@@ -22,49 +22,96 @@ export default function HomePage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-900 to-black text-white">
-      {/* Hero Section avec animation */}
+    <div className="min-h-screen bg-metrik-black">
+      
+      {/* Hero Section - Cockpit Style */}
       <div className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-r from-red-600/20 to-orange-600/20 animate-pulse"></div>
-        <div className="relative bg-gradient-to-r from-red-600 to-orange-600 p-16 text-center">
-          <div className="animate-fade-in">
-            <h1 className="text-7xl font-bold mb-4 drop-shadow-2xl">🏎️ F1 Metrics</h1>
-            <p className="text-2xl opacity-90 drop-shadow-lg">
-              Plateforme complète d'analyse télémétrique Formula 1
+        {/* Background subtle grid */}
+        <div className="absolute inset-0 bg-grid-pattern bg-grid opacity-50" />
+        
+        {/* Gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-b from-metrik-turquoise/5 via-transparent to-metrik-black" />
+        
+        {/* Content */}
+        <div className="relative z-10 max-w-7xl mx-auto px-4 py-20">
+          
+          {/* Main Title */}
+          <div className="text-center mb-12">
+            <div className="inline-block mb-6">
+              <h1 className="text-7xl md:text-8xl font-rajdhani font-bold tracking-wider mb-2">
+                <span className="text-metrik-silver">METR</span>
+                <span className="text-metrik-turquoise text-glow">IK</span>
+              </h1>
+              <div className="h-1 bg-gradient-to-r from-transparent via-metrik-turquoise to-transparent" />
+            </div>
+            
+            <p className="text-2xl md:text-3xl font-rajdhani text-metrik-text-secondary mb-4 tracking-wide">
+              SYSTÈME D'ANALYSE TÉLÉMÉTRIQUE FORMULA 1
             </p>
-            <div className="mt-8 flex gap-4 justify-center">
-              <button
-                onClick={() => navigate('/telemetry')}
-                className="px-8 py-4 bg-white text-red-600 rounded-lg font-bold text-lg hover:scale-110 transition-transform shadow-2xl"
-              >
-                📊 Télémétrie
-              </button>
-              <button
-                onClick={() => navigate('/comparison')}
-                className="px-8 py-4 bg-black/50 backdrop-blur text-white rounded-lg font-bold text-lg hover:scale-110 transition-transform shadow-2xl border-2 border-white/30"
-              >
-                🔄 Comparaison
-              </button>
+            
+            <p className="text-metrik-text-tertiary font-inter max-w-2xl mx-auto leading-relaxed">
+              Plateforme professionnelle d'analyse de données en temps réel.
+              Visualisations avancées, comparaisons multi-pilotes, insights techniques.
+            </p>
+          </div>
+
+          {/* CTA Buttons */}
+          <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
+            <button
+              onClick={() => navigate('/telemetry')}
+              className="btn-cockpit text-lg px-8 py-4"
+            >
+              <span className="flex items-center gap-2">
+                📊 ANALYSER TÉLÉMÉTRIE
+              </span>
+            </button>
+            
+            <button
+              onClick={() => navigate('/comparison')}
+              className="btn-cockpit-secondary text-lg px-8 py-4"
+            >
+              <span className="flex items-center gap-2">
+                🔄 COMPARER PILOTES
+              </span>
+            </button>
+          </div>
+
+          {/* Stats Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
+            <div className="card-cockpit text-center">
+              <div className="text-5xl mb-3">🏎️</div>
+              <div className="data-display text-4xl mb-2">{events.length}</div>
+              <div className="text-metrik-text-secondary font-rajdhani text-sm tracking-wider">COURSES SAISON</div>
+            </div>
+            
+            <div className="card-cockpit text-center">
+              <div className="text-5xl mb-3">🌍</div>
+              <div className="data-display text-4xl mb-2">{new Set(events.map(e => e.country)).size}</div>
+              <div className="text-metrik-text-secondary font-rajdhani text-sm tracking-wider">PAYS VISITÉS</div>
+            </div>
+            
+            <div className="card-cockpit text-center">
+              <div className="text-5xl mb-3">📊</div>
+              <div className="data-display text-4xl mb-2">9</div>
+              <div className="text-metrik-text-secondary font-rajdhani text-sm tracking-wider">MODULES ANALYSE</div>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto p-8">
-        {/* Sélecteur de saison amélioré */}
-        <div className="mb-12">
-          <h2 className="text-3xl font-bold mb-6 text-center bg-gradient-to-r from-red-500 to-orange-500 bg-clip-text text-transparent">
-            Sélectionne une saison
-          </h2>
-          <div className="flex gap-3 flex-wrap justify-center">
+      {/* Season Selection */}
+      <div className="max-w-7xl mx-auto px-4 py-12">
+        <div className="mb-8">
+          <h2 className="section-header mb-6">Sélectionner une saison</h2>
+          <div className="flex gap-3 flex-wrap">
             {seasons.map(year => (
               <button
                 key={year}
                 onClick={() => setSelectedYear(year)}
-                className={`px-8 py-4 rounded-xl font-bold transition-all duration-300 ${
+                className={`px-6 py-3 rounded-lg font-rajdhani font-bold text-lg transition-all duration-300 border ${
                   selectedYear === year
-                    ? 'bg-gradient-to-r from-red-600 to-orange-600 scale-110 shadow-2xl shadow-red-500/50'
-                    : 'bg-gray-800 hover:bg-gray-700 hover:scale-105 shadow-lg'
+                    ? 'bg-metrik-turquoise/10 border-metrik-turquoise text-metrik-turquoise shadow-glow-turquoise scale-105'
+                    : 'bg-metrik-card border-metrik-silver/20 text-metrik-text-secondary hover:border-metrik-silver/50 hover:scale-105'
                 }`}
               >
                 {year}
@@ -73,47 +120,36 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Statistiques de la saison */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-          <div className="bg-gradient-to-br from-green-600 to-green-700 rounded-xl p-6 text-center shadow-xl">
-            <div className="text-5xl mb-2">🏁</div>
-            <div className="text-4xl font-bold">{events.length}</div>
-            <div className="text-lg opacity-90">Courses</div>
-          </div>
-          <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl p-6 text-center shadow-xl">
-            <div className="text-5xl mb-2">🌍</div>
-            <div className="text-4xl font-bold">{new Set(events.map(e => e.country)).size}</div>
-            <div className="text-lg opacity-90">Pays</div>
-          </div>
-          <div className="bg-gradient-to-br from-purple-600 to-purple-700 rounded-xl p-6 text-center shadow-xl">
-            <div className="text-5xl mb-2">📅</div>
-            <div className="text-4xl font-bold">{selectedYear}</div>
-            <div className="text-lg opacity-90">Saison</div>
-          </div>
-        </div>
-
-        {/* Liste des courses */}
+        {/* Calendar Grid */}
         <div>
-          <h2 className="text-3xl font-bold mb-6 text-center">
-            Calendrier {selectedYear}
-          </h2>
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-3xl font-rajdhani font-bold text-metrik-text">
+              Calendrier {selectedYear}
+            </h2>
+            <div className="text-metrik-text-secondary font-rajdhani">
+              <span className="data-display text-2xl">{events.length}</span>
+              <span className="ml-2">GRANDS PRIX</span>
+            </div>
+          </div>
+
           {loading ? (
             <div className="text-center py-20">
-              <div className="inline-block animate-spin rounded-full h-16 w-16 border-4 border-red-600 border-t-transparent"></div>
-              <p className="mt-4 text-gray-400">Chargement du calendrier...</p>
+              <div className="loading-spinner mx-auto mb-4" />
+              <p className="text-metrik-text-secondary font-rajdhani">CHARGEMENT DES DONNÉES...</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {events.map((event, index) => (
                 <div
                   key={event.round}
-                  className="group bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl p-6 hover:from-gray-700 hover:to-gray-800 transition-all duration-300 hover:scale-105 cursor-pointer border-l-4 border-red-600 shadow-lg hover:shadow-2xl hover:shadow-red-500/30 animate-fade-in"
-                  style={{ animationDelay: `${index * 0.05}s` }}
+                  className="card-cockpit cursor-pointer group"
                   onClick={() => navigate('/results')}
+                  style={{ animationDelay: `${index * 0.05}s` }}
                 >
+                  {/* Header */}
                   <div className="flex justify-between items-start mb-4">
                     <div className="flex items-center gap-3">
-                      <span className="text-5xl font-bold text-gray-700 group-hover:text-red-600 transition-colors">
+                      <span className="text-5xl font-rajdhani font-black text-metrik-turquoise/30 group-hover:text-metrik-turquoise transition-colors">
                         R{event.round}
                       </span>
                     </div>
@@ -121,16 +157,23 @@ export default function HomePage() {
                       {getCountryFlag(event.country)}
                     </span>
                   </div>
-                  <h3 className="text-xl font-bold mb-3 group-hover:text-red-400 transition-colors">
+
+                  {/* Title */}
+                  <h3 className="text-xl font-rajdhani font-bold text-metrik-text mb-3 group-hover:text-metrik-turquoise transition-colors">
                     {event.event_name}
                   </h3>
-                  <div className="space-y-1 text-gray-400">
-                    <p className="flex items-center gap-2">
-                      <span>📍</span>
+
+                  {/* Divider */}
+                  <div className="h-px bg-gradient-to-r from-metrik-turquoise/50 via-metrik-turquoise/20 to-transparent mb-3" />
+
+                  {/* Info */}
+                  <div className="space-y-1 text-sm">
+                    <p className="flex items-center gap-2 text-metrik-text-secondary font-inter">
+                      <span className="text-metrik-turquoise">▸</span>
                       <span>{event.location}</span>
                     </p>
-                    <p className="flex items-center gap-2">
-                      <span>🌍</span>
+                    <p className="flex items-center gap-2 text-metrik-text-secondary font-inter">
+                      <span className="text-metrik-silver">▸</span>
                       <span>{event.country}</span>
                     </p>
                   </div>
@@ -140,23 +183,6 @@ export default function HomePage() {
           )}
         </div>
       </div>
-
-      <style>{`
-        @keyframes fade-in {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        .animate-fade-in {
-          animation: fade-in 0.6s ease-out forwards;
-          opacity: 0;
-        }
-      `}</style>
     </div>
   );
 }
