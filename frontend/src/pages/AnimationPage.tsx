@@ -4,7 +4,7 @@ import { backendService } from '../services/backend.service';
 export default function AnimationPage() {
   const [year, setYear] = useState(2024);
   const [round, setRound] = useState(1);
-  const [sessionType, setSessionType] = useState('Q');
+  const [sessionType, setSessionType] = useState('R');
   const [driver1, setDriver1] = useState('VER');
   const [driver2, setDriver2] = useState('HAM');
   const [drivers, setDrivers] = useState<any[]>([]);
@@ -13,10 +13,8 @@ export default function AnimationPage() {
   const [loadingDrivers, setLoadingDrivers] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentFrame, setCurrentFrame] = useState(0);
-  const [speed, setSpeed] = useState(1);
-  
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const animationRef = useRef<number>();
+  const animationRef = useRef<number | null>(null);
 
   const loadDrivers = async () => {
     try {
@@ -37,7 +35,7 @@ export default function AnimationPage() {
   const loadAnimation = async () => {
     try {
       setLoading(true);
-      const data = await backendService.getRaceAnimation(year, round, sessionType, driver1, driver2);
+      const data = await backendService.getAnimation(year, round, sessionType, driver1, driver2);
       setAnimationData(data);
       setCurrentFrame(0);
       setIsPlaying(false);
@@ -50,154 +48,194 @@ export default function AnimationPage() {
   };
 
   useEffect(() => {
-    if (!animationData || !canvasRef.current) return;
-    
+    if (animationData && canvasRef.current) {
+      drawFrame(currentFrame);
+    }
+  }, [animationData, currentFrame]);
+
+  const drawFrame = (frame: number) => {
     const canvas = canvasRef.current;
+    if (!canvas || !animationData) return;
+
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const circuit = animationData.circuit;
-    const frame = animationData.animation[currentFrame];
-    
-    if (!frame) return;
+    const { positions_1, positions_2 } = animationData;
+    if (!positions_1 || positions_1.length === 0) return;
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // Clear
+    ctx.fillStyle = '#0A0A0A';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    const allX = circuit.map((p: any) => p.x);
-    const allY = circuit.map((p: any) => p.y);
-    const minX = Math.min(...allX);
-    const maxX = Math.max(...allX);
-    const minY = Math.min(...allY);
-    const maxY = Math.max(...allY);
-    
-    const padding = 50;
-    const scaleX = (canvas.width - 2 * padding) / (maxX - minX);
-    const scaleY = (canvas.height - 2 * padding) / (maxY - minY);
-    const scale = Math.min(scaleX, scaleY);
+    // Find bounds for both drivers
+    const allPositions = [...positions_1, ...positions_2];
+    const xs = allPositions.map((p: any) => p.x);
+    const ys = allPositions.map((p: any) => p.y);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
 
-    const toCanvasX = (x: number) => (x - minX) * scale + padding;
-    const toCanvasY = (y: number) => canvas.height - ((y - minY) * scale + padding);
+    const width = maxX - minX;
+    const height = maxY - minY;
+    const scale = Math.min((canvas.width - 100) / width, (canvas.height - 100) / height);
 
-    ctx.strokeStyle = '#4B5563';
-    ctx.lineWidth = 3;
+    // Normalize
+    const normalize = (positions: any[]) => positions.map((p: any) => ({
+      x: (p.x - minX) * scale + 50,
+      y: canvas.height - ((p.y - minY) * scale + 50),
+    }));
+
+    const norm1 = normalize(positions_1);
+    const norm2 = normalize(positions_2);
+
+    // Draw track (faded)
+    ctx.strokeStyle = 'rgba(192, 192, 192, 0.2)';
+    ctx.lineWidth = 4;
     ctx.beginPath();
-    circuit.forEach((point: any, i: number) => {
-      const x = toCanvasX(point.x);
-      const y = toCanvasY(point.y);
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    });
+    for (let i = 1; i < norm1.length; i++) {
+      ctx.moveTo(norm1[i - 1].x, norm1[i - 1].y);
+      ctx.lineTo(norm1[i].x, norm1[i].y);
+    }
     ctx.stroke();
 
-    const drawCar = (x: number, y: number, color: string, label: string) => {
-      const cx = toCanvasX(x);
-      const cy = toCanvasY(y);
-      
-      ctx.fillStyle = color;
+    // Draw paths up to current frame
+    const drawPath = (positions: any[], color: string, glowColor: string) => {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 6;
+      ctx.shadowBlur = 15;
+      ctx.shadowColor = glowColor;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
       ctx.beginPath();
-      ctx.arc(cx, cy, 12, 0, Math.PI * 2);
-      ctx.fill();
-      
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 3;
+      for (let i = 1; i <= Math.min(frame, positions.length - 1); i++) {
+        ctx.moveTo(positions[i - 1].x, positions[i - 1].y);
+        ctx.lineTo(positions[i].x, positions[i].y);
+      }
       ctx.stroke();
-      
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 14px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(label, cx, cy - 20);
     };
 
-    drawCar(frame.driver1.x, frame.driver1.y, '#00D176', driver1);
-    drawCar(frame.driver2.x, frame.driver2.y, '#0EA5E9', driver2);
+    drawPath(norm1, '#00D176', '#00D176');
+    drawPath(norm2, '#00D2BE', '#00D2BE');
 
-  }, [animationData, currentFrame, driver1, driver2]);
+    // Draw cars at current position
+    const drawCar = (positions: any[], color: string, label: string) => {
+      if (frame >= positions.length) return;
+      const pos = positions[frame];
 
-  useEffect(() => {
-    if (isPlaying && animationData) {
-      const interval = 1000 / (30 * speed);
-      animationRef.current = window.setInterval(() => {
-        setCurrentFrame(prev => {
-          if (prev >= animationData.animation.length - 1) {
-            setIsPlaying(false);
-            return prev;
-          }
-          return prev + 1;
-        });
-      }, interval);
-      
-      return () => {
-        if (animationRef.current) clearInterval(animationRef.current);
-      };
-    }
-  }, [isPlaying, speed, animationData]);
+      ctx.shadowBlur = 20;
+      ctx.shadowColor = color;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(pos.x, pos.y, 12, 0, Math.PI * 2);
+      ctx.fill();
 
-  const togglePlay = () => {
-    if (currentFrame >= animationData.animation.length - 1) {
-      setCurrentFrame(0);
-    }
-    setIsPlaying(!isPlaying);
+      // Label
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = 'bold 14px Rajdhani';
+      ctx.textAlign = 'center';
+      ctx.fillText(label, pos.x, pos.y - 20);
+    };
+
+    drawCar(norm1, '#00D176', driver1);
+    drawCar(norm2, '#00D2BE', driver2);
+
+    ctx.shadowBlur = 0;
   };
 
-  const restart = () => {
-    setCurrentFrame(0);
+  const play = () => {
+    if (!animationData) return;
+    setIsPlaying(true);
+
+    const animate = () => {
+      setCurrentFrame(prev => {
+        const next = prev + 1;
+        if (next >= animationData.positions_1.length) {
+          setIsPlaying(false);
+          return 0;
+        }
+        return next;
+      });
+
+      animationRef.current = requestAnimationFrame(animate);
+    };
+
+    animationRef.current = requestAnimationFrame(animate);
+  };
+
+  const pause = () => {
     setIsPlaying(false);
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current);
+    }
   };
 
-  const getCurrentDelta = () => {
-    if (!animationData || !animationData.animation[currentFrame]) return 0;
-    return animationData.animation[currentFrame].delta;
-  };
-
-  const getProgress = () => {
-    if (!animationData) return 0;
-    return (currentFrame / (animationData.animation.length - 1)) * 100;
+  const reset = () => {
+    pause();
+    setCurrentFrame(0);
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-8">
+    <div className="min-h-screen bg-metrik-black text-metrik-text p-8">
       <div className="max-w-7xl mx-auto">
-        <h1 className="text-4xl font-bold mb-8">🎬 Animation de Course</h1>
+        
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-5xl font-rajdhani font-bold mb-2">
+            <span className="text-metrik-silver">ANIMA</span>
+            <span className="text-metrik-turquoise">TION</span>
+          </h1>
+          <div className="h-1 bg-gradient-to-r from-metrik-turquoise via-metrik-turquoise/50 to-transparent w-64" />
+          <p className="text-metrik-text-secondary font-inter mt-2">Simulation de course en temps réel</p>
+        </div>
 
-        <div className="bg-gray-800 rounded-lg p-6 mb-8">
-          <h2 className="text-2xl font-bold mb-4">Paramètres</h2>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+        {/* Controls */}
+        <div className="card-cockpit mb-8">
+          <h2 className="text-2xl font-rajdhani font-bold text-metrik-turquoise mb-6">PARAMÈTRES SYSTÈME</h2>
+          
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
             <div>
-              <label className="block text-sm mb-2">Année</label>
+              <label className="block text-sm font-rajdhani text-metrik-text-secondary mb-2 tracking-wide">ANNÉE</label>
               <input
                 type="number"
                 value={year}
                 onChange={(e) => setYear(parseInt(e.target.value))}
-                className="w-full px-4 py-2 bg-gray-700 rounded-lg"
+                className="w-full px-4 py-3 bg-metrik-dark border border-metrik-turquoise/30 rounded-lg text-metrik-text font-mono focus:border-metrik-turquoise focus:outline-none transition-colors"
               />
             </div>
+            
             <div>
-              <label className="block text-sm mb-2">Round</label>
+              <label className="block text-sm font-rajdhani text-metrik-text-secondary mb-2 tracking-wide">ROUND</label>
               <input
                 type="number"
                 value={round}
                 onChange={(e) => setRound(parseInt(e.target.value))}
-                className="w-full px-4 py-2 bg-gray-700 rounded-lg"
+                className="w-full px-4 py-3 bg-metrik-dark border border-metrik-turquoise/30 rounded-lg text-metrik-text font-mono focus:border-metrik-turquoise focus:outline-none transition-colors"
               />
             </div>
+            
             <div>
-              <label className="block text-sm mb-2">Session</label>
+              <label className="block text-sm font-rajdhani text-metrik-text-secondary mb-2 tracking-wide">SESSION</label>
               <select
                 value={sessionType}
                 onChange={(e) => setSessionType(e.target.value)}
-                className="w-full px-4 py-2 bg-gray-700 rounded-lg"
+                className="w-full px-4 py-3 bg-metrik-dark border border-metrik-turquoise/30 rounded-lg text-metrik-text font-rajdhani focus:border-metrik-turquoise focus:outline-none transition-colors"
               >
                 <option value="Q">Qualifications</option>
                 <option value="R">Course</option>
               </select>
             </div>
-            <div className="flex items-end">
+            
+            <div>
+              <label className="block text-sm font-rajdhani text-metrik-text-secondary mb-2 tracking-wide">ACTION</label>
               <button
                 onClick={loadDrivers}
                 disabled={loadingDrivers}
-                className="w-full px-6 py-2 bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                className="w-full btn-cockpit disabled:opacity-50"
               >
-                {loadingDrivers ? 'Chargement...' : '🔄 Charger les pilotes'}
+                {loadingDrivers ? 'CHARGEMENT...' : '🔄 PILOTES'}
               </button>
             </div>
           </div>
@@ -205,119 +243,131 @@ export default function AnimationPage() {
           {drivers.length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="block text-sm mb-2">Pilote 1</label>
+                <label className="block text-sm font-rajdhani text-metrik-text-secondary mb-2 tracking-wide">PILOTE 1</label>
                 <select
                   value={driver1}
                   onChange={(e) => setDriver1(e.target.value)}
-                  className="w-full px-4 py-2 bg-gray-700 rounded-lg"
+                  className="w-full px-4 py-3 bg-metrik-dark border border-metrik-success/30 rounded-lg text-metrik-text font-rajdhani focus:border-metrik-success focus:outline-none transition-colors"
                 >
                   {drivers.map(d => (
                     <option key={d.code} value={d.code}>
-                      #{d.number} - {d.code} ({d.team})
+                      #{d.number} - {d.code}
                     </option>
                   ))}
                 </select>
               </div>
+              
               <div>
-                <label className="block text-sm mb-2">Pilote 2</label>
+                <label className="block text-sm font-rajdhani text-metrik-text-secondary mb-2 tracking-wide">PILOTE 2</label>
                 <select
                   value={driver2}
                   onChange={(e) => setDriver2(e.target.value)}
-                  className="w-full px-4 py-2 bg-gray-700 rounded-lg"
+                  className="w-full px-4 py-3 bg-metrik-dark border border-metrik-turquoise/30 rounded-lg text-metrik-text font-rajdhani focus:border-metrik-turquoise focus:outline-none transition-colors"
                 >
                   {drivers.map(d => (
                     <option key={d.code} value={d.code}>
-                      #{d.number} - {d.code} ({d.team})
+                      #{d.number} - {d.code}
                     </option>
                   ))}
                 </select>
               </div>
+              
               <div className="flex items-end">
                 <button
                   onClick={loadAnimation}
                   disabled={loading}
-                  className="w-full px-6 py-2 bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+                  className="w-full btn-cockpit disabled:opacity-50"
                 >
-                  {loading ? 'Chargement...' : '🎬 Charger'}
+                  {loading ? 'GÉNÉRATION...' : '🎬 GÉNÉRER'}
                 </button>
               </div>
             </div>
           )}
         </div>
 
+        {/* Player Controls */}
         {animationData && (
-          <div className="space-y-6">
-            <div className="bg-gray-800 rounded-lg p-6">
-              <canvas
-                ref={canvasRef}
-                width={1000}
-                height={600}
-                className="w-full bg-gray-900 rounded-lg"
-              />
+          <div className="card-cockpit mb-8">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-rajdhani font-bold text-metrik-turquoise flex items-center gap-2">
+                <span>🎮</span> CONTRÔLES
+              </h3>
+              <div className="text-metrik-text-secondary font-mono text-sm">
+                Frame {currentFrame} / {animationData.positions_1.length}
+              </div>
             </div>
 
-            <div className="bg-gray-800 rounded-lg p-6">
-              <div className="grid grid-cols-3 gap-4 mb-6">
-                <div className="bg-green-600 rounded-lg p-4 text-center">
-                  <div className="text-xl font-bold">{driver1}</div>
-                  <div className="text-3xl font-mono">{animationData.lap_time1.toFixed(3)}s</div>
-                </div>
-                <div className="bg-purple-600 rounded-lg p-4 text-center">
-                  <div className="text-lg font-bold">Delta</div>
-                  <div className="text-3xl font-mono">
-                    {getCurrentDelta() > 0 ? '+' : ''}{getCurrentDelta().toFixed(3)}s
-                  </div>
-                </div>
-                <div className="bg-blue-600 rounded-lg p-4 text-center">
-                  <div className="text-xl font-bold">{driver2}</div>
-                  <div className="text-3xl font-mono">{animationData.lap_time2.toFixed(3)}s</div>
-                </div>
-              </div>
+            <div className="flex gap-4">
+              <button
+                onClick={isPlaying ? pause : play}
+                className="btn-cockpit flex-1"
+              >
+                {isPlaying ? '⏸️ PAUSE' : '▶️ LECTURE'}
+              </button>
+              
+              <button
+                onClick={reset}
+                className="btn-cockpit-secondary"
+              >
+                🔄 RESET
+              </button>
+            </div>
 
-              <div className="mb-4">
-                <div className="bg-gray-700 rounded-full h-4 overflow-hidden">
-                  <div
-                    className="bg-gradient-to-r from-red-600 to-orange-600 h-full transition-all duration-100"
-                    style={{ width: `${getProgress()}%` }}
-                  />
-                </div>
-              </div>
+            {/* Progress Bar */}
+            <div className="mt-4">
+              <input
+                type="range"
+                min="0"
+                max={animationData.positions_1.length - 1}
+                value={currentFrame}
+                onChange={(e) => {
+                  pause();
+                  setCurrentFrame(parseInt(e.target.value));
+                }}
+                className="w-full h-2 bg-metrik-dark rounded-lg appearance-none cursor-pointer accent-metrik-turquoise"
+              />
+            </div>
+          </div>
+        )}
 
-              <div className="flex gap-4 items-center justify-center">
-                <button
-                  onClick={restart}
-                  className="px-6 py-3 bg-gray-700 rounded-lg hover:bg-gray-600 transition-colors font-bold"
-                >
-                  ⏮️ Restart
-                </button>
-                <button
-                  onClick={togglePlay}
-                  className="px-8 py-3 bg-red-600 rounded-lg hover:bg-red-700 transition-colors font-bold text-xl"
-                >
-                  {isPlaying ? '⏸️ Pause' : '▶️ Play'}
-                </button>
+        {/* Canvas */}
+        {animationData && (
+          <div className="card-cockpit">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-rajdhani font-bold text-metrik-turquoise flex items-center gap-2">
+                <span>🏁</span> SIMULATION
+              </h3>
+              <div className="flex items-center gap-6 text-sm font-rajdhani">
                 <div className="flex items-center gap-2">
-                  <label className="text-sm">Vitesse:</label>
-                  <select
-                    value={speed}
-                    onChange={(e) => setSpeed(parseFloat(e.target.value))}
-                    className="px-4 py-2 bg-gray-700 rounded-lg"
-                  >
-                    <option value="0.5">0.5x</option>
-                    <option value="1">1x</option>
-                    <option value="2">2x</option>
-                    <option value="5">5x</option>
-                    <option value="10">10x</option>
-                  </select>
+                  <div className="w-4 h-4 bg-metrik-success rounded-full shadow-glow-turquoise" />
+                  <span className="text-metrik-text-secondary">{driver1}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 bg-metrik-turquoise rounded-full shadow-glow-turquoise" />
+                  <span className="text-metrik-text-secondary">{driver2}</span>
                 </div>
               </div>
+            </div>
+            <div className="bg-metrik-black border border-metrik-turquoise/20 rounded-lg p-4 flex items-center justify-center">
+              <canvas 
+                ref={canvasRef} 
+                width={1000} 
+                height={600}
+                className="max-w-full h-auto"
+              />
             </div>
           </div>
         )}
 
         {!animationData && !loading && (
-          <div className="text-center py-12 text-gray-400">
-            👆 Charge les pilotes, sélectionne-les et clique sur "Charger" pour voir l'animation !
+          <div className="card-cockpit text-center py-12">
+            <div className="text-6xl mb-4">🎬</div>
+            <p className="text-metrik-text-secondary font-rajdhani text-lg">
+              SYSTÈME EN ATTENTE DE DONNÉES
+            </p>
+            <p className="text-metrik-text-tertiary font-inter text-sm mt-2">
+              Chargez les pilotes, sélectionnez-en 2 et générez l'animation
+            </p>
           </div>
         )}
       </div>

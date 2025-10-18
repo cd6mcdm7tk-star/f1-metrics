@@ -4,6 +4,89 @@
 
 @layer base {
   body {
-    @apply bg-gray-900 text-white;
+    @apply bg-metrik-black text-metrik-text font-inter antialiased;
+    background-image: 
+      linear-gradient(rgba(0,210,190,0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,210,190,0.02) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-rajdhani font-semibold;
+  }
+}
+
+@layer components {
+  /* Button Cockpit Style */
+  .btn-cockpit {
+    @apply px-6 py-3 bg-transparent border-2 border-metrik-turquoise text-metrik-text 
+           font-rajdhani font-semibold rounded-lg transition-all duration-300
+           hover:bg-metrik-turquoise hover:shadow-glow-turquoise;
+  }
+
+  .btn-cockpit-secondary {
+    @apply px-6 py-3 bg-metrik-card border border-metrik-silver text-metrik-text 
+           font-rajdhani font-semibold rounded-lg transition-all duration-300
+           hover:bg-metrik-dark hover:shadow-glow-silver;
+  }
+
+  /* Card Cockpit Style */
+  .card-cockpit {
+    @apply bg-metrik-card border border-metrik-turquoise/20 rounded-lg p-6
+           shadow-cockpit transition-all duration-300
+           hover:border-metrik-turquoise/40 hover:shadow-glow-turquoise;
+  }
+
+  /* Data Display (Chiffres style cockpit) */
+  .data-display {
+    @apply font-mono text-3xl font-bold text-metrik-turquoise tracking-wider;
+  }
+
+  /* Section Headers */
+  .section-header {
+    @apply text-3xl font-rajdhani font-bold text-metrik-text mb-2
+           border-b-2 border-metrik-turquoise/30 pb-2 inline-block;
+  }
+
+  /* Loading State */
+  .loading-spinner {
+    @apply inline-block w-12 h-12 border-4 border-metrik-dark 
+           border-t-metrik-turquoise rounded-full animate-spin;
+  }
+
+  /* Scrollbar Custom */
+  ::-webkit-scrollbar {
+    @apply w-2 h-2;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-metrik-dark;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-metrik-turquoise/50 rounded-full hover:bg-metrik-turquoise;
+  }
+}
+
+@layer utilities {
+  /* Glow Effects */
+  .glow-turquoise {
+    box-shadow: 0 0 20px rgba(0, 210, 190, 0.3);
+  }
+
+  .glow-turquoise-lg {
+    box-shadow: 0 0 40px rgba(0, 210, 190, 0.4);
+  }
+
+  /* Glassmorphism Cockpit */
+  .glass-cockpit {
+    background: rgba(18, 18, 18, 0.9);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+
+  /* Text Glow */
+  .text-glow {
+    text-shadow: 0 0 10px rgba(0, 210, 190, 0.5);
   }
 }

@@ -1,19 +1,36 @@
-import React, { useState } from 'react';
-import { ScatterChart, Scatter, XAxis, YAxis, ZAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import React, { useState, useRef, useEffect } from 'react';
 import { backendService } from '../services/backend.service';
 
 export default function CircuitPage() {
   const [year, setYear] = useState(2024);
   const [round, setRound] = useState(1);
-  const [sessionType, setSessionType] = useState('Q');
+  const [sessionType, setSessionType] = useState('R');
   const [driver, setDriver] = useState('VER');
+  const [drivers, setDrivers] = useState<any[]>([]);
   const [circuitData, setCircuitData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingDrivers, setLoadingDrivers] = useState(false);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  const loadDrivers = async () => {
+    try {
+      setLoadingDrivers(true);
+      const data = await backendService.getDrivers(year, round, sessionType);
+      setDrivers(data.drivers);
+      if (data.drivers.length > 0) {
+        setDriver(data.drivers[0].code);
+      }
+      setLoadingDrivers(false);
+    } catch (err) {
+      console.error(err);
+      setLoadingDrivers(false);
+    }
+  };
 
   const loadCircuit = async () => {
     try {
       setLoading(true);
-      const data = await backendService.getCircuitTelemetry(year, round, sessionType, driver);
+      const data = await backendService.getCircuit(year, round, sessionType, driver);
       setCircuitData(data);
       setLoading(false);
     } catch (err) {
@@ -23,46 +40,143 @@ export default function CircuitPage() {
     }
   };
 
-  const getColorForSpeed = (speed: number) => {
-    if (speed < 100) return '#3B82F6';
-    if (speed < 150) return '#10B981';
-    if (speed < 200) return '#F59E0B';
-    if (speed < 250) return '#EF4444';
-    return '#DC2626';
+  useEffect(() => {
+    if (circuitData && canvasRef.current) {
+      drawCircuit();
+    }
+  }, [circuitData]);
+
+  const drawCircuit = () => {
+    const canvas = canvasRef.current;
+    if (!canvas || !circuitData) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const positions = circuitData.positions;
+    if (positions.length === 0) return;
+
+    // Clear
+    ctx.fillStyle = '#0A0A0A';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Find bounds
+    const xs = positions.map((p: any) => p.x);
+    const ys = positions.map((p: any) => p.y);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+
+    const width = maxX - minX;
+    const height = maxY - minY;
+    const scale = Math.min((canvas.width - 100) / width, (canvas.height - 100) / height);
+
+    // Normalize positions
+    const normalizedPositions = positions.map((p: any) => ({
+      x: (p.x - minX) * scale + 50,
+      y: canvas.height - ((p.y - minY) * scale + 50),
+      speed: p.speed,
+    }));
+
+    // Get speed range for color mapping
+    const speeds = normalizedPositions.map((p: any) => p.speed);
+    const minSpeed = Math.min(...speeds);
+    const maxSpeed = Math.max(...speeds);
+
+    // Draw track with speed colors
+    for (let i = 1; i < normalizedPositions.length; i++) {
+      const prev = normalizedPositions[i - 1];
+      const curr = normalizedPositions[i];
+
+      // Color based on speed (slow = red, fast = turquoise)
+      const speedRatio = (curr.speed - minSpeed) / (maxSpeed - minSpeed);
+      const r = Math.floor(255 * (1 - speedRatio));
+      const g = Math.floor(210 * speedRatio);
+      const b = Math.floor(190 * speedRatio);
+
+      ctx.strokeStyle = `rgb(${r}, ${g}, ${b})`;
+      ctx.lineWidth = 6;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      // Glow effect
+      ctx.shadowBlur = 10;
+      ctx.shadowColor = `rgb(${r}, ${g}, ${b})`;
+
+      ctx.beginPath();
+      ctx.moveTo(prev.x, prev.y);
+      ctx.lineTo(curr.x, curr.y);
+      ctx.stroke();
+    }
+
+    // Draw start/finish line
+    if (normalizedPositions.length > 0) {
+      const start = normalizedPositions[0];
+      ctx.fillStyle = '#00D2BE';
+      ctx.shadowBlur = 20;
+      ctx.shadowColor = '#00D2BE';
+      ctx.beginPath();
+      ctx.arc(start.x, start.y, 12, 0, Math.PI * 2);
+      ctx.fill();
+
+      // "START" label
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = 'bold 14px Rajdhani';
+      ctx.textAlign = 'center';
+      ctx.fillText('START', start.x, start.y - 20);
+    }
+
+    // Reset shadow
+    ctx.shadowBlur = 0;
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-8">
+    <div className="min-h-screen bg-metrik-black text-metrik-text p-8">
       <div className="max-w-7xl mx-auto">
-        <h1 className="text-4xl font-bold mb-8">🗺️ Tracé du Circuit</h1>
+        
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-5xl font-rajdhani font-bold mb-2">
+            <span className="text-metrik-silver">CIR</span>
+            <span className="text-metrik-turquoise">CUIT</span>
+          </h1>
+          <div className="h-1 bg-gradient-to-r from-metrik-turquoise via-metrik-turquoise/50 to-transparent w-64" />
+          <p className="text-metrik-text-secondary font-inter mt-2">Visualisation trajectoire et zones de vitesse</p>
+        </div>
 
-        <div className="bg-gray-800 rounded-lg p-6 mb-8">
-          <h2 className="text-2xl font-bold mb-4">Paramètres</h2>
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        {/* Controls */}
+        <div className="card-cockpit mb-8">
+          <h2 className="text-2xl font-rajdhani font-bold text-metrik-turquoise mb-6">PARAMÈTRES SYSTÈME</h2>
+          
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
             <div>
-              <label className="block text-sm mb-2">Année</label>
+              <label className="block text-sm font-rajdhani text-metrik-text-secondary mb-2 tracking-wide">ANNÉE</label>
               <input
                 type="number"
                 value={year}
                 onChange={(e) => setYear(parseInt(e.target.value))}
-                className="w-full px-4 py-2 bg-gray-700 rounded-lg"
+                className="w-full px-4 py-3 bg-metrik-dark border border-metrik-turquoise/30 rounded-lg text-metrik-text font-mono focus:border-metrik-turquoise focus:outline-none transition-colors"
               />
             </div>
+            
             <div>
-              <label className="block text-sm mb-2">Round</label>
+              <label className="block text-sm font-rajdhani text-metrik-text-secondary mb-2 tracking-wide">ROUND</label>
               <input
                 type="number"
                 value={round}
                 onChange={(e) => setRound(parseInt(e.target.value))}
-                className="w-full px-4 py-2 bg-gray-700 rounded-lg"
+                className="w-full px-4 py-3 bg-metrik-dark border border-metrik-turquoise/30 rounded-lg text-metrik-text font-mono focus:border-metrik-turquoise focus:outline-none transition-colors"
               />
             </div>
+            
             <div>
-              <label className="block text-sm mb-2">Session</label>
+              <label className="block text-sm font-rajdhani text-metrik-text-secondary mb-2 tracking-wide">SESSION</label>
               <select
                 value={sessionType}
                 onChange={(e) => setSessionType(e.target.value)}
-                className="w-full px-4 py-2 bg-gray-700 rounded-lg"
+                className="w-full px-4 py-3 bg-metrik-dark border border-metrik-turquoise/30 rounded-lg text-metrik-text font-rajdhani focus:border-metrik-turquoise focus:outline-none transition-colors"
               >
                 <option value="FP1">FP1</option>
                 <option value="FP2">FP2</option>
@@ -71,78 +185,114 @@ export default function CircuitPage() {
                 <option value="R">Course</option>
               </select>
             </div>
-            <div>
-              <label className="block text-sm mb-2">Pilote</label>
-              <input
-                type="text"
-                value={driver}
-                onChange={(e) => setDriver(e.target.value.toUpperCase())}
-                className="w-full px-4 py-2 bg-gray-700 rounded-lg"
-              />
-            </div>
-            <div className="flex items-end">
+            
+            <div className="col-span-2">
+              <label className="block text-sm font-rajdhani text-metrik-text-secondary mb-2 tracking-wide">ACTION</label>
               <button
-                onClick={loadCircuit}
-                disabled={loading}
-                className="w-full px-6 py-2 bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+                onClick={loadDrivers}
+                disabled={loadingDrivers}
+                className="w-full btn-cockpit disabled:opacity-50"
               >
-                {loading ? 'Chargement...' : 'Charger'}
+                {loadingDrivers ? 'CHARGEMENT...' : '🔄 CHARGER PILOTES'}
               </button>
             </div>
           </div>
-          {circuitData && (
-            <div className="mt-4 text-center">
-              <span className="text-lg">
-                🏎️ <span className="font-bold">{circuitData.driver}</span> - ⏱️ <span className="font-bold text-green-500">{circuitData.lap_time?.toFixed(3)}s</span>
-              </span>
+
+          {drivers.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-rajdhani text-metrik-text-secondary mb-2 tracking-wide">PILOTE</label>
+                <select
+                  value={driver}
+                  onChange={(e) => setDriver(e.target.value)}
+                  className="w-full px-4 py-3 bg-metrik-dark border border-metrik-silver/30 rounded-lg text-metrik-text font-rajdhani focus:border-metrik-silver focus:outline-none transition-colors"
+                >
+                  {drivers.map(d => (
+                    <option key={d.code} value={d.code}>
+                      #{d.number} - {d.code} ({d.team})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              <div className="flex items-end">
+                <button
+                  onClick={loadCircuit}
+                  disabled={loading}
+                  className="w-full btn-cockpit disabled:opacity-50"
+                >
+                  {loading ? 'GÉNÉRATION...' : '🗺️ VISUALISER'}
+                </button>
+              </div>
             </div>
           )}
         </div>
 
+        {/* Circuit Info */}
         {circuitData && (
-          <div className="bg-gray-800 rounded-lg p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-bold">Circuit Map</h3>
-              <div className="flex gap-4 text-sm">
-                <span><span className="inline-block w-4 h-4 bg-blue-500 rounded mr-1"></span>&lt;100 km/h</span>
-                <span><span className="inline-block w-4 h-4 bg-green-500 rounded mr-1"></span>100-150 km/h</span>
-                <span><span className="inline-block w-4 h-4 bg-yellow-500 rounded mr-1"></span>150-200 km/h</span>
-                <span><span className="inline-block w-4 h-4 bg-orange-500 rounded mr-1"></span>200-250 km/h</span>
-                <span><span className="inline-block w-4 h-4 bg-red-600 rounded mr-1"></span>&gt;250 km/h</span>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+            <div className="card-cockpit text-center">
+              <div className="text-sm font-rajdhani text-metrik-text-secondary tracking-wider mb-2">CIRCUIT</div>
+              <div className="text-2xl font-rajdhani font-bold text-metrik-turquoise">{circuitData.circuit_name}</div>
+            </div>
+            
+            <div className="card-cockpit text-center">
+              <div className="text-sm font-rajdhani text-metrik-text-secondary tracking-wider mb-2">PILOTE</div>
+              <div className="text-2xl font-rajdhani font-bold text-metrik-silver">{driver}</div>
+            </div>
+            
+            <div className="card-cockpit text-center">
+              <div className="text-sm font-rajdhani text-metrik-text-secondary tracking-wider mb-2">TEMPS AU TOUR</div>
+              <div className="data-display text-2xl text-metrik-success">{circuitData.lap_time?.toFixed(3)}s</div>
+            </div>
+          </div>
+        )}
+
+        {/* Canvas */}
+        {circuitData && (
+          <div className="card-cockpit">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-rajdhani font-bold text-metrik-turquoise flex items-center gap-2">
+                <span>🗺️</span> TRAJECTOIRE & VITESSE
+              </h3>
+              <div className="flex items-center gap-4 text-sm font-inter">
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 bg-gradient-to-r from-red-500 to-orange-500 rounded" />
+                  <span className="text-metrik-text-secondary">Lent</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 bg-gradient-to-r from-yellow-500 to-green-500 rounded" />
+                  <span className="text-metrik-text-secondary">Moyen</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 bg-gradient-to-r from-green-500 to-metrik-turquoise rounded" />
+                  <span className="text-metrik-text-secondary">Rapide</span>
+                </div>
               </div>
             </div>
-            <ResponsiveContainer width="100%" height={600}>
-              <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
-                <XAxis type="number" dataKey="x" hide />
-                <YAxis type="number" dataKey="y" hide />
-                <ZAxis type="number" dataKey="speed" range={[50, 200]} />
-                <Tooltip 
-                  cursor={{ strokeDasharray: '3 3' }}
-                  content={({ active, payload }) => {
-                    if (active && payload && payload.length) {
-                      return (
-                        <div className="bg-gray-900 border border-gray-700 p-3 rounded-lg">
-                          <p className="text-sm">Vitesse: <span className="font-bold text-green-400">{payload[0].value} km/h</span></p>
-                          <p className="text-sm">Distance: <span className="font-bold">{payload[0].payload.distance?.toFixed(0)} m</span></p>
-                        </div>
-                      );
-                    }
-                    return null;
-                  }}
-                />
-                <Scatter data={circuitData.circuit} shape="circle">
-                  {circuitData.circuit.map((entry: any, index: number) => (
-                    <Cell key={`cell-${index}`} fill={getColorForSpeed(entry.speed)} />
-                  ))}
-                </Scatter>
-              </ScatterChart>
-            </ResponsiveContainer>
+            <div className="bg-metrik-black border border-metrik-turquoise/20 rounded-lg p-4 flex items-center justify-center">
+              <canvas 
+                ref={canvasRef} 
+                width={1000} 
+                height={600}
+                className="max-w-full h-auto"
+              />
+            </div>
+            <p className="text-metrik-text-tertiary text-sm font-inter mt-4 text-center">
+              Rouge = zones de freinage / Turquoise = zones rapides / Point turquoise = ligne de départ
+            </p>
           </div>
         )}
 
         {!circuitData && !loading && (
-          <div className="text-center py-12 text-gray-400">
-            👆 Sélectionne une session et un pilote puis clique sur Charger
+          <div className="card-cockpit text-center py-12">
+            <div className="text-6xl mb-4">🗺️</div>
+            <p className="text-metrik-text-secondary font-rajdhani text-lg">
+              SYSTÈME EN ATTENTE DE DONNÉES
+            </p>
+            <p className="text-metrik-text-tertiary font-inter text-sm mt-2">
+              Chargez les pilotes et sélectionnez-en un pour visualiser le circuit
+            </p>
           </div>
         )}
       </div>
