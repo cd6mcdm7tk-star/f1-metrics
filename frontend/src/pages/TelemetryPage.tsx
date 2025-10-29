@@ -1,409 +1,1735 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { backendService } from '../services/backend.service';
+import { useState, useEffect } from 'react';
+import { ArrowLeft, Loader2, Gauge, TrendingDown, BarChart3, Clock, Activity, Zap, Target, Settings } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import GrandPrixSelector from '../components/GrandPrixSelector';
+import SessionSelector from '../components/SessionSelector';
+import DriverSelector from '../components/DriverSelector';
+import YearSelector from '../components/YearSelector';
+import LoadingSpinner from '../components/LoadingSpinner';
+import SkeletonChart from '../components/SkeletonChart';
+import {
+  getDrivers,
+  getTelemetryComparison,
+  getRacePace,
+  getMultiDriverPace,
+  getStintAnalysis,
+  getSectorEvolution,
+  getMultiDriverSectors
+} from '../services/backend.service';
+import type { TelemetryData } from '../types/telemetry';
+import type { RacePaceData, MultiDriverPaceData, StintAnalysisData, SectorEvolutionData } from '../types/raceevolution';
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, AreaChart, ReferenceLine, ComposedChart, Cell } from 'recharts';
 
 export default function TelemetryPage() {
-  const [year, setYear] = useState(2024);
-  const [round, setRound] = useState(1);
-  const [sessionType, setSessionType] = useState('R');
-  const [driver, setDriver] = useState('VER');
+  const navigate = useNavigate();
+  const [year, setYear] = useState(2025);
+  const [selectedGP, setSelectedGP] = useState<number>(1);
+  const [sessionType, setSessionType] = useState('Q');
   const [drivers, setDrivers] = useState<any[]>([]);
-  const [telemetry, setTelemetry] = useState<any[]>([]);
-  const [circuitData, setCircuitData] = useState<any>(null);
+  const [driver1, setDriver1] = useState('');
+  const [driver2, setDriver2] = useState('');
+  const [comparisonDrivers, setComparisonDrivers] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
-  const [loadingDrivers, setLoadingDrivers] = useState(false);
-  const [lapTime, setLapTime] = useState<number | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [telemetryData, setTelemetryData] = useState<TelemetryData | null>(null);
+  const [racePaceData, setRacePaceData] = useState<RacePaceData | null>(null);
+  const [multiDriverData, setMultiDriverData] = useState<MultiDriverPaceData | null>(null);
+  const [stintData, setStintData] = useState<StintAnalysisData | null>(null);
+  const [sectorData, setSectorData] = useState<SectorEvolutionData | null>(null);
+  const [multiDriverSectorsData, setMultiDriverSectorsData] = useState<any>(null);
+  const [trackPath, setTrackPath] = useState<string>('');
+  const [activeTab, setActiveTab] = useState<'telemetry' | 'pace' | 'comparison' | 'stints' | 'sectors'>('telemetry');
+
+  useEffect(() => {
+    loadDrivers();
+  }, [year, selectedGP, sessionType]);
 
   const loadDrivers = async () => {
     try {
-      setLoadingDrivers(true);
-      const data = await backendService.getDrivers(year, round, sessionType);
-      setDrivers(data.drivers);
-      if (data.drivers.length > 0) {
-        setDriver(data.drivers[0].code);
+      const data = await getDrivers(year, selectedGP, sessionType);
+      setDrivers(data);
+      if (data.length > 0) {
+        setDriver1(data[0].abbreviation);
+        setDriver2(data[1]?.abbreviation || data[0].abbreviation);
       }
-      setLoadingDrivers(false);
-    } catch (err) {
-      console.error(err);
-      setLoadingDrivers(false);
+    } catch (error) {
+      console.error('Error loading drivers:', error);
     }
   };
 
   const loadTelemetry = async () => {
+    if (!driver1 || !driver2) return;
+    setLoading(true);
     try {
-      setLoading(true);
-      const [telData, circData] = await Promise.all([
-        backendService.getTelemetry(year, round, sessionType, driver),
-        backendService.getCircuit(year, round, sessionType, driver),
+      const data = await getTelemetryComparison(year, selectedGP, sessionType, driver1, driver2);
+      setTelemetryData(data);
+    } catch (error) {
+      console.error('Error loading telemetry:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadRaceEvolution = async () => {
+    if (!driver1 || sessionType !== 'R') return;
+    setLoading(true);
+    try {
+      const [pace, stints, sectors] = await Promise.all([
+        getRacePace(year, selectedGP, driver1),
+        getStintAnalysis(year, selectedGP, driver1),
+        getSectorEvolution(year, selectedGP, driver1)
       ]);
-      setTelemetry(telData.telemetry);
-      setLapTime(telData.lap_time);
-      setCircuitData(circData);
-      setLoading(false);
-    } catch (err) {
-      console.error(err);
-      alert('Erreur de chargement. Vérifie les paramètres.');
+      setRacePaceData(pace);
+      setStintData(stints);
+      setSectorData(sectors);
+    } catch (error) {
+      console.error('Error loading race evolution:', error);
+    } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    if (circuitData && canvasRef.current) {
-      drawCircuit();
+  const loadQualifyingSectors = async () => {
+    if (comparisonDrivers.length === 0) return;
+    setLoading(true);
+    try {
+      const sectors = await getMultiDriverSectors(year, selectedGP, sessionType, comparisonDrivers);
+      setMultiDriverSectorsData(sectors);
+    } catch (error) {
+      console.error('Error loading qualifying sectors:', error);
+    } finally {
+      setLoading(false);
     }
-  }, [circuitData]);
-
-  const drawCircuit = () => {
-    const canvas = canvasRef.current;
-    if (!canvas || !circuitData) return;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const positions = circuitData.positions;
-    if (positions.length === 0) return;
-
-    ctx.fillStyle = '#0A0A0A';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    const xs = positions.map((p: any) => p.x);
-    const ys = positions.map((p: any) => p.y);
-    const minX = Math.min(...xs);
-    const maxX = Math.max(...xs);
-    const minY = Math.min(...ys);
-    const maxY = Math.max(...ys);
-
-    const width = maxX - minX;
-    const height = maxY - minY;
-    const scale = Math.min((canvas.width - 40) / width, (canvas.height - 40) / height);
-
-    const normalizedPositions = positions.map((p: any) => ({
-      x: (p.x - minX) * scale + 20,
-      y: canvas.height - ((p.y - minY) * scale + 20),
-      speed: p.speed,
-    }));
-
-    const speeds = normalizedPositions.map((p: any) => p.speed);
-    const minSpeed = Math.min(...speeds);
-    const maxSpeed = Math.max(...speeds);
-
-    for (let i = 1; i < normalizedPositions.length; i++) {
-      const prev = normalizedPositions[i - 1];
-      const curr = normalizedPositions[i];
-
-      const speedRatio = (curr.speed - minSpeed) / (maxSpeed - minSpeed);
-      const r = Math.floor(255 * (1 - speedRatio));
-      const g = Math.floor(210 * speedRatio);
-      const b = Math.floor(190 * speedRatio);
-
-      ctx.strokeStyle = `rgb(${r}, ${g}, ${b})`;
-      ctx.lineWidth = 4;
-      ctx.shadowBlur = 8;
-      ctx.shadowColor = `rgb(${r}, ${g}, ${b})`;
-
-      ctx.beginPath();
-      ctx.moveTo(prev.x, prev.y);
-      ctx.lineTo(curr.x, curr.y);
-      ctx.stroke();
-    }
-
-    if (normalizedPositions.length > 0) {
-      const start = normalizedPositions[0];
-      ctx.fillStyle = '#00D2BE';
-      ctx.shadowBlur = 15;
-      ctx.shadowColor = '#00D2BE';
-      ctx.beginPath();
-      ctx.arc(start.x, start.y, 8, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    ctx.shadowBlur = 0;
   };
 
-  // Calculate stats
-  const stats = telemetry.length > 0 ? {
-    maxSpeed: Math.max(...telemetry.map(t => t.speed)),
-    avgSpeed: telemetry.reduce((sum, t) => sum + t.speed, 0) / telemetry.length,
-    minSpeed: Math.min(...telemetry.map(t => t.speed)),
-    avgThrottle: telemetry.reduce((sum, t) => sum + t.throttle, 0) / telemetry.length,
-    brakingZones: telemetry.filter(t => t.brake > 0).length,
-    maxGear: Math.max(...telemetry.map(t => t.gear)),
+  const loadMultiDriverComparison = async () => {
+    if (comparisonDrivers.length === 0) return;
+    setLoading(true);
+    try {
+      const data = await getMultiDriverPace(year, selectedGP, comparisonDrivers, sessionType);
+      setMultiDriverData(data);
+    } catch (error) {
+      console.error('Error loading multi driver comparison:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getCompoundColor = (compound: string) => {
+    const colors: { [key: string]: string } = {
+      SOFT: '#ff4444',
+      MEDIUM: '#ffd700',
+      HARD: '#f0f0f0',
+      INTERMEDIATE: '#00ff00',
+      WET: '#0099ff',
+      UNKNOWN: '#666666'
+    };
+    return colors[compound] || colors.UNKNOWN;
+  };
+
+  const formatLapTime = (seconds: number | null): string => {
+    if (!seconds) return '--:--.---';
+    const mins = Math.floor(seconds / 60);
+    const secs = (seconds % 60).toFixed(3);
+    return `${mins}:${secs.padStart(6, '0')}`;
+  };
+
+  const telemetryChartData = telemetryData?.telemetry.map(point => ({
+    distance: point.distance,
+    speed1: point.speed1,
+    speed2: point.speed2,
+    speedDelta: point.speed1 - point.speed2,
+    throttle1: point.throttle1,
+    throttle2: point.throttle2,
+    brake1: point.brake1 ? 100 : 0,
+    brake2: point.brake2 ? 100 : 0,
+    gear1: point.gear1,
+    gear2: point.gear2,
+  })) || [];
+
+  const paceChartData = racePaceData?.paceData
+    .filter(lap => lap.lapTime !== null && lap.lapTime > 0)
+    .map(lap => ({
+      lap: lap.lapNumber,
+      time: lap.lapTime as number,
+      compound: lap.compound || 'UNKNOWN',
+      tyreLife: lap.tyreLife || 0
+    })) || [];
+
+  const comparisonChartData = multiDriverData ?
+    (() => {
+      const maxLaps = Math.max(...Object.values(multiDriverData.data).map(d => d.length));
+      const chartData = [];
+      for (let i = 0; i < maxLaps; i++) {
+        const lapData: any = { lap: i + 1 };
+        multiDriverData.drivers.forEach(driver => {
+          const driverData = multiDriverData.data[driver];
+          if (driverData[i] && driverData[i].lapTime !== null && !driverData[i].pitOutTime && !driverData[i].pitInTime) {
+            lapData[driver] = driverData[i].lapTime;
+          }
+        });
+        chartData.push(lapData);
+      }
+      return chartData;
+    })()
+    : [];
+
+  const stintEvolutionChartData = stintData?.stints.map((stint) => ({
+    stint: stint.stint,
+    avgTime: stint.avgLapTime,
+    bestTime: stint.bestLapTime,
+    worstTime: stint.worstLapTime,
+    compound: stint.compound,
+    laps: stint.totalLaps
+  })) || [];
+
+  const stintChartData = stintData?.stints.map(stint => ({
+    stint: `Stint ${stint.stint}`,
+    compound: stint.compound,
+    avgTime: stint.avgLapTime,
+    bestTime: stint.bestLapTime,
+    worstTime: stint.worstLapTime,
+    degradation: stint.degradation,
+    laps: stint.totalLaps
+  })) || [];
+
+  const sectorChartData = sectorData?.sectorData.map(lap => ({
+    lap: lap.lapNumber,
+    sector1: lap.sector1,
+    sector2: lap.sector2,
+    sector3: lap.sector3,
+    totalTime: (lap.sector1 || 0) + (lap.sector2 || 0) + (lap.sector3 || 0)
+  })) || [];
+
+  const multiSectorChartData = multiDriverSectorsData ? 
+    Object.entries(multiDriverSectorsData.sectors).map(([driver, sectors]: [string, any]) => ({
+      driver,
+      sector1: sectors.sector1,
+      sector2: sectors.sector2,
+      sector3: sectors.sector3,
+      total: sectors.total
+    }))
+    : [];
+
+  // Delta Graph Data - Calcul segment par segment NORMALISÉ
+  const deltaGraphData = telemetryData && sessionType === 'Q' ? 
+    (() => {
+      const data = [];
+      let cumulativeTime1 = 0;
+      let cumulativeTime2 = 0;
+      
+      data.push({
+        distance: telemetryData.telemetry[0].distance,
+        delta: 0,
+        speed1: telemetryData.telemetry[0].speed1,
+        speed2: telemetryData.telemetry[0].speed2
+      });
+      
+      for (let i = 1; i < telemetryData.telemetry.length; i++) {
+        const prevPoint = telemetryData.telemetry[i - 1];
+        const currPoint = telemetryData.telemetry[i];
+        
+        const segmentDistance = currPoint.distance - prevPoint.distance;
+        
+        const segmentTime1 = prevPoint.speed1 > 0 ? segmentDistance / (prevPoint.speed1 / 3.6) : 0;
+        const segmentTime2 = prevPoint.speed2 > 0 ? segmentDistance / (prevPoint.speed2 / 3.6) : 0;
+        
+        cumulativeTime1 += segmentTime1;
+        cumulativeTime2 += segmentTime2;
+        
+        data.push({
+          distance: currPoint.distance,
+          deltaRaw: cumulativeTime2 - cumulativeTime1,
+          speed1: currPoint.speed1,
+          speed2: currPoint.speed2,
+          delta: 0
+        });
+      }
+      
+      const realDelta = (telemetryData.lapTime2 || 0) - (telemetryData.lapTime1 || 0);
+      const calculatedDelta = data[data.length - 1]?.deltaRaw || 0;
+      const normalizationFactor = calculatedDelta !== 0 ? realDelta / calculatedDelta : 1;
+      
+      return data.map(point => ({
+        distance: point.distance,
+        delta: point.deltaRaw ? point.deltaRaw * normalizationFactor : 0,
+        speed1: point.speed1,
+        speed2: point.speed2
+      }));
+    })()
+    : [];
+
+  // 🔥 NOUVEAU: Track Dominance Data - Version ULTRA PRO avec vérification GPS
+  const trackDominanceData = telemetryData && sessionType === 'Q' ? 
+    (() => {
+      // ✅ ÉTAPE 1 : Vérifier si on a des GPS valides (non nuls)
+      const validGpsPoints = telemetryData.telemetry.filter(p => 
+        p.x != null && p.y != null &&  // != null vérifie null ET undefined
+        !isNaN(p.x) && !isNaN(p.y) &&
+        Math.abs(p.x) > 0.1 && Math.abs(p.y) > 0.1
+      );
+
+      // Si moins de 50% des points ont des GPS valides, désactiver le circuit
+      if (validGpsPoints.length < telemetryData.telemetry.length * 0.5) {
+        return null;
+      }
+
+      const segmentSize = 50; // Segments plus petits pour plus de précision
+      const maxDistance = telemetryData.telemetry[telemetryData.telemetry.length - 1]?.distance || 0;
+      const numSegments = Math.ceil(maxDistance / segmentSize);
+      
+      const segments = [];
+      
+      for (let i = 0; i < numSegments; i++) {
+        const startDist = i * segmentSize;
+        const endDist = Math.min((i + 1) * segmentSize, maxDistance);
+        
+        const segmentPoints = telemetryData.telemetry.filter(
+          p => p.distance >= startDist && p.distance < endDist &&
+               p.x != null && p.y != null && !isNaN(p.x) && !isNaN(p.y)
+        );
+        
+        if (segmentPoints.length > 0) {
+          const avgSpeed1 = segmentPoints.reduce((sum, p) => sum + p.speed1, 0) / segmentPoints.length;
+          const avgSpeed2 = segmentPoints.reduce((sum, p) => sum + p.speed2, 0) / segmentPoints.length;
+          
+          const advantage = avgSpeed1 - avgSpeed2;
+          const advantagePercent = avgSpeed2 > 0 ? (advantage / avgSpeed2) * 100 : 0;
+          
+          // Centre du segment pour le tracé
+          const centerPoint = segmentPoints[Math.floor(segmentPoints.length / 2)];
+          
+          segments.push({
+            segment: i + 1,
+            startDistance: startDist,
+            endDistance: endDist,
+            avgSpeed1,
+            avgSpeed2,
+            advantage,
+            advantagePercent,
+            dominant: Math.abs(advantagePercent) < 0.3 ? 'equal' : advantagePercent > 0 ? 'driver1' : 'driver2',
+            x: centerPoint.x,
+            y: centerPoint.y,
+            points: segmentPoints
+          });
+        }
+      }
+      
+      // Si pas assez de segments valides, retourner null
+      if (segments.length < 10) {
+        return null;
+      }
+
+      // Stats globales
+      const driver1Dominant = segments.filter(s => s.dominant === 'driver1').length;
+      const driver2Dominant = segments.filter(s => s.dominant === 'driver2').length;
+      const equalSegments = segments.filter(s => s.dominant === 'equal').length;
+      
+      // Top 5 segments pour chaque pilote
+      const driver1BestSegments = segments
+        .filter(s => s.dominant === 'driver1')
+        .sort((a, b) => b.advantage - a.advantage)
+        .slice(0, 5);
+      
+      const driver2BestSegments = segments
+        .filter(s => s.dominant === 'driver2')
+        .sort((a, b) => Math.abs(b.advantage) - Math.abs(a.advantage))
+        .slice(0, 5);
+      
+      return {
+        segments,
+        stats: {
+          driver1Dominant,
+          driver2Dominant,
+          equalSegments,
+          totalSegments: segments.length,
+          driver1BestSegments,
+          driver2BestSegments
+        },
+        hasValidGps: true
+      };
+    })()
+    : null;
+
+  // Calcul des stats pour RacePaceData
+  const racePaceStats = racePaceData ? (() => {
+    const validLaps = racePaceData.paceData.filter(l => l.lapTime !== null && l.lapTime > 0);
+    const lapTimes = validLaps.map(l => l.lapTime as number);
+    const avg = lapTimes.length > 0 ? lapTimes.reduce((sum, l) => sum + l, 0) / lapTimes.length : 0;
+    const variance = lapTimes.length > 0 ? lapTimes.reduce((sum, l) => sum + Math.pow(l - avg, 2), 0) / lapTimes.length : 0;
+    
+    return {
+      totalLaps: racePaceData.paceData.length,
+      bestLapTime: lapTimes.length > 0 ? Math.min(...lapTimes) : 0,
+      avgLapTime: avg,
+      totalStints: stintData?.stints.length || 0,
+      stdDeviation: Math.sqrt(variance)
+    };
+  })() : null;
+
+  // Calcul des stats pour TelemetryData
+  const telemetryStats = telemetryData ? {
+    maxSpeed1: Math.max(...telemetryData.telemetry.map(p => p.speed1)),
+    maxSpeed2: Math.max(...telemetryData.telemetry.map(p => p.speed2)),
+    delta: (telemetryData.lapTime1 || 0) - (telemetryData.lapTime2 || 0)
   } : null;
 
+  const tabs = [
+    { id: 'telemetry' as const, name: 'Telemetry', icon: Activity, desc: '2 Drivers Comparison' },
+    { id: 'pace' as const, name: 'Race Pace', icon: TrendingDown, desc: 'Lap Times Evolution', requiresRace: true },
+    { id: 'comparison' as const, name: 'Multi-Driver', icon: BarChart3, desc: 'Compare Multiple Drivers', requiresRace: true },
+    { id: 'stints' as const, name: 'Track Dominance', icon: Target, desc: 'Speed Advantage Map', requiresQualifying: true },
+    { id: 'sectors' as const, name: 'Sectors', icon: Clock, desc: 'Sector Times', requiresRace: true }
+  ];
+
   return (
-    <div className="min-h-screen bg-metrik-black text-metrik-text p-8">
-      <div className="max-w-[1800px] mx-auto">
-        
+    <div className="min-h-screen bg-metrik-black text-white">
+      <div className="container mx-auto px-6 py-8">
         {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-5xl font-rajdhani font-bold mb-2">
-            <span className="text-metrik-silver">TÉLÉ</span>
-            <span className="text-metrik-turquoise">MÉTRIE</span>
-          </h1>
-          <div className="h-1 bg-gradient-to-r from-metrik-turquoise via-metrik-turquoise/50 to-transparent w-64" />
-          <p className="text-metrik-text-secondary font-inter mt-2">Analyse détaillée des données de course</p>
+        <div className="flex items-center justify-between mb-8">
+          <button
+            onClick={() => navigate('/')}
+            className="flex items-center gap-2 text-metrik-silver hover:text-metrik-turquoise transition-colors group"
+          >
+            <ArrowLeft className="group-hover:-translate-x-1 transition-transform" size={20} />
+            <span className="font-rajdhani font-bold uppercase tracking-wide">Back</span>
+          </button>
+          <div className="flex items-center gap-3">
+            <Gauge className="text-metrik-turquoise" size={32} />
+            <h1 className="text-4xl font-rajdhani font-black bg-gradient-to-r from-white to-metrik-turquoise bg-clip-text text-transparent">
+              TELEMETRY ANALYSIS
+            </h1>
+          </div>
         </div>
 
-        {/* Controls */}
-        <div className="card-cockpit mb-6">
-          <h2 className="text-2xl font-rajdhani font-bold text-metrik-turquoise mb-4">PARAMÈTRES SYSTÈME</h2>
-          
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
-            <div>
-              <label className="block text-sm font-rajdhani text-metrik-text-secondary mb-2 tracking-wide">ANNÉE</label>
-              <input
-                type="number"
-                value={year}
-                onChange={(e) => setYear(parseInt(e.target.value))}
-                className="w-full px-4 py-3 bg-metrik-dark border border-metrik-turquoise/30 rounded-lg text-metrik-text font-mono focus:border-metrik-turquoise focus:outline-none transition-colors"
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-rajdhani text-metrik-text-secondary mb-2 tracking-wide">ROUND</label>
-              <input
-                type="number"
-                value={round}
-                onChange={(e) => setRound(parseInt(e.target.value))}
-                className="w-full px-4 py-3 bg-metrik-dark border border-metrik-turquoise/30 rounded-lg text-metrik-text font-mono focus:border-metrik-turquoise focus:outline-none transition-colors"
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-rajdhani text-metrik-text-secondary mb-2 tracking-wide">SESSION</label>
-              <select
-                value={sessionType}
-                onChange={(e) => setSessionType(e.target.value)}
-                className="w-full px-4 py-3 bg-metrik-dark border border-metrik-turquoise/30 rounded-lg text-metrik-text font-rajdhani focus:border-metrik-turquoise focus:outline-none transition-colors"
-              >
-                <option value="FP1">FP1</option>
-                <option value="FP2">FP2</option>
-                <option value="FP3">FP3</option>
-                <option value="Q">Qualifications</option>
-                <option value="R">Course</option>
-              </select>
-            </div>
-            
-            <div className="col-span-2">
-              <label className="block text-sm font-rajdhani text-metrik-text-secondary mb-2 tracking-wide">ACTION</label>
-              <button
-                onClick={loadDrivers}
-                disabled={loadingDrivers}
-                className="w-full btn-cockpit disabled:opacity-50"
-              >
-                {loadingDrivers ? 'CHARGEMENT...' : '🔄 CHARGER PILOTES'}
-              </button>
-            </div>
+        {/* Selection Controls */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-xl p-4 shadow-lg shadow-metrik-turquoise/20">
+            <YearSelector selectedYear={year} onSelectYear={setYear} />
           </div>
-
-          {drivers.length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-rajdhani text-metrik-text-secondary mb-2 tracking-wide">PILOTE</label>
-                <select
-                  value={driver}
-                  onChange={(e) => setDriver(e.target.value)}
-                  className="w-full px-4 py-3 bg-metrik-dark border border-metrik-silver/30 rounded-lg text-metrik-text font-rajdhani focus:border-metrik-silver focus:outline-none transition-colors"
-                >
-                  {drivers.map(d => (
-                    <option key={d.code} value={d.code}>
-                      #{d.number} - {d.code} ({d.team})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              
-              <div className="flex items-end">
-                <button
-                  onClick={loadTelemetry}
-                  disabled={loading}
-                  className="w-full btn-cockpit disabled:opacity-50"
-                >
-                  {loading ? 'ANALYSE...' : '📊 ANALYSER'}
-                </button>
-              </div>
+          <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-xl p-4 shadow-lg shadow-metrik-turquoise/20">
+            <GrandPrixSelector
+              year={year}
+              selectedRound={selectedGP}
+              onSelect={setSelectedGP}
+            />
+          </div>
+          <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-xl p-4 shadow-lg shadow-metrik-turquoise/20">
+            <SessionSelector
+              selectedSession={sessionType}
+              onSelectSession={(session: string) => setSessionType(session)}
+            />
+          </div>
+          {(activeTab === 'telemetry' || (activeTab === 'stints' && sessionType === 'Q')) && (
+            <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-xl p-4 shadow-lg shadow-metrik-turquoise/20">
+              <DriverSelector
+                drivers={drivers}
+                selectedDriver={driver1}
+                onSelectDriver={setDriver1}
+                label="Driver 1"
+              />
             </div>
           )}
         </div>
 
-        {/* Stats Cards + Lap Time */}
-        {stats && lapTime && (
-          <div className="grid grid-cols-2 md:grid-cols-7 gap-3 mb-6">
-            <div className="card-cockpit text-center bg-metrik-success/5 border-metrik-success/30">
-              <div className="text-xs font-rajdhani text-metrik-text-tertiary mb-1">LAP TIME</div>
-              <div className="data-display text-2xl text-metrik-success">{lapTime.toFixed(3)}s</div>
-            </div>
-            
-            <div className="card-cockpit text-center">
-              <div className="text-xs font-rajdhani text-metrik-text-tertiary mb-1">MAX SPEED</div>
-              <div className="font-mono text-xl font-bold text-metrik-turquoise">{stats.maxSpeed.toFixed(0)}</div>
-              <div className="text-xs text-metrik-text-tertiary">km/h</div>
-            </div>
-            
-            <div className="card-cockpit text-center">
-              <div className="text-xs font-rajdhani text-metrik-text-tertiary mb-1">AVG SPEED</div>
-              <div className="font-mono text-xl font-bold text-metrik-silver">{stats.avgSpeed.toFixed(0)}</div>
-              <div className="text-xs text-metrik-text-tertiary">km/h</div>
-            </div>
-            
-            <div className="card-cockpit text-center">
-              <div className="text-xs font-rajdhani text-metrik-text-tertiary mb-1">MIN SPEED</div>
-              <div className="font-mono text-xl font-bold text-metrik-warning">{stats.minSpeed.toFixed(0)}</div>
-              <div className="text-xs text-metrik-text-tertiary">km/h</div>
-            </div>
-            
-            <div className="card-cockpit text-center">
-              <div className="text-xs font-rajdhani text-metrik-text-tertiary mb-1">AVG THROTTLE</div>
-              <div className="font-mono text-xl font-bold text-metrik-success">{stats.avgThrottle.toFixed(0)}</div>
-              <div className="text-xs text-metrik-text-tertiary">%</div>
-            </div>
-            
-            <div className="card-cockpit text-center">
-              <div className="text-xs font-rajdhani text-metrik-text-tertiary mb-1">BRAKING ZONES</div>
-              <div className="font-mono text-xl font-bold text-metrik-error">{stats.brakingZones}</div>
-            </div>
-            
-            <div className="card-cockpit text-center">
-              <div className="text-xs font-rajdhani text-metrik-text-tertiary mb-1">MAX GEAR</div>
-              <div className="font-mono text-xl font-bold text-metrik-gold">{stats.maxGear}</div>
+        {/* Secondary Driver Selector for Telemetry and Track Dominance */}
+        {(activeTab === 'telemetry' || (activeTab === 'stints' && sessionType === 'Q')) && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-xl p-4 shadow-lg shadow-metrik-turquoise/20">
+              <DriverSelector
+                drivers={drivers}
+                selectedDriver={driver2}
+                onSelectDriver={setDriver2}
+                label="Driver 2"
+              />
             </div>
           </div>
         )}
 
-        {/* Main Content: Grid Layout + Track Map */}
-        {telemetry.length > 0 && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            
-            {/* Left: 2x2 Grid of Charts */}
-            <div className="lg:col-span-2 grid grid-cols-2 gap-4">
-              
-              {/* Speed */}
-              <div className="card-cockpit">
-                <h3 className="text-lg font-rajdhani font-bold text-metrik-turquoise mb-3 flex items-center gap-2">
-                  <span>🚀</span> VITESSE (km/h)
-                </h3>
-                <ResponsiveContainer width="100%" height={250}>
-                  <LineChart data={telemetry}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(192,192,192,0.1)" />
-                    <XAxis 
-                      dataKey="distance" 
-                      stroke="#B0B0B0" 
-                      style={{ fontSize: '10px', fontFamily: 'JetBrains Mono' }}
-                      hide
-                    />
-                    <YAxis 
-                      stroke="#B0B0B0"
-                      style={{ fontSize: '10px', fontFamily: 'JetBrains Mono' }}
-                      width={40}
-                    />
-                    <Tooltip 
-                      contentStyle={{ 
-                        backgroundColor: '#1A1A1A', 
-                        border: '1px solid #00D2BE',
-                        borderRadius: '8px',
-                        fontFamily: 'JetBrains Mono',
-                        fontSize: '11px'
-                      }} 
-                    />
-                    <Line 
-                      type="monotone" 
-                      dataKey="speed" 
-                      stroke="#00D2BE" 
-                      strokeWidth={2} 
-                      dot={false}
-                      filter="drop-shadow(0 0 8px rgba(0,210,190,0.6))"
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
+        {/* Driver Selector for Pace/Sectors (Race only) */}
+        {(activeTab === 'pace' || (activeTab === 'sectors' && sessionType === 'R')) && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-xl p-4 shadow-lg shadow-metrik-turquoise/20">
+              <DriverSelector
+                drivers={drivers}
+                selectedDriver={driver1}
+                onSelectDriver={setDriver1}
+                label="Driver"
+              />
+            </div>
+          </div>
+        )}
 
-              {/* Throttle */}
-              <div className="card-cockpit">
-                <h3 className="text-lg font-rajdhani font-bold text-metrik-success mb-3 flex items-center gap-2">
-                  <span>⚡</span> THROTTLE (%)
-                </h3>
-                <ResponsiveContainer width="100%" height={250}>
-                  <LineChart data={telemetry}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(192,192,192,0.1)" />
-                    <XAxis dataKey="distance" stroke="#B0B0B0" hide />
-                    <YAxis stroke="#B0B0B0" style={{ fontSize: '10px' }} width={40} />
-                    <Tooltip contentStyle={{ backgroundColor: '#1A1A1A', border: '1px solid #00D176', borderRadius: '8px', fontSize: '11px' }} />
-                    <Line type="monotone" dataKey="throttle" stroke="#00D176" strokeWidth={2} dot={false} />
-                  </LineChart>
-                </ResponsiveContainer>
+        {/* Multi Driver Selector for Comparison and Qualifying Sectors */}
+        {(activeTab === 'comparison' || (activeTab === 'sectors' && sessionType === 'Q')) && (
+          <div className="mb-8">
+            <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-xl p-6 shadow-lg shadow-metrik-turquoise/20">
+              <h3 className="text-lg font-rajdhani font-bold text-metrik-turquoise mb-4">
+                Select Drivers to Compare
+              </h3>
+              <div className="flex flex-wrap gap-3">
+                {drivers.map((driver) => (
+                  <button
+                    key={driver.abbreviation}
+                    onClick={() => {
+                      if (comparisonDrivers.includes(driver.abbreviation)) {
+                        setComparisonDrivers(comparisonDrivers.filter(d => d !== driver.abbreviation));
+                      } else {
+                        setComparisonDrivers([...comparisonDrivers, driver.abbreviation]);
+                      }
+                    }}
+                    className={`px-4 py-2 rounded-lg font-rajdhani font-bold transition-all duration-200 ${
+                      comparisonDrivers.includes(driver.abbreviation)
+                        ? 'bg-metrik-turquoise text-metrik-black shadow-lg shadow-metrik-turquoise/50'
+                        : 'bg-metrik-card border border-metrik-turquoise/30 text-metrik-silver hover:text-metrik-turquoise'
+                    }`}
+                  >
+                    {driver.abbreviation}
+                  </button>
+                ))}
               </div>
-
-              {/* Brake */}
-              <div className="card-cockpit">
-                <h3 className="text-lg font-rajdhani font-bold text-metrik-error mb-3 flex items-center gap-2">
-                  <span>🛑</span> BRAKE (%)
-                </h3>
-                <ResponsiveContainer width="100%" height={250}>
-                  <LineChart data={telemetry}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(192,192,192,0.1)" />
-                    <XAxis dataKey="distance" stroke="#B0B0B0" hide />
-                    <YAxis stroke="#B0B0B0" style={{ fontSize: '10px' }} width={40} />
-                    <Tooltip contentStyle={{ backgroundColor: '#1A1A1A', border: '1px solid #FF4444', borderRadius: '8px', fontSize: '11px' }} />
-                    <Line type="monotone" dataKey="brake" stroke="#FF4444" strokeWidth={2} dot={false} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-
-              {/* Gear */}
-              <div className="card-cockpit">
-                <h3 className="text-lg font-rajdhani font-bold text-metrik-gold mb-3 flex items-center gap-2">
-                  <span>⚙️</span> GEAR
-                </h3>
-                <ResponsiveContainer width="100%" height={250}>
-                  <LineChart data={telemetry}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(192,192,192,0.1)" />
-                    <XAxis dataKey="distance" stroke="#B0B0B0" hide />
-                    <YAxis stroke="#B0B0B0" style={{ fontSize: '10px' }} width={40} domain={[0, 8]} />
-                    <Tooltip contentStyle={{ backgroundColor: '#1A1A1A', border: '1px solid #FFD700', borderRadius: '8px', fontSize: '11px' }} />
-                    <Line type="stepAfter" dataKey="gear" stroke="#FFD700" strokeWidth={2} dot={false} />
-                  </LineChart>
-                </ResponsiveContainer>
+              <div className="text-sm text-metrik-silver mt-3">
+                Selected: {comparisonDrivers.length} driver{comparisonDrivers.length !== 1 ? 's' : ''}
               </div>
             </div>
+          </div>
+        )}
 
-            {/* Right: Mini Track Map */}
-            {circuitData && (
-              <div className="card-cockpit">
-                <h3 className="text-lg font-rajdhani font-bold text-metrik-silver mb-3 flex items-center gap-2">
-                  <span>🗺️</span> TRACK MAP
-                </h3>
-                <div className="bg-metrik-black rounded border border-metrik-turquoise/10 flex items-center justify-center p-4">
-                  <canvas ref={canvasRef} width={320} height={560} className="max-w-full h-auto" />
+        {/* Tab Navigation */}
+        <div className="mb-8 overflow-x-auto">
+          <div className="flex gap-2 min-w-max">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              const isDisabled = (tab.requiresRace && sessionType !== 'R') || (tab.requiresQualifying && sessionType !== 'Q');
+              const isActive = activeTab === tab.id;
+              
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => !isDisabled && setActiveTab(tab.id)}
+                  disabled={isDisabled}
+                  className={`
+                    group relative px-6 py-4 rounded-xl font-rajdhani font-bold uppercase tracking-wide transition-all duration-300
+                    ${isActive 
+                      ? 'bg-gradient-to-r from-metrik-turquoise to-metrik-turquoise/80 text-metrik-black shadow-lg shadow-metrik-turquoise/50' 
+                      : isDisabled
+                        ? 'bg-metrik-card/50 border border-metrik-silver/20 text-metrik-silver/40 cursor-not-allowed'
+                        : 'bg-metrik-card border border-metrik-turquoise/30 text-metrik-silver hover:text-metrik-turquoise hover:border-metrik-turquoise/60 hover:shadow-lg hover:shadow-metrik-turquoise/20'
+                    }
+                  `}
+                >
+                  <div className="flex items-center gap-2">
+                    <Icon size={20} />
+                    <div className="text-left">
+                      <div className="text-sm">{tab.name}</div>
+                      <div className={`text-xs font-normal ${isActive ? 'text-metrik-black/80' : 'text-metrik-silver/60'}`}>
+                        {tab.desc}
+                      </div>
+                    </div>
+                  </div>
+                  {isDisabled && (
+                    <div className="absolute -top-2 -right-2 bg-metrik-card border border-metrik-turquoise/30 text-metrik-turquoise text-xs px-2 py-1 rounded-full">
+                      {tab.requiresRace ? 'Race only' : 'Qualifying only'}
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Load Data Button */}
+        <div className="mb-8">
+          <button
+            onClick={() => {
+              if (activeTab === 'telemetry' || (activeTab === 'stints' && sessionType === 'Q')) loadTelemetry();
+              else if (activeTab === 'pace' || (activeTab === 'stints' && sessionType === 'R') || (activeTab === 'sectors' && sessionType === 'R')) loadRaceEvolution();
+              else if (activeTab === 'comparison') loadMultiDriverComparison();
+              else if (activeTab === 'sectors' && sessionType === 'Q') loadQualifyingSectors();
+            }}
+            disabled={loading || ((activeTab === 'telemetry' || (activeTab === 'stints' && sessionType === 'Q')) && (!driver1 || !driver2)) || ((activeTab === 'comparison' || (activeTab === 'sectors' && sessionType === 'Q')) && comparisonDrivers.length === 0)}
+            className="w-full backdrop-blur-xl bg-gradient-to-r from-metrik-turquoise to-metrik-turquoise/80 hover:from-metrik-turquoise/90 hover:to-metrik-turquoise/70 disabled:from-metrik-silver/50 disabled:to-metrik-silver/30 text-metrik-black font-rajdhani font-black text-lg py-4 rounded-xl shadow-lg shadow-metrik-turquoise/50 disabled:shadow-none transition-all duration-300 uppercase tracking-wide disabled:cursor-not-allowed"
+          >
+            {loading ? (
+              <span className="flex items-center justify-center gap-2">
+                <Loader2 className="animate-spin" size={20} />
+                Loading...
+              </span>
+            ) : (
+              `Load ${activeTab === 'telemetry' ? 'Telemetry' : activeTab === 'pace' ? 'Race Pace' : activeTab === 'comparison' ? 'Multi-Driver' : activeTab === 'stints' ? (sessionType === 'Q' ? 'Track Dominance' : 'Stint Analysis') : 'Sectors'} Data`
+            )}
+          </button>
+        </div>
+
+        {/* Content */}
+        {loading ? (
+          <SkeletonChart />
+        ) : (
+          <div className="space-y-8">
+            {/* Telemetry Tab */}
+            {activeTab === 'telemetry' && telemetryData && (
+              <div className="space-y-6">
+                {/* Stats Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-2xl p-6 shadow-lg shadow-metrik-turquoise/20 hover:shadow-metrik-turquoise/40 transition-all duration-300">
+                    <div className="flex items-center justify-between mb-2">
+                      <Clock className="text-metrik-turquoise" size={24} />
+                      <span className="text-xs text-metrik-silver uppercase tracking-wide font-rajdhani font-bold">Lap Time</span>
+                    </div>
+                    <div className="text-3xl font-rajdhani font-black text-white mb-1">
+                      {formatLapTime(telemetryData.lapTime1 || 0)}
+                    </div>
+                    <div className="text-sm text-metrik-silver font-inter">{driver1}</div>
+                  </div>
+                  <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-2xl p-6 shadow-lg shadow-metrik-turquoise/20 hover:shadow-metrik-turquoise/40 transition-all duration-300">
+                    <div className="flex items-center justify-between mb-2">
+                      <Clock className="text-metrik-turquoise" size={24} />
+                      <span className="text-xs text-metrik-silver uppercase tracking-wide font-rajdhani font-bold">Lap Time</span>
+                    </div>
+                    <div className="text-3xl font-rajdhani font-black text-white mb-1">
+                      {formatLapTime(telemetryData.lapTime2 || 0)}
+                    </div>
+                    <div className="text-sm text-metrik-silver font-inter">{driver2}</div>
+                  </div>
+                  <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-2xl p-6 shadow-lg shadow-metrik-turquoise/20 hover:shadow-metrik-turquoise/40 transition-all duration-300">
+                    <div className="flex items-center justify-between mb-2">
+                      <Zap className="text-metrik-turquoise" size={24} />
+                      <span className="text-xs text-metrik-silver uppercase tracking-wide font-rajdhani font-bold">Delta</span>
+                    </div>
+                    <div className={`text-3xl font-rajdhani font-black mb-1 ${
+                      telemetryStats && telemetryStats.delta > 0 ? 'text-red-500' : 'text-green-500'
+                    }`}>
+                      {telemetryStats && telemetryStats.delta > 0 ? '+' : ''}{telemetryStats?.delta.toFixed(3)}s
+                    </div>
+                    <div className="text-sm text-metrik-silver font-inter">
+                      {telemetryStats && Math.abs(telemetryStats.delta) < 0.001 ? 'Equal pace' : telemetryStats && telemetryStats.delta > 0 ? `${driver1} slower` : `${driver1} faster`}
+                    </div>
+                  </div>
+                  <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-2xl p-6 shadow-lg shadow-metrik-turquoise/20 hover:shadow-metrik-turquoise/40 transition-all duration-300">
+                    <div className="flex items-center justify-between mb-2">
+                      <Gauge className="text-metrik-turquoise" size={24} />
+                      <span className="text-xs text-metrik-silver uppercase tracking-wide font-rajdhani font-bold">Max Speed</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <div className="text-2xl font-rajdhani font-black text-white">
+                          {telemetryStats?.maxSpeed1.toFixed(0)}
+                        </div>
+                        <div className="text-xs text-metrik-silver">{driver1}</div>
+                      </div>
+                      <div>
+                        <div className="text-2xl font-rajdhani font-black text-white">
+                          {telemetryStats?.maxSpeed2.toFixed(0)}
+                        </div>
+                        <div className="text-xs text-metrik-silver">{driver2}</div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div className="mt-3 flex items-center justify-between text-xs font-inter">
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 bg-gradient-to-r from-red-500 to-orange-500 rounded" />
-                    <span className="text-metrik-text-secondary">Lent</span>
+
+                {/* Speed Comparison */}
+                <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-2xl p-6 shadow-lg shadow-metrik-turquoise/20">
+                  <h3 className="text-2xl font-rajdhani font-black text-metrik-turquoise mb-6 tracking-wide flex items-center gap-2">
+                    <Gauge className="w-6 h-6" />
+                    SPEED COMPARISON
+                  </h3>
+                  <ResponsiveContainer width="100%" height={400}>
+                    <LineChart data={telemetryChartData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1a1a1a" />
+                      <XAxis 
+                        dataKey="distance" 
+                        stroke="#666"
+                        label={{ value: 'Distance (m)', position: 'insideBottom', offset: -5, fill: '#c0c0c0' }}
+                      />
+                      <YAxis 
+                        stroke="#666"
+                        label={{ value: 'Speed (km/h)', angle: -90, position: 'insideLeft', fill: '#c0c0c0' }}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: '#1a1a1a',
+                          border: '1px solid #00E5CC',
+                          borderRadius: '8px'
+                        }}
+                      />
+                      <Legend />
+                      <Line 
+                        type="monotone" 
+                        dataKey="speed1" 
+                        stroke="#00E5CC" 
+                        strokeWidth={2}
+                        dot={false}
+                        name={driver1}
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="speed2" 
+                        stroke="#ff4444" 
+                        strokeWidth={2}
+                        dot={false}
+                        name={driver2}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* Delta Graph pour Qualification */}
+                {sessionType === 'Q' && deltaGraphData.length > 0 && (
+                  <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-2xl p-6 shadow-lg shadow-metrik-turquoise/20">
+                    <h3 className="text-2xl font-rajdhani font-black text-metrik-turquoise mb-4 tracking-wide flex items-center gap-2">
+                      <Zap className="w-6 h-6" />
+                      DELTA ANALYSIS - {driver1} vs {driver2}
+                    </h3>
+                    <div className="text-sm text-metrik-silver mb-6 font-inter">
+                      Cumulative time gap throughout the lap • Green = {driver1} ahead • Red = {driver2} ahead
+                    </div>
+                    <ResponsiveContainer width="100%" height={400}>
+                      <AreaChart data={deltaGraphData}>
+                        <defs>
+                          <linearGradient id="deltaPositive" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#22c55e" stopOpacity={0.8}/>
+                            <stop offset="95%" stopColor="#22c55e" stopOpacity={0.2}/>
+                          </linearGradient>
+                          <linearGradient id="deltaNegative" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#ef4444" stopOpacity={0.2}/>
+                            <stop offset="95%" stopColor="#ef4444" stopOpacity={0.8}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#1a1a1a" />
+                        <XAxis 
+                          dataKey="distance" 
+                          stroke="#999"
+                          label={{ value: 'Distance (m)', position: 'insideBottom', offset: -5, fill: '#c0c0c0' }}
+                        />
+                        <YAxis 
+                          stroke="#999"
+                          label={{ value: 'Time Gap (s)', angle: -90, position: 'insideLeft', fill: '#c0c0c0' }}
+                          tickFormatter={(value) => `${value >= 0 ? '+' : ''}${value.toFixed(3)}s`}
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: '#1a1a1a',
+                            border: '2px solid #00E5CC',
+                            borderRadius: '12px',
+                            padding: '12px'
+                          }}
+                          formatter={(value: any) => {
+                            const val = parseFloat(value);
+                            return [
+                              `${Math.abs(val).toFixed(3)}s`,
+                              val > 0 ? `${driver1} ahead by` : val < 0 ? `${driver2} ahead by` : 'Equal pace'
+                            ];
+                          }}
+                          labelFormatter={(label) => `Distance: ${label}m`}
+                        />
+                        <ReferenceLine 
+                          y={0} 
+                          stroke="#00E5CC" 
+                          strokeWidth={3} 
+                          strokeDasharray="5 5"
+                          label={{ 
+                            value: 'Equal', 
+                            position: 'right',
+                            fill: '#00E5CC',
+                            fontSize: 12,
+                            fontWeight: 'bold'
+                          }}
+                        />
+                        <Area 
+                          type="monotone" 
+                          dataKey="delta" 
+                          stroke="#00E5CC" 
+                          strokeWidth={4}
+                          fill="url(#deltaPositive)"
+                          fillOpacity={1}
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 bg-gradient-to-r from-yellow-500 to-green-500 rounded" />
-                    <span className="text-metrik-text-secondary">Moyen</span>
+                )}
+
+                {/* Throttle Application */}
+                <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-2xl p-6 shadow-lg shadow-metrik-turquoise/20">
+                  <h3 className="text-2xl font-rajdhani font-black text-metrik-turquoise mb-6 tracking-wide flex items-center gap-2">
+                    <Activity className="w-6 h-6" />
+                    THROTTLE APPLICATION
+                  </h3>
+                  <ResponsiveContainer width="100%" height={350}>
+                    <LineChart data={telemetryChartData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1a1a1a" />
+                      <XAxis 
+                        dataKey="distance" 
+                        stroke="#666"
+                        label={{ value: 'Distance (m)', position: 'insideBottom', offset: -5, fill: '#c0c0c0' }}
+                      />
+                      <YAxis 
+                        stroke="#666"
+                        label={{ value: 'Throttle (%)', angle: -90, position: 'insideLeft', fill: '#c0c0c0' }}
+                        domain={[0, 100]}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: '#1a1a1a',
+                          border: '1px solid #00E5CC',
+                          borderRadius: '8px'
+                        }}
+                      />
+                      <Legend />
+                      <Line 
+                        type="monotone" 
+                        dataKey="throttle1" 
+                        stroke="#00E5CC" 
+                        strokeWidth={3}
+                        dot={false}
+                        name={`${driver1} Throttle`}
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="throttle2" 
+                        stroke="#00ff00" 
+                        strokeWidth={3}
+                        dot={false}
+                        name={`${driver2} Throttle`}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* Brake Application */}
+                <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-2xl p-6 shadow-lg shadow-metrik-turquoise/20">
+                  <h3 className="text-2xl font-rajdhani font-black text-metrik-turquoise mb-6 tracking-wide flex items-center gap-2">
+                    <Activity className="w-6 h-6" />
+                    BRAKE APPLICATION
+                  </h3>
+                  <ResponsiveContainer width="100%" height={350}>
+                    <LineChart data={telemetryChartData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1a1a1a" />
+                      <XAxis 
+                        dataKey="distance" 
+                        stroke="#666"
+                        label={{ value: 'Distance (m)', position: 'insideBottom', offset: -5, fill: '#c0c0c0' }}
+                      />
+                      <YAxis 
+                        stroke="#666"
+                        label={{ value: 'Brake (%)', angle: -90, position: 'insideLeft', fill: '#c0c0c0' }}
+                        domain={[0, 100]}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: '#1a1a1a',
+                          border: '1px solid #00E5CC',
+                          borderRadius: '8px'
+                        }}
+                      />
+                      <Legend />
+                      <Line 
+                        type="monotone" 
+                        dataKey="brake1" 
+                        stroke="#ff4444" 
+                        strokeWidth={3}
+                        dot={false}
+                        name={`${driver1} Brake`}
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="brake2" 
+                        stroke="#ff8800" 
+                        strokeWidth={3}
+                        dot={false}
+                        name={`${driver2} Brake`}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* Gear Usage */}
+                <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-2xl p-6 shadow-lg shadow-metrik-turquoise/20">
+                  <h3 className="text-2xl font-rajdhani font-black text-metrik-turquoise mb-6 tracking-wide flex items-center gap-2">
+                    <Settings className="w-6 h-6" />
+                    GEAR SELECTION
+                  </h3>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <LineChart data={telemetryChartData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1a1a1a" />
+                      <XAxis 
+                        dataKey="distance" 
+                        stroke="#666"
+                        label={{ value: 'Distance (m)', position: 'insideBottom', offset: -5, fill: '#c0c0c0' }}
+                      />
+                      <YAxis 
+                        stroke="#666"
+                        label={{ value: 'Gear', angle: -90, position: 'insideLeft', fill: '#c0c0c0' }}
+                        domain={[1, 8]}
+                        ticks={[1, 2, 3, 4, 5, 6, 7, 8]}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: '#1a1a1a',
+                          border: '1px solid #00E5CC',
+                          borderRadius: '8px'
+                        }}
+                      />
+                      <Legend />
+                      <Line 
+                        type="stepAfter" 
+                        dataKey="gear1" 
+                        stroke="#00E5CC" 
+                        strokeWidth={3}
+                        dot={false}
+                        name={driver1}
+                      />
+                      <Line 
+                        type="stepAfter" 
+                        dataKey="gear2" 
+                        stroke="#ff4444" 
+                        strokeWidth={3}
+                        dot={false}
+                        name={driver2}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
+
+            {/* Race Pace Tab */}
+            {activeTab === 'pace' && racePaceData && (
+              <div className="space-y-6">
+                {/* Stats Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-2xl p-6 shadow-lg shadow-metrik-turquoise/20 hover:shadow-metrik-turquoise/40 transition-all duration-300">
+                    <div className="flex items-center justify-between mb-2">
+                      <Clock className="text-metrik-turquoise" size={24} />
+                      <span className="text-xs text-metrik-silver uppercase tracking-wide font-rajdhani font-bold">Avg Lap Time</span>
+                    </div>
+                    <div className="text-3xl font-rajdhani font-black text-white mb-1">
+                      {formatLapTime(racePaceStats?.avgLapTime || 0)}
+                    </div>
+                    <div className="text-sm text-metrik-silver font-inter">Excluding outliers</div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 bg-gradient-to-r from-green-500 to-metrik-turquoise rounded" />
-                    <span className="text-metrik-text-secondary">Rapide</span>
+                  <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-2xl p-6 shadow-lg shadow-metrik-turquoise/20 hover:shadow-metrik-turquoise/40 transition-all duration-300">
+                    <div className="flex items-center justify-between mb-2">
+                      <Zap className="text-metrik-turquoise" size={24} />
+                      <span className="text-xs text-metrik-silver uppercase tracking-wide font-rajdhani font-bold">Best Lap</span>
+                    </div>
+                    <div className="text-3xl font-rajdhani font-black text-white mb-1">
+                      {formatLapTime(racePaceStats?.bestLapTime || 0)}
+                    </div>
+                    <div className="text-sm text-metrik-silver font-inter">Lap {racePaceData?.paceData.find(l => l.lapTime === racePaceStats?.bestLapTime)?.lapNumber || '-'}</div>
+                  </div>
+                  <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-2xl p-6 shadow-lg shadow-metrik-turquoise/20 hover:shadow-metrik-turquoise/40 transition-all duration-300">
+                    <div className="flex items-center justify-between mb-2">
+                      <Target className="text-metrik-turquoise" size={24} />
+                      <span className="text-xs text-metrik-silver uppercase tracking-wide font-rajdhani font-bold">Total Laps</span>
+                    </div>
+                    <div className="text-3xl font-rajdhani font-black text-white mb-1">
+                      {racePaceStats?.totalLaps || 0}
+                    </div>
+                    <div className="text-sm text-metrik-silver font-inter">{racePaceStats?.totalStints || 0} stint{(racePaceStats?.totalStints || 0) > 1 ? 's' : ''}</div>
+                  </div>
+                  <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-2xl p-6 shadow-lg shadow-metrik-turquoise/20 hover:shadow-metrik-turquoise/40 transition-all duration-300">
+                    <div className="flex items-center justify-between mb-2">
+                      <BarChart3 className="text-metrik-turquoise" size={24} />
+                      <span className="text-xs text-metrik-silver uppercase tracking-wide font-rajdhani font-bold">Consistency</span>
+                    </div>
+                    <div className="text-3xl font-rajdhani font-black text-white mb-1">
+                      {racePaceStats ? ((1 - (racePaceStats.stdDeviation / racePaceStats.avgLapTime)) * 100).toFixed(1) : '0.0'}%
+                    </div>
+                    <div className="text-sm text-metrik-silver font-inter">±{racePaceStats?.stdDeviation.toFixed(3) || '0.000'}s std dev</div>
+                  </div>
+                </div>
+
+                {/* Pace Chart */}
+                <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-2xl p-6 shadow-lg shadow-metrik-turquoise/20">
+                  <h3 className="text-2xl font-rajdhani font-black text-metrik-turquoise mb-6 tracking-wide flex items-center gap-2">
+                    <TrendingDown className="w-6 h-6" />
+                    LAP TIME EVOLUTION - {driver1}
+                  </h3>
+                  <ResponsiveContainer width="100%" height={400}>
+                    <LineChart data={paceChartData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1a1a1a" />
+                      <XAxis 
+                        dataKey="lap" 
+                        stroke="#666"
+                        label={{ value: 'Lap Number', position: 'insideBottom', offset: -5, fill: '#c0c0c0' }}
+                      />
+                      <YAxis 
+                        stroke="#666"
+                        tickFormatter={(value) => `${value.toFixed(1)}s`}
+                        label={{ value: 'Lap Time (s)', angle: -90, position: 'insideLeft', fill: '#c0c0c0' }}
+                        domain={[
+                          (dataMin: number) => Math.floor(dataMin * 0.99),
+                          (dataMax: number) => Math.ceil(dataMax * 1.01)
+                        ]}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: '#1a1a1a',
+                          border: '1px solid #00E5CC',
+                          borderRadius: '8px'
+                        }}
+                        formatter={(value: any) => formatLapTime(value)}
+                      />
+                      <Legend />
+                      <Line 
+                        type="monotone" 
+                        dataKey="time" 
+                        stroke="#00E5CC" 
+                        strokeWidth={3}
+                        dot={{ r: 4, fill: '#00E5CC' }}
+                        name="Lap Time"
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
+
+            {/* Multi-Driver Comparison Tab */}
+            {activeTab === 'comparison' && multiDriverData && (
+              <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-2xl p-6 shadow-lg shadow-metrik-turquoise/20">
+                <h3 className="text-2xl font-rajdhani font-black text-metrik-turquoise mb-6 tracking-wide flex items-center gap-2">
+                  <BarChart3 className="w-6 h-6" />
+                  MULTI-DRIVER {sessionType === 'R' ? 'RACE' : 'QUALIFYING'} COMPARISON
+                </h3>
+                <ResponsiveContainer width="100%" height={500}>
+                  <LineChart data={comparisonChartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1a1a1a" />
+                    <XAxis 
+                      dataKey="lap" 
+                      stroke="#666"
+                      label={{ value: 'Lap Number', position: 'insideBottom', offset: -5, fill: '#c0c0c0' }}
+                    />
+                    <YAxis 
+                      stroke="#666"
+                      tickFormatter={(value) => `${value.toFixed(1)}s`}
+                      domain={[
+                        (dataMin: number) => Math.floor(dataMin * 0.99),
+                        (dataMax: number) => Math.ceil(dataMax * 1.01)
+                      ]}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: '#1a1a1a',
+                        border: '1px solid #00E5CC',
+                        borderRadius: '8px'
+                      }}
+                      formatter={(value: any) => formatLapTime(value)}
+                    />
+                    <Legend />
+                    {multiDriverData.drivers.map((driver, index) => (
+                      <Line
+                        key={driver}
+                        type="monotone"
+                        dataKey={driver}
+                        stroke={`hsl(${index * 60}, 70%, 60%)`}
+                        strokeWidth={2}
+                        dot={{ r: 3 }}
+                      />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            {/* 🔥 TRACK DOMINANCE TAB - VERSION ULTRA PRO ET ÉPURÉE */}
+            {activeTab === 'stints' && sessionType === 'Q' && telemetryData && !trackDominanceData && (
+              <div className="backdrop-blur-xl bg-metrik-card/95 border border-yellow-500/30 rounded-2xl p-12 shadow-lg">
+                <div className="flex flex-col items-center text-center space-y-4">
+                  <div className="p-6 bg-yellow-500/10 rounded-full">
+                    <Target className="text-yellow-500" size={48} />
+                  </div>
+                  <h3 className="text-2xl font-rajdhani font-black text-yellow-500">
+                    GPS DATA NOT AVAILABLE
+                  </h3>
+                  <p className="text-metrik-silver text-lg font-inter max-w-2xl">
+                    Track Dominance Map requires GPS coordinates from the telemetry data. This feature is only available for races from <strong>2018 onwards</strong> where GPS tracking data is provided by FastF1.
+                  </p>
+                  <p className="text-metrik-turquoise text-sm font-inter">
+                    Try selecting a more recent Grand Prix (2018+) to view the circuit dominance analysis.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'stints' && sessionType === 'Q' && trackDominanceData && (
+              <div className="space-y-8">
+                {/* Stats Overview */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="backdrop-blur-xl bg-gradient-to-br from-green-500/10 to-green-500/5 border border-green-500/30 rounded-2xl p-6 shadow-lg hover:shadow-green-500/20 transition-all duration-300">
+                    <div className="flex items-center justify-between mb-3">
+                      <Target className="text-green-500" size={28} />
+                      <span className="text-xs text-metrik-silver uppercase tracking-wider font-rajdhani font-bold">{driver1} Dominance</span>
+                    </div>
+                    <div className="text-5xl font-rajdhani font-black text-green-500 mb-2">
+                      {((trackDominanceData.stats.driver1Dominant / trackDominanceData.stats.totalSegments) * 100).toFixed(0)}%
+                    </div>
+                    <div className="text-sm text-metrik-silver font-inter">
+                      {trackDominanceData.stats.driver1Dominant} of {trackDominanceData.stats.totalSegments} segments
+                    </div>
+                  </div>
+
+                  <div className="backdrop-blur-xl bg-gradient-to-br from-red-500/10 to-red-500/5 border border-red-500/30 rounded-2xl p-6 shadow-lg hover:shadow-red-500/20 transition-all duration-300">
+                    <div className="flex items-center justify-between mb-3">
+                      <Target className="text-red-500" size={28} />
+                      <span className="text-xs text-metrik-silver uppercase tracking-wider font-rajdhani font-bold">{driver2} Dominance</span>
+                    </div>
+                    <div className="text-5xl font-rajdhani font-black text-red-500 mb-2">
+                      {((trackDominanceData.stats.driver2Dominant / trackDominanceData.stats.totalSegments) * 100).toFixed(0)}%
+                    </div>
+                    <div className="text-sm text-metrik-silver font-inter">
+                      {trackDominanceData.stats.driver2Dominant} of {trackDominanceData.stats.totalSegments} segments
+                    </div>
+                  </div>
+
+                  <div className="backdrop-blur-xl bg-gradient-to-br from-metrik-turquoise/10 to-metrik-turquoise/5 border border-metrik-turquoise/30 rounded-2xl p-6 shadow-lg hover:shadow-metrik-turquoise/20 transition-all duration-300">
+                    <div className="flex items-center justify-between mb-3">
+                      <Gauge className="text-metrik-turquoise" size={28} />
+                      <span className="text-xs text-metrik-silver uppercase tracking-wider font-rajdhani font-bold">Equal Pace</span>
+                    </div>
+                    <div className="text-5xl font-rajdhani font-black text-metrik-turquoise mb-2">
+                      {((trackDominanceData.stats.equalSegments / trackDominanceData.stats.totalSegments) * 100).toFixed(0)}%
+                    </div>
+                    <div className="text-sm text-metrik-silver font-inter">
+                      {trackDominanceData.stats.equalSegments} segments within 0.3%
+                    </div>
+                  </div>
+                </div>
+
+                {/* 🔥 TRACK MAP ÉPURÉ - ULTRA MODERNE */}
+                <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-2xl p-8 shadow-lg shadow-metrik-turquoise/20">
+                  <div className="flex items-center justify-between mb-6">
+                    <div>
+                      <h3 className="text-3xl font-rajdhani font-black text-metrik-turquoise tracking-wide flex items-center gap-3">
+                        <Target className="w-8 h-8" />
+                        CIRCUIT DOMINANCE MAP
+                      </h3>
+                      <p className="text-sm text-metrik-silver mt-2 font-inter">
+                        Real GPS circuit layout with speed advantage gradient • Hover segments for detailed analysis
+                      </p>
+                    </div>
+                    <div className="flex gap-4">
+                      <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-500/10 border border-green-500/30">
+                        <div className="w-3 h-3 rounded-full bg-green-500 shadow-lg shadow-green-500/50" />
+                        <span className="text-xs text-green-500 font-rajdhani font-bold">{driver1}</span>
+                      </div>
+                      <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500/10 border border-red-500/30">
+                        <div className="w-3 h-3 rounded-full bg-red-500 shadow-lg shadow-red-500/50" />
+                        <span className="text-xs text-red-500 font-rajdhani font-bold">{driver2}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* SVG Circuit ÉPURÉ */}
+                  <div className="relative w-full rounded-xl overflow-hidden" style={{ height: '700px', background: 'linear-gradient(135deg, #0a0a0a 0%, #0f0f0f 50%, #0a0a0a 100%)' }}>
+                    <svg 
+                      className="w-full h-full"
+                      viewBox="0 0 1000 700"
+                      preserveAspectRatio="xMidYMid meet"
+                    >
+                      <defs>
+                        {/* Glow effects */}
+                        <filter id="track-glow-soft">
+                          <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                          <feMerge>
+                            <feMergeNode in="coloredBlur"/>
+                            <feMergeNode in="SourceGraphic"/>
+                          </feMerge>
+                        </filter>
+
+                        {/* Gradient turquoise pour Start/Finish */}
+                        <linearGradient id="start-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                          <stop offset="0%" stopColor="#00E5CC" stopOpacity="0.8" />
+                          <stop offset="100%" stopColor="#00E5CC" stopOpacity="0.3" />
+                        </linearGradient>
+                      </defs>
+
+                      {telemetryData && (() => {
+                        // ✅ Filtrer les points GPS valides uniquement
+                        const validGpsPoints = telemetryData.telemetry.filter(p => 
+                          p.x != null && p.y != null &&  // != null vérifie null ET undefined
+                          !isNaN(p.x) && !isNaN(p.y) &&
+                          Math.abs(p.x) > 0.1 && Math.abs(p.y) > 0.1
+                        );
+
+                        if (validGpsPoints.length === 0) return null;
+
+                        // Calculs GPS avec points valides
+                        const allPoints = validGpsPoints.map(p => ({ x: p.x, y: p.y }));
+                        const xValues = allPoints.map(p => p.x);
+                        const yValues = allPoints.map(p => p.y);
+                        const minX = Math.min(...xValues);
+                        const maxX = Math.max(...xValues);
+                        const minY = Math.min(...yValues);
+                        const maxY = Math.max(...yValues);
+                        const rangeX = maxX - minX;
+                        const rangeY = maxY - minY;
+                        
+                        // Vérification que le range est valide
+                        if (rangeX === 0 || rangeY === 0 || isNaN(rangeX) || isNaN(rangeY)) return null;
+
+                        const viewBoxWidth = 1000;
+                        const viewBoxHeight = 700;
+                        const padding = 80;
+                        const scaleX = (viewBoxWidth - 2 * padding) / rangeX;
+                        const scaleY = (viewBoxHeight - 2 * padding) / rangeY;
+                        const scale = Math.min(scaleX, scaleY);
+                        const offsetX = (viewBoxWidth - rangeX * scale) / 2;
+                        const offsetY = (viewBoxHeight - rangeY * scale) / 2;
+
+                        // Créer le path complet du circuit pour le tracé de base
+                        const allNormalizedPoints = validGpsPoints.map(p => ({
+                          x: (p.x - minX) * scale + offsetX,
+                          y: (p.y - minY) * scale + offsetY
+                        }));
+
+                        const fullTrackPath = allNormalizedPoints.reduce((acc, point, i) => {
+                          if (i === 0) return `M ${point.x},${point.y}`;
+                          return `${acc} L ${point.x},${point.y}`;
+                        }, '');
+
+                        return (
+                          <g>
+                            {/* Grid subtile */}
+                            <g opacity="0.03">
+                              {Array.from({ length: 20 }, (_, i) => (
+                                <line
+                                  key={`grid-v-${i}`}
+                                  x1={i * (viewBoxWidth / 20)}
+                                  y1={0}
+                                  x2={i * (viewBoxWidth / 20)}
+                                  y2={viewBoxHeight}
+                                  stroke="#ffffff"
+                                  strokeWidth="0.5"
+                                />
+                              ))}
+                              {Array.from({ length: 14 }, (_, i) => (
+                                <line
+                                  key={`grid-h-${i}`}
+                                  x1={0}
+                                  y1={i * (viewBoxHeight / 14)}
+                                  x2={viewBoxWidth}
+                                  y2={i * (viewBoxHeight / 14)}
+                                  stroke="#ffffff"
+                                  strokeWidth="0.5"
+                                />
+                              ))}
+                            </g>
+
+                            {/* 🔥 TRACÉ DE BASE - Visible en gris/turquoise pour voir la forme */}
+                            <path
+                              d={fullTrackPath}
+                              fill="none"
+                              stroke="rgba(0, 229, 204, 0.2)"
+                              strokeWidth="25"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+
+                            {/* Segments colorés par-dessus */}
+                            {trackDominanceData.segments.map((segment, idx) => {
+                              const segmentPoints = segment.points.map(p => ({
+                                x: (p.x - minX) * scale + offsetX,
+                                y: (p.y - minY) * scale + offsetY
+                              }));
+
+                              if (segmentPoints.length < 2) return null;
+
+                              const segmentPath = segmentPoints.reduce((acc, point, i) => {
+                                if (i === 0) return `M ${point.x},${point.y}`;
+                                return `${acc} L ${point.x},${point.y}`;
+                              }, '');
+
+                              // Couleurs PLUS INTENSES et visibles
+                              let strokeColor;
+                              const intensity = Math.min(Math.abs(segment.advantagePercent) / 1.5, 1);
+                              
+                              if (segment.dominant === 'driver1') {
+                                strokeColor = `rgba(34, 197, 94, ${0.7 + intensity * 0.3})`;
+                              } else if (segment.dominant === 'driver2') {
+                                strokeColor = `rgba(239, 68, 68, ${0.7 + intensity * 0.3})`;
+                              } else {
+                                strokeColor = 'rgba(120, 120, 120, 0.6)';
+                              }
+
+                              return (
+                                <g key={idx} className="group cursor-pointer">
+                                  {/* Tracé segment coloré - PLUS ÉPAIS (18px) */}
+                                  <path
+                                    d={segmentPath}
+                                    fill="none"
+                                    stroke={strokeColor}
+                                    strokeWidth="18"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    className="transition-all duration-300 group-hover:stroke-width-[24]"
+                                    filter="url(#track-glow-soft)"
+                                  />
+
+                                  {/* Zone hover invisible */}
+                                  <path
+                                    d={segmentPath}
+                                    fill="none"
+                                    stroke="transparent"
+                                    strokeWidth="35"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                  />
+
+                                  {/* Tooltip moderne ultra clean */}
+                                  <g 
+                                    className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+                                    transform={`translate(${Math.max(140, Math.min(segment.x * scale + offsetX - 140, viewBoxWidth - 290))}, ${Math.max(70, Math.min(segment.y * scale + offsetY - 75, viewBoxHeight - 150))})`}
+                                  >
+                                    {/* Shadow élégante */}
+                                    <rect
+                                      x="3"
+                                      y="3"
+                                      width="280"
+                                      height="120"
+                                      rx="16"
+                                      fill="rgba(0, 0, 0, 0.7)"
+                                      filter="blur(10px)"
+                                    />
+
+                                    {/* Background glass morphism */}
+                                    <rect
+                                      x="0"
+                                      y="0"
+                                      width="280"
+                                      height="120"
+                                      rx="16"
+                                      fill="rgba(10, 10, 10, 0.95)"
+                                      stroke="#00E5CC"
+                                      strokeWidth="2"
+                                    />
+
+                                    {/* Header avec gradient */}
+                                    <rect
+                                      x="0"
+                                      y="0"
+                                      width="280"
+                                      height="38"
+                                      rx="16"
+                                      fill="url(#start-gradient)"
+                                      opacity="0.15"
+                                    />
+
+                                    {/* Badge numéro segment */}
+                                    <circle cx="28" cy="22" r="14" fill="#00E5CC" />
+                                    <text
+                                      x="28"
+                                      y="27"
+                                      textAnchor="middle"
+                                      fill="#0a0a0a"
+                                      fontSize="13"
+                                      fontWeight="bold"
+                                      fontFamily="Rajdhani"
+                                    >
+                                      {segment.segment}
+                                    </text>
+
+                                    {/* Title */}
+                                    <text x="50" y="27" fill="#00E5CC" fontSize="16" fontWeight="bold" fontFamily="Rajdhani">
+                                      SEGMENT {segment.segment}
+                                    </text>
+
+                                    {/* Distance */}
+                                    <text x="22" y="55" fill="#888" fontSize="11" fontFamily="Inter">
+                                      {segment.startDistance.toFixed(0)}-{segment.endDistance.toFixed(0)}m
+                                    </text>
+
+                                    {/* Divider */}
+                                    <line x1="20" y1="65" x2="260" y2="65" stroke="#00E5CC" strokeWidth="1" opacity="0.2" />
+
+                                    {/* Driver 1 */}
+                                    <circle cx="28" cy="82" r="5" fill="#22c55e" />
+                                    <text x="40" y="86" fill="#fff" fontSize="13" fontFamily="Rajdhani" fontWeight="bold">
+                                      {driver1}
+                                    </text>
+                                    <text x="220" y="86" textAnchor="end" fill="#22c55e" fontSize="14" fontFamily="Rajdhani" fontWeight="bold">
+                                      {segment.avgSpeed1.toFixed(1)} km/h
+                                    </text>
+
+                                    {/* Driver 2 */}
+                                    <circle cx="28" cy="102" r="5" fill="#ef4444" />
+                                    <text x="40" y="106" fill="#fff" fontSize="13" fontFamily="Rajdhani" fontWeight="bold">
+                                      {driver2}
+                                    </text>
+                                    <text x="220" y="106" textAnchor="end" fill="#ef4444" fontSize="14" fontFamily="Rajdhani" fontWeight="bold">
+                                      {segment.avgSpeed2.toFixed(1)} km/h
+                                    </text>
+
+                                    {/* Advantage badge */}
+                                    <rect
+                                      x="225"
+                                      y="74"
+                                      width="48"
+                                      height="38"
+                                      rx="8"
+                                      fill={segment.dominant === 'driver1' ? 'rgba(34, 197, 94, 0.12)' : segment.dominant === 'driver2' ? 'rgba(239, 68, 68, 0.12)' : 'rgba(128, 128, 128, 0.12)'}
+                                      stroke={segment.dominant === 'driver1' ? '#22c55e' : segment.dominant === 'driver2' ? '#ef4444' : '#888'}
+                                      strokeWidth="1.5"
+                                    />
+                                    <text
+                                      x="249"
+                                      y="89"
+                                      textAnchor="middle"
+                                      fill={segment.dominant === 'driver1' ? '#22c55e' : segment.dominant === 'driver2' ? '#ef4444' : '#888'}
+                                      fontSize="12"
+                                      fontFamily="Rajdhani"
+                                      fontWeight="bold"
+                                    >
+                                      Δ {Math.abs(segment.advantage).toFixed(1)}
+                                    </text>
+                                    <text
+                                      x="249"
+                                      y="103"
+                                      textAnchor="middle"
+                                      fill="#888"
+                                      fontSize="9"
+                                      fontFamily="Inter"
+                                    >
+                                      km/h
+                                    </text>
+                                  </g>
+                                </g>
+                              );
+                            })}
+
+                            {/* Start/Finish Line ultra clean */}
+                            {(() => {
+                              const firstValidPoint = validGpsPoints[0];
+                              if (!firstValidPoint) return null;
+
+                              const startPoint = {
+                                x: (firstValidPoint.x - minX) * scale + offsetX,
+                                y: (firstValidPoint.y - minY) * scale + offsetY
+                              };
+
+                              // Vérifier que les coordonnées sont valides
+                              if (isNaN(startPoint.x) || isNaN(startPoint.y)) return null;
+
+                              return (
+                                <g>
+                                  {/* Glow circles */}
+                                  <circle
+                                    cx={startPoint.x}
+                                    cy={startPoint.y}
+                                    r="22"
+                                    fill="none"
+                                    stroke="#00E5CC"
+                                    strokeWidth="2"
+                                    opacity="0.4"
+                                  />
+                                  <circle
+                                    cx={startPoint.x}
+                                    cy={startPoint.y}
+                                    r="16"
+                                    fill="none"
+                                    stroke="#00E5CC"
+                                    strokeWidth="3"
+                                    opacity="0.8"
+                                  />
+
+                                  {/* Central point */}
+                                  <circle
+                                    cx={startPoint.x}
+                                    cy={startPoint.y}
+                                    r="8"
+                                    fill="#00E5CC"
+                                    filter="url(#track-glow-soft)"
+                                  />
+
+                                  {/* Checkered flag lines */}
+                                  <line
+                                    x1={startPoint.x - 20}
+                                    y1={startPoint.y}
+                                    x2={startPoint.x + 20}
+                                    y2={startPoint.y}
+                                    stroke="#ffffff"
+                                    strokeWidth="4"
+                                    strokeDasharray="8 8"
+                                    opacity="0.8"
+                                  />
+
+                                  {/* Label background */}
+                                  <rect
+                                    x={startPoint.x - 70}
+                                    y={startPoint.y - 50}
+                                    width="140"
+                                    height="32"
+                                    rx="8"
+                                    fill="#0a0a0a"
+                                    stroke="#00E5CC"
+                                    strokeWidth="2"
+                                    opacity="0.95"
+                                  />
+
+                                  {/* Label text */}
+                                  <text
+                                    x={startPoint.x}
+                                    y={startPoint.y - 28}
+                                    textAnchor="middle"
+                                    fill="#00E5CC"
+                                    fontSize="14"
+                                    fontWeight="bold"
+                                    fontFamily="Rajdhani"
+                                    letterSpacing="1.5"
+                                  >
+                                    START / FINISH
+                                  </text>
+                                </g>
+                              );
+                            })()}
+                          </g>
+                        );
+                      })()}
+                    </svg>
+                  </div>
+                </div>
+
+                {/* Top 5 Segments pour chaque pilote */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Driver 1 Best Segments */}
+                  <div className="backdrop-blur-xl bg-gradient-to-br from-green-500/5 to-transparent border border-green-500/20 rounded-2xl p-6 shadow-lg">
+                    <h4 className="text-xl font-rajdhani font-black text-green-500 mb-4 flex items-center gap-2">
+                      <Zap className="w-5 h-5" />
+                      {driver1} - TOP 5 STRONGEST SEGMENTS
+                    </h4>
+                    <div className="space-y-3">
+                      {trackDominanceData.stats.driver1BestSegments.map((seg, idx) => (
+                        <div key={idx} className="bg-metrik-card/50 border border-green-500/20 rounded-xl p-4 hover:border-green-500/40 transition-all duration-300">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-lg font-rajdhani font-bold text-white">
+                              #{idx + 1} - Segment {seg.segment}
+                            </span>
+                            <span className="text-green-500 font-rajdhani font-black text-xl">
+                              +{seg.advantage.toFixed(1)} km/h
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between text-sm text-metrik-silver">
+                            <span>{seg.startDistance.toFixed(0)}-{seg.endDistance.toFixed(0)}m</span>
+                            <span>{seg.avgSpeed1.toFixed(1)} vs {seg.avgSpeed2.toFixed(1)} km/h</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Driver 2 Best Segments */}
+                  <div className="backdrop-blur-xl bg-gradient-to-br from-red-500/5 to-transparent border border-red-500/20 rounded-2xl p-6 shadow-lg">
+                    <h4 className="text-xl font-rajdhani font-black text-red-500 mb-4 flex items-center gap-2">
+                      <Zap className="w-5 h-5" />
+                      {driver2} - TOP 5 STRONGEST SEGMENTS
+                    </h4>
+                    <div className="space-y-3">
+                      {trackDominanceData.stats.driver2BestSegments.map((seg, idx) => (
+                        <div key={idx} className="bg-metrik-card/50 border border-red-500/20 rounded-xl p-4 hover:border-red-500/40 transition-all duration-300">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-lg font-rajdhani font-bold text-white">
+                              #{idx + 1} - Segment {seg.segment}
+                            </span>
+                            <span className="text-red-500 font-rajdhani font-black text-xl">
+                              +{Math.abs(seg.advantage).toFixed(1)} km/h
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between text-sm text-metrik-silver">
+                            <span>{seg.startDistance.toFixed(0)}-{seg.endDistance.toFixed(0)}m</span>
+                            <span>{seg.avgSpeed2.toFixed(1)} vs {seg.avgSpeed1.toFixed(1)} km/h</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
             )}
-          </div>
-        )}
 
-        {telemetry.length === 0 && !loading && (
-          <div className="card-cockpit text-center py-12">
-            <div className="text-6xl mb-4">📊</div>
-            <p className="text-metrik-text-secondary font-rajdhani text-lg">
-              SYSTÈME EN ATTENTE DE DONNÉES
-            </p>
-            <p className="text-metrik-text-tertiary font-inter text-sm mt-2">
-              Chargez les pilotes et sélectionnez-en un pour démarrer l'analyse
-            </p>
+            {/* Sectors Tab - Qualifying */}
+            {activeTab === 'sectors' && sessionType === 'Q' && multiDriverSectorsData && (
+              <div className="space-y-6">
+                <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-2xl p-6 shadow-lg shadow-metrik-turquoise/20">
+                  <h3 className="text-2xl font-rajdhani font-black text-metrik-turquoise mb-6 tracking-wide flex items-center gap-2">
+                    <Clock className="w-6 h-6" />
+                    SECTOR 1 COMPARISON
+                  </h3>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={multiSectorChartData} layout="vertical">
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1a1a1a" />
+                      <XAxis 
+                        type="number" 
+                        stroke="#666"
+                        tickFormatter={(value) => `${value.toFixed(2)}s`}
+                      />
+                      <YAxis 
+                        type="category" 
+                        dataKey="driver" 
+                        stroke="#666"
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: '#1a1a1a',
+                          border: '1px solid #00E5CC',
+                          borderRadius: '8px'
+                        }}
+                        formatter={(value: any) => `${value.toFixed(3)}s`}
+                      />
+                      <Bar dataKey="sector1" fill="#ff4444" name="Sector 1" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-2xl p-6 shadow-lg shadow-metrik-turquoise/20">
+                  <h3 className="text-2xl font-rajdhani font-black text-metrik-turquoise mb-6 tracking-wide flex items-center gap-2">
+                    <Clock className="w-6 h-6" />
+                    SECTOR 2 COMPARISON
+                  </h3>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={multiSectorChartData} layout="vertical">
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1a1a1a" />
+                      <XAxis 
+                        type="number" 
+                        stroke="#666"
+                        tickFormatter={(value) => `${value.toFixed(2)}s`}
+                      />
+                      <YAxis 
+                        type="category" 
+                        dataKey="driver" 
+                        stroke="#666"
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: '#1a1a1a',
+                          border: '1px solid #00E5CC',
+                          borderRadius: '8px'
+                        }}
+                        formatter={(value: any) => `${value.toFixed(3)}s`}
+                      />
+                      <Bar dataKey="sector2" fill="#ffd700" name="Sector 2" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-2xl p-6 shadow-lg shadow-metrik-turquoise/20">
+                  <h3 className="text-2xl font-rajdhani font-black text-metrik-turquoise mb-6 tracking-wide flex items-center gap-2">
+                    <Clock className="w-6 h-6" />
+                    SECTOR 3 COMPARISON
+                  </h3>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={multiSectorChartData} layout="vertical">
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1a1a1a" />
+                      <XAxis 
+                        type="number" 
+                        stroke="#666"
+                        tickFormatter={(value) => `${value.toFixed(2)}s`}
+                      />
+                      <YAxis 
+                        type="category" 
+                        dataKey="driver" 
+                        stroke="#666"
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: '#1a1a1a',
+                          border: '1px solid #00E5CC',
+                          borderRadius: '8px'
+                        }}
+                        formatter={(value: any) => `${value.toFixed(3)}s`}
+                      />
+                      <Bar dataKey="sector3" fill="#00ff00" name="Sector 3" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="text-center text-metrik-silver text-sm font-inter">
+                  Comparison of sector times from each driver's fastest lap - Lower is better
+                </div>
+              </div>
+            )}
+
+            {/* Sectors Tab - Race */}
+            {activeTab === 'sectors' && sessionType === 'R' && sectorData && (
+              <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-2xl p-6 shadow-lg shadow-metrik-turquoise/20">
+                <h3 className="text-2xl font-rajdhani font-black text-metrik-turquoise mb-6 tracking-wide flex items-center gap-2">
+                  <Clock className="w-6 h-6" />
+                  SECTOR EVOLUTION - {driver1}
+                </h3>
+                <ResponsiveContainer width="100%" height={400}>
+                  <LineChart data={sectorChartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1a1a1a" />
+                    <XAxis dataKey="lap" stroke="#666" />
+                    <YAxis 
+                      stroke="#666"
+                      domain={[
+                        (dataMin: number) => Math.floor(dataMin * 0.99),
+                        (dataMax: number) => Math.ceil(dataMax * 1.01)
+                      ]}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: '#1a1a1a',
+                        border: '1px solid #00E5CC',
+                        borderRadius: '8px'
+                      }}
+                      formatter={(value: any) => `${value?.toFixed(3)}s`}
+                    />
+                    <Legend />
+                    <Line type="monotone" dataKey="sector1" stroke="#ff4444" strokeWidth={2} name="Sector 1" />
+                    <Line type="monotone" dataKey="sector2" stroke="#ffd700" strokeWidth={2} name="Sector 2" />
+                    <Line type="monotone" dataKey="sector3" stroke="#00ff00" strokeWidth={2} name="Sector 3" />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            {/* Empty States */}
+            {activeTab === 'telemetry' && !telemetryData && !loading && (
+              <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-2xl p-20 flex flex-col items-center justify-center shadow-lg shadow-metrik-turquoise/20">
+                <Gauge className="text-metrik-silver/50 mb-6" size={64} />
+                <p className="text-metrik-silver font-rajdhani text-xl text-center">
+                  Select two drivers and click "Load Telemetry Data" to compare
+                </p>
+              </div>
+            )}
+            {activeTab === 'pace' && !racePaceData && !loading && (
+              <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-2xl p-20 flex flex-col items-center justify-center shadow-lg shadow-metrik-turquoise/20">
+                <TrendingDown className="text-metrik-silver/50 mb-6" size={64} />
+                <p className="text-metrik-silver font-rajdhani text-xl text-center">
+                  Select a driver and click "Load Race Pace Data"
+                </p>
+              </div>
+            )}
+            {activeTab === 'comparison' && !multiDriverData && !loading && (
+              <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-2xl p-20 flex flex-col items-center justify-center shadow-lg shadow-metrik-turquoise/20">
+                <BarChart3 className="text-metrik-silver/50 mb-6" size={64} />
+                <p className="text-metrik-silver font-rajdhani text-xl text-center">
+                  Select multiple drivers and click "Load Multi-Driver Data"
+                </p>
+              </div>
+            )}
+            {activeTab === 'stints' && sessionType === 'Q' && !trackDominanceData && !loading && (
+              <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-2xl p-20 flex flex-col items-center justify-center shadow-lg shadow-metrik-turquoise/20">
+                <Target className="text-metrik-silver/50 mb-6" size={64} />
+                <p className="text-metrik-silver font-rajdhani text-xl text-center">
+                  Select two drivers and click "Load Track Dominance Data"
+                </p>
+              </div>
+            )}
+            {activeTab === 'stints' && sessionType !== 'Q' && !loading && (
+              <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-2xl p-20 flex flex-col items-center justify-center shadow-lg shadow-metrik-turquoise/20">
+                <Target className="text-metrik-silver/50 mb-6" size={64} />
+                <p className="text-metrik-silver font-rajdhani text-xl text-center">
+                  Track Dominance is only available in Qualification mode
+                </p>
+              </div>
+            )}
+            {activeTab === 'sectors' && !sectorData && !multiDriverSectorsData && !loading && (
+              <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-2xl p-20 flex flex-col items-center justify-center shadow-lg shadow-metrik-turquoise/20">
+                <Clock className="text-metrik-silver/50 mb-6" size={64} />
+                <p className="text-metrik-silver font-rajdhani text-xl text-center">
+                  {sessionType === 'Q' 
+                    ? 'Select drivers and click "Load Sectors Data"'
+                    : 'Select a driver and click "Load Sectors Data"'}
+                </p>
+              </div>
+            )}
           </div>
         )}
       </div>
