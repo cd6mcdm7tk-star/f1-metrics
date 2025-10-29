@@ -259,7 +259,7 @@ export default function CornerAnalyzerPage() {
     const fetchGrandsPrix = async () => {
       setLoadingGP(true);
       try {
-        const response = await axios.get(`http://localhost:8000/api/grands-prix/${year}`);
+        const response = await axios.get(`https://metrikdelta-backend-eu-production.up.railway.app/api/grands-prix/${year}`);
         const data = response.data.grands_prix || [];
         setGrandsPrix(data);
         if (data.length > 0) {
@@ -283,7 +283,7 @@ export default function CornerAnalyzerPage() {
       setLoadingDrivers(true);
       try {
         const response = await axios.get(
-          `http://localhost:8000/api/drivers/${year}/${selectedRound}/${sessionType}`
+          `https://metrikdelta-backend-eu-production.up.railway.app/api/drivers/${year}/${selectedRound}/${sessionType}`
         );
         const driversArray = response.data.drivers || response.data || [];
         const drivers = driversArray.map((d: any) => d.number);
@@ -317,7 +317,7 @@ export default function CornerAnalyzerPage() {
 
     try {
       const response = await axios.get<CornerAnalysisData>(
-        `http://localhost:8000/api/corner-analysis/${year}/${selectedRound}/${sessionType}/${driver}`
+        `https://metrikdelta-backend-eu-production.up.railway.app/api/corner-analysis/${year}/${selectedRound}/${sessionType}/${driver}`
       );
       
       setDriversData(prev => 

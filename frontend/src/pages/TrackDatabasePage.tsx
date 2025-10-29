@@ -628,7 +628,7 @@ function CircuitLayoutDisplay({ circuit }: { circuit: Circuit }) {
         setError('');
         
         const round = getCircuitRound(circuit.country);
-        const url = `http://localhost:8000/api/racing-line/2024/${round}/Q/VER`;
+        const url = `https://metrikdelta-backend-eu-production.up.railway.app/api/racing-line/2024/${round}/Q/VER`;
         
         const response = await fetch(url);
         

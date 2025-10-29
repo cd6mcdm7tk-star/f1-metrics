@@ -133,7 +133,7 @@ export default function AnimationPage() {
       let data;
       if (sessionType === 'R') {
         const response = await fetch(
-          `http://localhost:8000/api/animation-race-full/${year}/${selectedGP}/${driver1}/${driver2}`
+          `https://metrikdelta-backend-eu-production.up.railway.app/api/animation-race-full/${year}/${selectedGP}/${driver1}/${driver2}`
         );
         if (!response.ok) {
           throw new Error(`Backend error: ${response.status} - ${response.statusText}`);
@@ -141,7 +141,7 @@ export default function AnimationPage() {
         data = await response.json();
       } else {
         const response = await fetch(
-          `http://localhost:8000/api/animation-enhanced/${year}/${selectedGP}/${sessionType}/${driver1}/${driver2}`
+          `https://metrikdelta-backend-eu-production.up.railway.app/api/animation-enhanced/${year}/${selectedGP}/${sessionType}/${driver1}/${driver2}`
         );
         if (!response.ok) {
           throw new Error(`Backend error: ${response.status} - ${response.statusText}`);
