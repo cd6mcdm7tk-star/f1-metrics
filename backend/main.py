@@ -1474,3 +1474,5 @@ async def get_racing_line_analyzer(year: int, round: int, session: str, driver: 
         print(f"\n!!! ERROR in racing-line-analyzer endpoint !!!")
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))# Updated CORS config
+
+# Force Railway redeploy with CORS fix
