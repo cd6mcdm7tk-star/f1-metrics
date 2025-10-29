@@ -128,7 +128,7 @@ export default function F1CircuitGuesser({ onClose }: F1CircuitGuesserProps) {
   const loadTrackData = async (circuit: Circuit) => {
     try {
       setLoadingTrack(true);
-      const url = `http://localhost:8000/api/racing-line/${circuit.year}/${circuit.round}/Q/VER`;
+      const url = `https://metrikdelta-backend-eu-production.up.railway.app/api/racing-line/${circuit.year}/${circuit.round}/Q/VER`;
       const response = await fetch(url);
       
       if (!response.ok) {
