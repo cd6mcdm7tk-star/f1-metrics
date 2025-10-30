@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { Home, Activity, Trophy, Map, Target, Film, Menu, X, Cpu, Route as RouteIcon } from 'lucide-react';
+import { Home, Activity, Trophy, Map, Target, Film, Menu, X, Cpu } from 'lucide-react';
 import { useState } from 'react';
 import HomePage from './pages/HomePage';
 import TelemetryPage from './pages/TelemetryPage';
@@ -13,6 +13,8 @@ import Toast from './components/Toast';
 import DonkeyLogo from './components/DonkeyLogo';
 import F1CircuitGuesser from './components/F1CircuitGuesser';
 import { useKonamiCode } from './hooks/useKonamiCode';
+import Footer from './components/Footer'; // ← NOUVEAU : Import du Footer
+
 
 function Navigation() {
   const location = useLocation();
@@ -132,17 +134,24 @@ function App() {
 
   return (
     <BrowserRouter>
-      <div className="min-h-screen bg-metrik-black text-metrik-text">
+      <div className="min-h-screen bg-metrik-black text-metrik-text flex flex-col">
         <Navigation />
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/telemetry" element={<TelemetryPage />} />
-          <Route path="/animation" element={<AnimationPage />} />
-          <Route path="/pit-wall" element={<PitWallPage />} />
-          <Route path="/championship" element={<ChampionshipPage />} />
-          <Route path="/track-database" element={<TrackDatabasePage />} />
-          <Route path="/f1-anatomy" element={<F1AnatomyPage />} />
-        </Routes>
+        
+        {/* Main content avec flex-1 pour pousser le footer en bas */}
+        <main className="flex-1">
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/telemetry" element={<TelemetryPage />} />
+            <Route path="/animation" element={<AnimationPage />} />
+            <Route path="/pit-wall" element={<PitWallPage />} />
+            <Route path="/championship" element={<ChampionshipPage />} />
+            <Route path="/track-database" element={<TrackDatabasePage />} />
+            <Route path="/f1-anatomy" element={<F1AnatomyPage />} />
+          </Routes>
+        </main>
+
+        {/* ⭐ NOUVEAU : Footer apparaît sur toutes les pages ⭐ */}
+        <Footer />
 
         <div className="fixed top-4 right-4 z-50 flex flex-col gap-3 pointer-events-none">
           {toasts.map((toast) => (

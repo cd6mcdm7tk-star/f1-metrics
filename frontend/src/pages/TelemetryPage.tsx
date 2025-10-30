@@ -19,6 +19,7 @@ import {
 import type { TelemetryData } from '../types/telemetry';
 import type { RacePaceData, MultiDriverPaceData, StintAnalysisData, SectorEvolutionData } from '../types/raceevolution';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, AreaChart, ReferenceLine, ComposedChart, Cell } from 'recharts';
+import { MobileResponsiveChart } from '../components/MobileResponsiveChart';
 
 export default function TelemetryPage() {
   const navigate = useNavigate();
@@ -632,8 +633,8 @@ export default function TelemetryPage() {
                     <Gauge className="w-6 h-6" />
                     SPEED COMPARISON
                   </h3>
-                  <ResponsiveContainer width="100%" height={400}>
-                    <LineChart data={telemetryChartData}>
+                  <MobileResponsiveChart height={400}>
+  <LineChart data={telemetryChartData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#1a1a1a" />
                       <XAxis 
                         dataKey="distance" 
@@ -669,7 +670,7 @@ export default function TelemetryPage() {
                         name={driver2}
                       />
                     </LineChart>
-                  </ResponsiveContainer>
+</MobileResponsiveChart>
                 </div>
 
                 {/* Delta Graph pour Qualification */}
@@ -682,7 +683,7 @@ export default function TelemetryPage() {
                     <div className="text-sm text-metrik-silver mb-6 font-inter">
                       Cumulative time gap throughout the lap • Green = {driver1} ahead • Red = {driver2} ahead
                     </div>
-                    <ResponsiveContainer width="100%" height={400}>
+                    <MobileResponsiveChart height={400}>
                       <AreaChart data={deltaGraphData}>
                         <defs>
                           <linearGradient id="deltaPositive" x1="0" y1="0" x2="0" y2="1">
@@ -743,7 +744,7 @@ export default function TelemetryPage() {
                           fillOpacity={1}
                         />
                       </AreaChart>
-                    </ResponsiveContainer>
+                    </MobileResponsiveChart>
                   </div>
                 )}
 
@@ -753,7 +754,7 @@ export default function TelemetryPage() {
                     <Activity className="w-6 h-6" />
                     THROTTLE APPLICATION
                   </h3>
-                  <ResponsiveContainer width="100%" height={350}>
+                  <MobileResponsiveChart height={350}>
                     <LineChart data={telemetryChartData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#1a1a1a" />
                       <XAxis 
@@ -791,7 +792,7 @@ export default function TelemetryPage() {
                         name={`${driver2} Throttle`}
                       />
                     </LineChart>
-                  </ResponsiveContainer>
+                  </MobileResponsiveChart>
                 </div>
 
                 {/* Brake Application */}
@@ -800,7 +801,7 @@ export default function TelemetryPage() {
                     <Activity className="w-6 h-6" />
                     BRAKE APPLICATION
                   </h3>
-                  <ResponsiveContainer width="100%" height={350}>
+                  <MobileResponsiveChart height={350}>
                     <LineChart data={telemetryChartData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#1a1a1a" />
                       <XAxis 
@@ -838,7 +839,7 @@ export default function TelemetryPage() {
                         name={`${driver2} Brake`}
                       />
                     </LineChart>
-                  </ResponsiveContainer>
+                  </MobileResponsiveChart>
                 </div>
 
                 {/* Gear Usage */}
@@ -847,7 +848,7 @@ export default function TelemetryPage() {
                     <Settings className="w-6 h-6" />
                     GEAR SELECTION
                   </h3>
-                  <ResponsiveContainer width="100%" height={300}>
+                  <MobileResponsiveChart height={300}>
                     <LineChart data={telemetryChartData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#1a1a1a" />
                       <XAxis 
@@ -886,7 +887,7 @@ export default function TelemetryPage() {
                         name={driver2}
                       />
                     </LineChart>
-                  </ResponsiveContainer>
+                  </MobileResponsiveChart>
                 </div>
               </div>
             )}
@@ -944,7 +945,7 @@ export default function TelemetryPage() {
                     <TrendingDown className="w-6 h-6" />
                     LAP TIME EVOLUTION - {driver1}
                   </h3>
-                  <ResponsiveContainer width="100%" height={400}>
+                  <MobileResponsiveChart height={400}>
                     <LineChart data={paceChartData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#1a1a1a" />
                       <XAxis 
@@ -979,7 +980,7 @@ export default function TelemetryPage() {
                         name="Lap Time"
                       />
                     </LineChart>
-                  </ResponsiveContainer>
+                  </MobileResponsiveChart>
                 </div>
               </div>
             )}
@@ -991,7 +992,7 @@ export default function TelemetryPage() {
                   <BarChart3 className="w-6 h-6" />
                   MULTI-DRIVER {sessionType === 'R' ? 'RACE' : 'QUALIFYING'} COMPARISON
                 </h3>
-                <ResponsiveContainer width="100%" height={500}>
+                <MobileResponsiveChart height={500} mobileHeight={350}>
                   <LineChart data={comparisonChartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#1a1a1a" />
                     <XAxis 
@@ -1027,7 +1028,7 @@ export default function TelemetryPage() {
                       />
                     ))}
                   </LineChart>
-                </ResponsiveContainer>
+                </MobileResponsiveChart>
               </div>
             )}
 
@@ -1054,7 +1055,7 @@ export default function TelemetryPage() {
             {activeTab === 'stints' && sessionType === 'Q' && trackDominanceData && (
               <div className="space-y-8">
                 {/* Stats Overview */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-3 md:gap-6">
                   <div className="backdrop-blur-xl bg-gradient-to-br from-green-500/10 to-green-500/5 border border-green-500/30 rounded-2xl p-6 shadow-lg hover:shadow-green-500/20 transition-all duration-300">
                     <div className="flex items-center justify-between mb-3">
                       <Target className="text-green-500" size={28} />
@@ -1107,12 +1108,12 @@ export default function TelemetryPage() {
                         Real GPS circuit layout with speed advantage gradient • Hover segments for detailed analysis
                       </p>
                     </div>
-                    <div className="flex gap-4">
-                      <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-500/10 border border-green-500/30">
+                   <div className="flex gap-2 md:gap-4 flex-wrap">
+  <div className="flex items-center gap-2 px-3 md:px-4 py-2 rounded-lg bg-green-500/10 border border-green-500/30">
                         <div className="w-3 h-3 rounded-full bg-green-500 shadow-lg shadow-green-500/50" />
                         <span className="text-xs text-green-500 font-rajdhani font-bold">{driver1}</span>
                       </div>
-                      <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500/10 border border-red-500/30">
+                        <div className="flex items-center gap-2 px-3 md:px-4 py-2 rounded-lg bg-green-500/10 border border-green-500/30">
                         <div className="w-3 h-3 rounded-full bg-red-500 shadow-lg shadow-red-500/50" />
                         <span className="text-xs text-red-500 font-rajdhani font-bold">{driver2}</span>
                       </div>
@@ -1120,7 +1121,15 @@ export default function TelemetryPage() {
                   </div>
 
                   {/* SVG Circuit ÉPURÉ */}
-                  <div className="relative w-full rounded-xl overflow-hidden" style={{ height: '700px', background: 'linear-gradient(135deg, #0a0a0a 0%, #0f0f0f 50%, #0a0a0a 100%)' }}>
+<div 
+  className="relative w-full rounded-xl overflow-hidden md:h-[700px]"
+  style={{ 
+    height: '100vh', 
+    maxHeight: '700px',
+    minHeight: '500px',
+    background: 'linear-gradient(135deg, #0a0a0a 0%, #0f0f0f 50%, #0a0a0a 100%)' 
+  }}
+>
                     <svg 
                       className="w-full h-full"
                       viewBox="0 0 1000 700"
@@ -1276,10 +1285,18 @@ export default function TelemetryPage() {
                                   />
 
                                   {/* Tooltip moderne ultra clean */}
-                                  <g 
-                                    className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
-                                    transform={`translate(${Math.max(140, Math.min(segment.x * scale + offsetX - 140, viewBoxWidth - 290))}, ${Math.max(70, Math.min(segment.y * scale + offsetY - 75, viewBoxHeight - 150))})`}
-                                  >
+<g 
+  className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+  transform={`translate(${
+    segment.x * scale + offsetX > viewBoxWidth / 2 
+      ? Math.max(20, segment.x * scale + offsetX - 300)
+      : Math.min(viewBoxWidth - 300, segment.x * scale + offsetX + 20)
+  }, ${
+    segment.y * scale + offsetY > viewBoxHeight / 2
+      ? Math.max(20, segment.y * scale + offsetY - 140)
+      : Math.min(viewBoxHeight - 140, segment.y * scale + offsetY + 20)
+  })`}
+>
                                     {/* Shadow élégante */}
                                     <rect
                                       x="3"
@@ -1553,7 +1570,7 @@ export default function TelemetryPage() {
                     <Clock className="w-6 h-6" />
                     SECTOR 1 COMPARISON
                   </h3>
-                  <ResponsiveContainer width="100%" height={300}>
+                  <MobileResponsiveChart height={300}>
                     <BarChart data={multiSectorChartData} layout="vertical">
                       <CartesianGrid strokeDasharray="3 3" stroke="#1a1a1a" />
                       <XAxis 
@@ -1576,14 +1593,14 @@ export default function TelemetryPage() {
                       />
                       <Bar dataKey="sector1" fill="#ff4444" name="Sector 1" />
                     </BarChart>
-                  </ResponsiveContainer>
+                  </MobileResponsiveChart>
                 </div>
                 <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-2xl p-6 shadow-lg shadow-metrik-turquoise/20">
                   <h3 className="text-2xl font-rajdhani font-black text-metrik-turquoise mb-6 tracking-wide flex items-center gap-2">
                     <Clock className="w-6 h-6" />
                     SECTOR 2 COMPARISON
                   </h3>
-                  <ResponsiveContainer width="100%" height={300}>
+                  <MobileResponsiveChart height={300}>
                     <BarChart data={multiSectorChartData} layout="vertical">
                       <CartesianGrid strokeDasharray="3 3" stroke="#1a1a1a" />
                       <XAxis 
@@ -1606,14 +1623,14 @@ export default function TelemetryPage() {
                       />
                       <Bar dataKey="sector2" fill="#ffd700" name="Sector 2" />
                     </BarChart>
-                  </ResponsiveContainer>
+                  </MobileResponsiveChart>
                 </div>
                 <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-2xl p-6 shadow-lg shadow-metrik-turquoise/20">
                   <h3 className="text-2xl font-rajdhani font-black text-metrik-turquoise mb-6 tracking-wide flex items-center gap-2">
                     <Clock className="w-6 h-6" />
                     SECTOR 3 COMPARISON
                   </h3>
-                  <ResponsiveContainer width="100%" height={300}>
+                  <MobileResponsiveChart height={300}>
                     <BarChart data={multiSectorChartData} layout="vertical">
                       <CartesianGrid strokeDasharray="3 3" stroke="#1a1a1a" />
                       <XAxis 
@@ -1636,7 +1653,7 @@ export default function TelemetryPage() {
                       />
                       <Bar dataKey="sector3" fill="#00ff00" name="Sector 3" />
                     </BarChart>
-                  </ResponsiveContainer>
+                  </MobileResponsiveChart>
                 </div>
                 <div className="text-center text-metrik-silver text-sm font-inter">
                   Comparison of sector times from each driver's fastest lap - Lower is better
@@ -1651,7 +1668,7 @@ export default function TelemetryPage() {
                   <Clock className="w-6 h-6" />
                   SECTOR EVOLUTION - {driver1}
                 </h3>
-                <ResponsiveContainer width="100%" height={400}>
+                <MobileResponsiveChart height={400}>
                   <LineChart data={sectorChartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#1a1a1a" />
                     <XAxis dataKey="lap" stroke="#666" />
@@ -1675,7 +1692,7 @@ export default function TelemetryPage() {
                     <Line type="monotone" dataKey="sector2" stroke="#ffd700" strokeWidth={2} name="Sector 2" />
                     <Line type="monotone" dataKey="sector3" stroke="#00ff00" strokeWidth={2} name="Sector 3" />
                   </LineChart>
-                </ResponsiveContainer>
+                </MobileResponsiveChart>
               </div>
             )}
 

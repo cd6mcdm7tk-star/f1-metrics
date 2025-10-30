@@ -185,3 +185,31 @@
 .animate-stagger {
   animation: stagger-appear 0.6s ease-out forwards;
 }
+/* ========================================
+   Custom Scrollbar pour les modals Footer
+   ======================================== */
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(64, 220, 165, 0.3);
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(64, 220, 165, 0.5);
+}
+
+/* Pour Firefox */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(64, 220, 165, 0.3) rgba(255, 255, 255, 0.05);
+}

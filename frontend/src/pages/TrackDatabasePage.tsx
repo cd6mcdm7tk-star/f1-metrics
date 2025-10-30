@@ -868,102 +868,105 @@ export default function TrackDatabasePage() {
           </Canvas>
 
           {selectedCircuit && (
-            <div className="absolute top-6 right-6 w-96 bg-metrik-card/95 backdrop-blur-xl border border-turquoise-500/30 rounded-xl p-6 shadow-2xl animate-fade-in max-h-[550px] overflow-y-auto">
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <MapPin className="w-5 h-5 text-turquoise-500" />
-                  <h3 className="text-xl font-bold text-turquoise-500">
-                    {selectedCircuit.country}
-                  </h3>
-                </div>
-                <button
-                  onClick={() => setSelectedCircuit(null)}
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
+  <div className="absolute inset-0 md:inset-auto md:top-6 md:right-6 md:w-96 w-full h-full md:h-auto 
+                  bg-metrik-card/95 backdrop-blur-xl border border-turquoise-500/30 
+                  md:rounded-xl rounded-none p-4 md:p-6 shadow-2xl animate-fade-in 
+                  md:max-h-[550px] max-h-full overflow-y-auto z-50">
+    <div className="flex items-start justify-between mb-4">
+      <div className="flex items-center gap-2">
+        <MapPin className="w-5 h-5 text-turquoise-500" />
+        <h3 className="text-lg md:text-xl font-bold text-turquoise-500">
+          {selectedCircuit.country}
+        </h3>
+      </div>
+      <button
+        onClick={() => setSelectedCircuit(null)}
+        className="text-gray-400 hover:text-white transition-colors p-2 hover:bg-white/10 rounded-lg"
+      >
+        <X className="w-6 h-6 md:w-5 md:h-5" />
+      </button>
+    </div>
 
-              <h2 className="text-2xl font-bold mb-6 text-white">
-                {selectedCircuit.name}
-              </h2>
+    <h2 className="text-xl md:text-2xl font-bold mb-4 md:mb-6 text-white">
+      {selectedCircuit.name}
+    </h2>
 
-              <CircuitLayoutDisplay circuit={selectedCircuit} />
+    <CircuitLayoutDisplay circuit={selectedCircuit} />
 
-              <div className="grid grid-cols-2 gap-3 mb-4">
-                <div className="bg-metrik-black/30 rounded-lg p-3 border border-turquoise-500/10">
-                  <div className="text-xs text-gray-500 mb-1">Circuit Type</div>
-                  <div className="text-turquoise-500 font-semibold">{selectedCircuit.circuitType}</div>
-                </div>
-                <div className="bg-metrik-black/30 rounded-lg p-3 border border-turquoise-500/10">
-                  <div className="text-xs text-gray-500 mb-1">Direction</div>
-                  <div className="text-turquoise-500 font-semibold">{selectedCircuit.direction}</div>
-                </div>
-              </div>
+    <div className="grid grid-cols-2 gap-2 md:gap-3 mb-4">
+      <div className="bg-metrik-black/30 rounded-lg p-2 md:p-3 border border-turquoise-500/10">
+        <div className="text-xs text-gray-500 mb-1">Circuit Type</div>
+        <div className="text-sm md:text-base text-turquoise-500 font-semibold">{selectedCircuit.circuitType}</div>
+      </div>
+      <div className="bg-metrik-black/30 rounded-lg p-2 md:p-3 border border-turquoise-500/10">
+        <div className="text-xs text-gray-500 mb-1">Direction</div>
+        <div className="text-sm md:text-base text-turquoise-500 font-semibold">{selectedCircuit.direction}</div>
+      </div>
+    </div>
 
-              <div className="space-y-3">
-                <div className="flex justify-between items-center py-2 border-b border-turquoise-500/10">
-                  <span className="text-gray-400">Circuit Length</span>
-                  <span className="text-white font-semibold">{selectedCircuit.length}</span>
-                </div>
-                <div className="flex justify-between items-center py-2 border-b border-turquoise-500/10">
-                  <span className="text-gray-400">Race Laps</span>
-                  <span className="text-white font-semibold">{selectedCircuit.laps}</span>
-                </div>
-                <div className="flex justify-between items-center py-2 border-b border-turquoise-500/10">
-                  <span className="text-gray-400">Total Corners</span>
-                  <span className="text-white font-semibold">{selectedCircuit.corners}</span>
-                </div>
-                <div className="flex justify-between items-center py-2 border-b border-turquoise-500/10">
-                  <span className="text-gray-400">DRS Zones</span>
-                  <span className="text-white font-semibold">{selectedCircuit.drsZones}</span>
-                </div>
-                <div className="flex justify-between items-center py-2 border-b border-turquoise-500/10">
-                  <span className="text-gray-400">Top Speed</span>
-                  <span className="text-white font-semibold">{selectedCircuit.topSpeed}</span>
-                </div>
-                <div className="flex justify-between items-center py-2 border-b border-turquoise-500/10">
-                  <span className="text-gray-400">First Grand Prix</span>
-                  <span className="text-white font-semibold">{selectedCircuit.firstGP}</span>
-                </div>
-                <div className="flex justify-between items-center py-2 border-b border-turquoise-500/10">
-                  <span className="text-gray-400">Lap Record</span>
-                  <span className="text-turquoise-500 font-bold">{selectedCircuit.lapRecord}</span>
-                </div>
-                <div className="flex justify-between items-center py-2 border-b border-turquoise-500/10">
-                  <span className="text-gray-400">Record Holder</span>
-                  <span className="text-white font-semibold text-right">{selectedCircuit.recordHolder}</span>
-                </div>
-                
-                <div className="mt-4 pt-4 border-t border-turquoise-500/20">
-                  <div className="text-xs text-gray-500 mb-2">Circuit Characteristics</div>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedCircuit.characteristics.map((char, idx) => (
-                      <span 
-                        key={idx}
-                        className="px-3 py-1 bg-turquoise-500/10 border border-turquoise-500/30 rounded-full text-xs text-turquoise-500 font-medium"
-                      >
-                        {char}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
+    <div className="space-y-2 md:space-y-3">
+      <div className="flex justify-between items-center py-2 border-b border-turquoise-500/10">
+        <span className="text-sm md:text-base text-gray-400">Circuit Length</span>
+        <span className="text-sm md:text-base text-white font-semibold">{selectedCircuit.length}</span>
+      </div>
+      <div className="flex justify-between items-center py-2 border-b border-turquoise-500/10">
+        <span className="text-sm md:text-base text-gray-400">Race Laps</span>
+        <span className="text-sm md:text-base text-white font-semibold">{selectedCircuit.laps}</span>
+      </div>
+      <div className="flex justify-between items-center py-2 border-b border-turquoise-500/10">
+        <span className="text-sm md:text-base text-gray-400">Total Corners</span>
+        <span className="text-sm md:text-base text-white font-semibold">{selectedCircuit.corners}</span>
+      </div>
+      <div className="flex justify-between items-center py-2 border-b border-turquoise-500/10">
+        <span className="text-sm md:text-base text-gray-400">DRS Zones</span>
+        <span className="text-sm md:text-base text-white font-semibold">{selectedCircuit.drsZones}</span>
+      </div>
+      <div className="flex justify-between items-center py-2 border-b border-turquoise-500/10">
+        <span className="text-sm md:text-base text-gray-400">Top Speed</span>
+        <span className="text-sm md:text-base text-white font-semibold">{selectedCircuit.topSpeed}</span>
+      </div>
+      <div className="flex justify-between items-center py-2 border-b border-turquoise-500/10">
+        <span className="text-sm md:text-base text-gray-400">First Grand Prix</span>
+        <span className="text-sm md:text-base text-white font-semibold">{selectedCircuit.firstGP}</span>
+      </div>
+      <div className="flex justify-between items-center py-2 border-b border-turquoise-500/10">
+        <span className="text-sm md:text-base text-gray-400">Lap Record</span>
+        <span className="text-sm md:text-base text-turquoise-500 font-bold">{selectedCircuit.lapRecord}</span>
+      </div>
+      <div className="flex justify-between items-center py-2 border-b border-turquoise-500/10">
+        <span className="text-sm md:text-base text-gray-400">Record Holder</span>
+        <span className="text-sm md:text-base text-white font-semibold text-right">{selectedCircuit.recordHolder}</span>
+      </div>
+      
+      <div className="mt-4 pt-4 border-t border-turquoise-500/20">
+        <div className="text-xs text-gray-500 mb-2">Circuit Characteristics</div>
+        <div className="flex flex-wrap gap-2">
+          {selectedCircuit.characteristics.map((char, idx) => (
+            <span 
+              key={idx}
+              className="px-2 md:px-3 py-1 bg-turquoise-500/10 border border-turquoise-500/30 rounded-full text-xs text-turquoise-500 font-medium"
+            >
+              {char}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
 
-              <div className="mt-6 pt-6 border-t border-turquoise-500/20 space-y-3">
-                <div className="flex items-center gap-2 text-sm text-turquoise-500 bg-turquoise-500/10 rounded-lg px-3 py-2">
-                  <div className="w-2 h-2 rounded-full bg-turquoise-500 animate-pulse"></div>
-                  <span className="font-medium">Circuit marker visible on globe</span>
-                </div>
-                <button
-                  onClick={() => setSelectedCircuit(null)}
-                  className="w-full px-4 py-2 bg-turquoise-500/10 hover:bg-turquoise-500/20 border border-turquoise-500/30 rounded-lg text-turquoise-500 font-semibold transition-all"
-                >
-                  Reset View
-                </button>
-              </div>
-            </div>
-          )}
+    <div className="mt-4 md:mt-6 pt-4 md:pt-6 border-t border-turquoise-500/20 space-y-3">
+      <div className="flex items-center gap-2 text-xs md:text-sm text-turquoise-500 bg-turquoise-500/10 rounded-lg px-3 py-2">
+        <div className="w-2 h-2 rounded-full bg-turquoise-500 animate-pulse"></div>
+        <span className="font-medium">Circuit marker visible on globe</span>
+      </div>
+      <button
+        onClick={() => setSelectedCircuit(null)}
+        className="w-full px-4 py-3 bg-turquoise-500/10 hover:bg-turquoise-500/20 border border-turquoise-500/30 rounded-lg text-turquoise-500 font-semibold transition-all touch-manipulation"
+      >
+        Reset View
+      </button>
+    </div>
+  </div>
+)}
 
           {!selectedCircuit && (
             <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-4 items-center">
