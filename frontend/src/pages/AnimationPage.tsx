@@ -562,7 +562,7 @@ export default function AnimationPage() {
 
         {/* Battle Stats Cards */}
         {battleData && battleStats && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-8">
             {/* Winner Card */}
             <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-2xl p-6 shadow-lg shadow-metrik-turquoise/20 hover:shadow-metrik-turquoise/40 transition-all duration-300 hover:scale-105 group">
               <div className="flex items-center justify-between mb-3">
@@ -628,9 +628,9 @@ export default function AnimationPage() {
         {battleData && (
           <div className="space-y-6">
             {/* Main Grid: Canvas + Real-Time Telemetry Panel */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Canvas - Takes 2 columns */}
-              <div className="lg:col-span-2">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
+  {/* Canvas - Takes 2 columns */}
+  <div className="lg:col-span-2 order-1">
                 <div className="backdrop-blur-xl bg-metrik-black/95 border-2 border-metrik-turquoise/40 rounded-2xl p-4 shadow-2xl shadow-metrik-turquoise/30">
                   <canvas
                     ref={canvasRef}
@@ -642,10 +642,10 @@ export default function AnimationPage() {
               </div>
 
               {/* Real-Time Telemetry Panel - Takes 1 column */}
-              <div className="space-y-4">
+<div className="space-y-3 md:space-y-4 order-2">
                 {/* Telemetry Cards Grid */}
-                <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-2xl p-4 shadow-lg shadow-metrik-turquoise/20">
-                  <h3 className="text-sm font-rajdhani font-bold text-metrik-turquoise mb-4 uppercase tracking-wider flex items-center gap-2">
+                <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-xl md:rounded-2xl p-3 md:p-4 shadow-lg shadow-metrik-turquoise/20">
+  <h3 className="text-xs md:text-sm font-rajdhani font-bold text-metrik-turquoise mb-3 md:mb-4 uppercase tracking-wider flex items-center gap-2">
                     <Activity className="w-4 h-4" />
                     REAL-TIME TELEMETRY
                   </h3>
@@ -875,9 +875,9 @@ export default function AnimationPage() {
             </div>
 
             {/* Driver Info Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+<div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
               {/* Driver 1 Card */}
-              <div className="backdrop-blur-xl bg-gradient-to-br from-cyan-500/10 to-metrik-black/95 border-2 border-cyan-500/50 rounded-2xl p-6 shadow-lg shadow-cyan-500/20">
+              <div className="backdrop-blur-xl bg-gradient-to-br from-cyan-500/10 to-metrik-black/95 border-2 border-cyan-500/50 rounded-xl md:rounded-2xl p-4 md:p-6 shadow-lg shadow-cyan-500/20">
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <div className="text-3xl font-rajdhani font-black text-cyan-400">
@@ -910,7 +910,7 @@ export default function AnimationPage() {
               </div>
 
               {/* Driver 2 Card */}
-              <div className="backdrop-blur-xl bg-gradient-to-br from-orange-500/10 to-metrik-black/95 border-2 border-orange-500/50 rounded-2xl p-6 shadow-lg shadow-orange-500/20">
+              <div className="backdrop-blur-xl bg-gradient-to-br from-orange-500/10 to-metrik-black/95 border-2 border-orange-500/50 rounded-xl md:rounded-2xl p-4 md:p-6 shadow-lg shadow-orange-500/20">
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <div className="text-3xl font-rajdhani font-black text-orange-400">
@@ -963,7 +963,7 @@ export default function AnimationPage() {
 
             {/* Controls */}
             <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-2xl p-6 shadow-lg shadow-metrik-turquoise/20">
-              <div className="flex items-center justify-center gap-6 flex-wrap">
+              <div className="flex items-center justify-center gap-3 md:gap-6 flex-wrap">
                 <button
                   onClick={handleReset}
                   className="p-3 bg-metrik-turquoise/20 hover:bg-metrik-turquoise/30 text-metrik-turquoise rounded-xl transition-all duration-300 hover:scale-110"
@@ -991,12 +991,12 @@ export default function AnimationPage() {
 
                 <div className="flex items-center gap-3">
                   <span className="text-metrik-silver font-rajdhani font-bold uppercase tracking-wider">Speed:</span>
-                  <div className="flex gap-2">
-                    {[0.5, 1, 2, 4].map((s) => (
-                      <button
-                        key={s}
-                        onClick={() => setSpeed(s)}
-                        className={`px-4 py-2 rounded-xl font-rajdhani font-bold transition-all duration-300 ${
+                  <div className="flex gap-1 md:gap-2">
+  {[0.5, 1, 2, 4].map((s) => (
+    <button
+      key={s}
+      onClick={() => setSpeed(s)}
+      className={`px-3 md:px-4 py-2 rounded-lg md:rounded-xl text-sm md:text-base font-rajdhani font-bold transition-all duration-300 ${
                           speed === s
                             ? 'bg-metrik-turquoise text-metrik-black shadow-lg shadow-metrik-turquoise/50'
                             : 'bg-metrik-turquoise/20 text-metrik-turquoise hover:bg-metrik-turquoise/30'

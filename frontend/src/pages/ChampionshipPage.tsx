@@ -656,9 +656,9 @@ export default function ChampionshipPage() {
 
                 {rest.length > 0 && (
                   <div>
-                    <h3 className="text-xl md:text-2xl font-rajdhani font-black text-white mb-4 md:mb-6 uppercase tracking-wide">
-                      Full Standings
-                    </h3>
+                    <h3 className="text-lg md:text-2xl font-rajdhani font-black text-white mb-3 md:mb-6 uppercase tracking-wide">
+  Standings 4-{currentStandings.length}
+</h3>
                     <div className="space-y-3">
                       {rest.map((standing, index) => (
                         <div

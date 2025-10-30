@@ -1452,12 +1452,12 @@ export default function F1AnatomyPage() {
   const navigate = useNavigate();
   const [selectedPart, setSelectedPart] = useState<CarPart | null>(null);
   const [animateRotation, setAnimateRotation] = useState(true);
-  const [animateWheels, setAnimateWheels] = useState(true);
-  const [showLabels, setShowLabels] = useState(true);
-  const [showEnvironment, setShowEnvironment] = useState(false);
+  const [animateWheels, setAnimateWheels] = useState(false);
+  const [showLabels, setShowLabels] = useState(false);
+  const [showEnvironment, setShowEnvironment] = useState(true);
   const [drsOpen, setDrsOpen] = useState(false);
   const [explodedView, setExplodedView] = useState(false);
-  const [windTunnel, setWindTunnel] = useState(true);
+  const [windTunnel, setWindTunnel] = useState(false);
 
   return (
     <div className="min-h-screen bg-metrik-black text-white">

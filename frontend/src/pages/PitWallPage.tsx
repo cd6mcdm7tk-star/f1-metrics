@@ -9,6 +9,7 @@ import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, L
 import YearSelector from '../components/YearSelector';
 import LoadingSpinner from '../components/LoadingSpinner';
 import SkeletonChart from '../components/SkeletonChart';
+import { MobileResponsiveChart } from '../components/MobileResponsiveChart';
 
 export default function PitWallPage() {
   const navigate = useNavigate();
@@ -117,7 +118,6 @@ export default function PitWallPage() {
     return `${mins}:${secs.padStart(6, '0')}`;
   };
 
-  // Helper: Get driver abbreviation
   const getDriverAbbr = (fullName: string): string => {
     const parts = fullName.split(' ');
     if (parts.length >= 2) {
@@ -126,51 +126,25 @@ export default function PitWallPage() {
     return fullName.substring(0, 3).toUpperCase();
   };
 
-  // Helper: Get team color (F1 2024-2025 official colors)
   const getTeamColor = (team: string): string => {
     const teamLower = team.toLowerCase();
-    
-    // Red Bull Racing
     if (teamLower.includes('red bull')) return '#3671C6';
-    
-    // Ferrari
     if (teamLower.includes('ferrari')) return '#E8002D';
-    
-    // Mercedes
     if (teamLower.includes('mercedes')) return '#27F4D2';
-    
-    // McLaren
     if (teamLower.includes('mclaren')) return '#FF8000';
-    
-    // Aston Martin
     if (teamLower.includes('aston')) return '#229971';
-    
-    // Alpine
     if (teamLower.includes('alpine')) return '#FF87BC';
-    
-    // Williams
     if (teamLower.includes('williams')) return '#64C4FF';
-    
-    // AlphaTauri / RB / Visa Cash App RB
     if (teamLower.includes('alphatauri') || teamLower.includes('visa') || teamLower.includes('rb f1')) return '#6692FF';
-    
-    // Alfa Romeo / Kick Sauber
     if (teamLower.includes('alfa') || teamLower.includes('sauber') || teamLower.includes('kick')) return '#52E252';
-    
-    // Haas
     if (teamLower.includes('haas')) return '#B6BABD';
-    
-    // Default color
     return '#FFFFFF';
   };
 
-  // Helper: Detect overtakes between laps
   const detectOvertakes = (currentLap: number): Array<{driver: string, oldPos: number, newPos: number}> => {
     if (!raceData || currentLap === 0) return [];
-    
     const prevPositions = raceData.raceData[currentLap - 1]?.positions || [];
     const currPositions = raceData.raceData[currentLap]?.positions || [];
-    
     const overtakes: Array<{driver: string, oldPos: number, newPos: number}> = [];
     
     currPositions.forEach(curr => {
@@ -187,14 +161,11 @@ export default function PitWallPage() {
     return overtakes;
   };
 
-  // Check if driver has DRS
   const hasDRS = (position: number, gap: number): boolean => {
     return position > 1 && gap < 1.0;
   };
 
-  // IMPROVED STATS CALCULATIONS
   const statsData = raceData && pitStopsData && eventsData ? {
-    // DNF: Count from critical race events (accidents, technical issues)
     dnfCount: (() => {
       if (!eventsData) return 0;
       return eventsData.events.filter(e => 
@@ -206,10 +177,8 @@ export default function PitWallPage() {
       ).length;
     })(),
     
-    // FASTEST LAP: Find best lap time and driver
     fastestLap: (() => {
       if (!raceData || raceData.raceData.length === 0) return { time: null, driver: null };
-      
       let bestTime = Infinity;
       let bestDriver = null;
       
@@ -228,7 +197,6 @@ export default function PitWallPage() {
       };
     })(),
     
-    // Weather: Detect from tire compounds
     weather: (() => {
       if (!pitStopsData) return 'Dry';
       const compounds = pitStopsData.pitStops.map(ps => ps.compound.toUpperCase());
@@ -238,7 +206,6 @@ export default function PitWallPage() {
     })()
   } : null;
 
-  // Get weather icon component
   const getWeatherIcon = (weather: string) => {
     switch (weather) {
       case 'Wet':
@@ -255,24 +222,19 @@ export default function PitWallPage() {
   const currentEvents = getEventsForLap(currentLap);
   const currentOvertakes = detectOvertakes(currentLap);
 
-  // Calculate CUMULATIVE gaps (real time gaps accumulated over all laps)
   const calculateCumulativeGaps = (): Map<string, number> => {
     if (!raceData || currentLap >= raceData.raceData.length) return new Map();
     
     const gaps = new Map<string, number>();
-    
-    // Find leader for current lap
     const leaderDriver = currentPositions.find(p => p.position === 1)?.driver;
     if (!leaderDriver) return gaps;
     
-    // For each driver, calculate their cumulative time difference vs leader
     currentPositions.forEach(pos => {
       if (pos.position === 1) {
         gaps.set(pos.driver, 0);
         return;
       }
       
-      // Sum all lap times for this driver and leader up to current lap
       let driverTotalTime = 0;
       let leaderTotalTime = 0;
       
@@ -293,7 +255,7 @@ export default function PitWallPage() {
       
       const gap = driverTotalTime > 0 && leaderTotalTime > 0 
         ? driverTotalTime - leaderTotalTime 
-        : pos.position * 0.5; // Fallback if no data
+        : pos.position * 0.5;
       
       gaps.set(pos.driver, Math.max(0, gap));
     });
@@ -321,19 +283,19 @@ export default function PitWallPage() {
 
         {/* Title */}
         <div className="text-center">
-          <h1 className="text-6xl md:text-7xl font-rajdhani font-black tracking-tight text-white mb-4 drop-shadow-glow">
+          <h1 className="text-5xl md:text-7xl font-rajdhani font-black tracking-tight text-white mb-4 drop-shadow-glow">
             PIT WALL
-            <span className="block text-3xl md:text-4xl text-metrik-turquoise mt-2 drop-shadow-glow-intense">
+            <span className="block text-2xl md:text-4xl text-metrik-turquoise mt-2 drop-shadow-glow-intense">
               STRATEGY COMMAND CENTER
             </span>
           </h1>
-          <p className="text-metrik-silver font-inter text-lg max-w-2xl mx-auto">
+          <p className="text-metrik-silver font-inter text-sm md:text-lg max-w-2xl mx-auto">
             Real-time race analysis • Strategy insights • Position tracking
           </p>
         </div>
 
         {/* Selectors */}
-        <div className="flex flex-wrap items-center justify-center gap-4">
+        <div className="flex flex-wrap items-center justify-center gap-3 md:gap-4">
           <YearSelector selectedYear={year} onSelectYear={setYear} />
           <GrandPrixSelector
             year={year}
@@ -343,7 +305,7 @@ export default function PitWallPage() {
           <button
             onClick={loadRaceData}
             disabled={loading}
-            className="px-8 py-3 bg-gradient-to-r from-metrik-turquoise to-cyan-500 text-metrik-black font-rajdhani font-black tracking-wider rounded-xl hover:shadow-lg hover:shadow-metrik-turquoise/50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 flex items-center gap-2 uppercase"
+            className="px-6 md:px-8 py-3 bg-gradient-to-r from-metrik-turquoise to-cyan-500 text-metrik-black font-rajdhani font-black tracking-wider rounded-xl hover:shadow-lg hover:shadow-metrik-turquoise/50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 flex items-center gap-2 uppercase text-sm md:text-base"
           >
             {loading ? (
               <>
@@ -371,23 +333,23 @@ export default function PitWallPage() {
         {!loading && raceData && (
           <>
             {/* Race Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-              <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-2xl p-6 shadow-lg shadow-metrik-turquoise/20">
-                <div className="text-metrik-silver text-sm font-inter mb-1 uppercase tracking-wide">Total Laps</div>
-                <div className="text-4xl font-rajdhani font-black text-white">{raceData.totalLaps}</div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+              <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-xl md:rounded-2xl p-4 md:p-6 shadow-lg shadow-metrik-turquoise/20">
+                <div className="text-metrik-silver text-xs md:text-sm font-inter mb-1 uppercase tracking-wide">Total Laps</div>
+                <div className="text-3xl md:text-4xl font-rajdhani font-black text-white">{raceData.totalLaps}</div>
               </div>
 
-              <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-2xl p-6 shadow-lg shadow-metrik-turquoise/20">
-                <div className="text-metrik-silver text-sm font-inter mb-1 uppercase tracking-wide flex items-center gap-2">
-                  <TrendingUp size={16} />
-                  Fastest Lap
+              <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-xl md:rounded-2xl p-4 md:p-6 shadow-lg shadow-metrik-turquoise/20">
+                <div className="text-metrik-silver text-xs md:text-sm font-inter mb-1 uppercase tracking-wide flex items-center gap-2">
+                  <TrendingUp size={14} className="md:w-4 md:h-4" />
+                  Fastest
                 </div>
                 {statsData?.fastestLap.time ? (
                   <>
-                    <div className="text-2xl font-rajdhani font-black text-metrik-turquoise">
+                    <div className="text-lg md:text-2xl font-rajdhani font-black text-metrik-turquoise">
                       {formatLapTime(statsData.fastestLap.time)}
                     </div>
-                    <div className="text-xs text-metrik-silver font-inter mt-1">
+                    <div className="text-xs text-metrik-silver font-inter mt-1 truncate">
                       {getDriverAbbr(statsData.fastestLap.driver || '')}
                     </div>
                   </>
@@ -396,71 +358,71 @@ export default function PitWallPage() {
                 )}
               </div>
 
-              <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-2xl p-6 shadow-lg shadow-metrik-turquoise/20">
-                <div className="text-metrik-silver text-sm font-inter mb-1 uppercase tracking-wide flex items-center gap-2">
-                  <XCircle size={16} />
+              <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-xl md:rounded-2xl p-4 md:p-6 shadow-lg shadow-metrik-turquoise/20">
+                <div className="text-metrik-silver text-xs md:text-sm font-inter mb-1 uppercase tracking-wide flex items-center gap-2">
+                  <XCircle size={14} className="md:w-4 md:h-4" />
                   DNFs
                 </div>
-                <div className="text-4xl font-rajdhani font-black text-white">
+                <div className="text-3xl md:text-4xl font-rajdhani font-black text-white">
                   {statsData?.dnfCount || 0}
                 </div>
               </div>
 
-              <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-2xl p-6 shadow-lg shadow-metrik-turquoise/20">
-                <div className="text-metrik-silver text-sm font-inter mb-1 uppercase tracking-wide flex items-center gap-2">
+              <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-xl md:rounded-2xl p-4 md:p-6 shadow-lg shadow-metrik-turquoise/20">
+                <div className="text-metrik-silver text-xs md:text-sm font-inter mb-1 uppercase tracking-wide flex items-center gap-2">
                   {statsData && getWeatherIcon(statsData.weather)}
                   Weather
                 </div>
-                <div className="text-2xl font-rajdhani font-black text-white">
+                <div className="text-lg md:text-2xl font-rajdhani font-black text-white">
                   {statsData?.weather || 'Unknown'}
                 </div>
               </div>
             </div>
 
             {/* Playback Controls */}
-            <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-2xl p-6 shadow-lg shadow-metrik-turquoise/20">
-              <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-xl md:rounded-2xl p-4 md:p-6 shadow-lg shadow-metrik-turquoise/20">
+              <div className="flex flex-col md:flex-row items-center justify-between gap-4 md:gap-6">
                 {/* Lap Display */}
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3 md:gap-4">
                   <div className="text-center">
-                    <div className="text-sm text-metrik-silver font-inter mb-1 uppercase tracking-wide">Current Lap</div>
-                    <div className="text-5xl font-rajdhani font-black text-metrik-turquoise">
+                    <div className="text-xs md:text-sm text-metrik-silver font-inter mb-1 uppercase tracking-wide">Current</div>
+                    <div className="text-4xl md:text-5xl font-rajdhani font-black text-metrik-turquoise">
                       {currentLap + 1}
                     </div>
                   </div>
-                  <div className="text-3xl text-metrik-silver font-rajdhani font-black">/</div>
+                  <div className="text-2xl md:text-3xl text-metrik-silver font-rajdhani font-black">/</div>
                   <div className="text-center">
-                    <div className="text-sm text-metrik-silver font-inter mb-1 uppercase tracking-wide">Total</div>
-                    <div className="text-4xl font-rajdhani font-black text-white">
+                    <div className="text-xs md:text-sm text-metrik-silver font-inter mb-1 uppercase tracking-wide">Total</div>
+                    <div className="text-3xl md:text-4xl font-rajdhani font-black text-white">
                       {raceData.totalLaps}
                     </div>
                   </div>
                 </div>
 
                 {/* Controls */}
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2 md:gap-4 flex-wrap justify-center">
                   <button
                     onClick={handleReset}
-                    className="p-3 bg-metrik-black/50 border border-metrik-turquoise/30 rounded-xl hover:bg-metrik-turquoise/20 hover:border-metrik-turquoise transition-all"
+                    className="p-2 md:p-3 bg-metrik-black/50 border border-metrik-turquoise/30 rounded-lg md:rounded-xl hover:bg-metrik-turquoise/20 hover:border-metrik-turquoise transition-all"
                     title="Reset"
                   >
-                    <RotateCcw size={24} />
+                    <RotateCcw size={20} className="md:w-6 md:h-6" />
                   </button>
 
                   <button
                     onClick={handlePlayPause}
-                    className="p-4 bg-gradient-to-r from-metrik-turquoise to-cyan-500 text-metrik-black rounded-xl hover:shadow-lg hover:shadow-metrik-turquoise/50 transition-all"
+                    className="p-3 md:p-4 bg-gradient-to-r from-metrik-turquoise to-cyan-500 text-metrik-black rounded-lg md:rounded-xl hover:shadow-lg hover:shadow-metrik-turquoise/50 transition-all"
                   >
-                    {isPlaying ? <Pause size={28} /> : <Play size={28} />}
+                    {isPlaying ? <Pause size={24} className="md:w-7 md:h-7" /> : <Play size={24} className="md:w-7 md:h-7" />}
                   </button>
 
                   <div className="flex items-center gap-2">
-                    <span className="text-metrik-silver text-sm font-inter">Speed:</span>
+                    <span className="text-metrik-silver text-xs md:text-sm font-inter">Speed:</span>
                     {[0.5, 1, 2, 4].map((s) => (
                       <button
                         key={s}
                         onClick={() => setSpeed(s)}
-                        className={`px-3 py-2 rounded-lg font-rajdhani font-bold transition-all ${
+                        className={`px-2 md:px-3 py-1 md:py-2 text-xs md:text-sm rounded-lg font-rajdhani font-bold transition-all ${
                           speed === s
                             ? 'bg-metrik-turquoise text-metrik-black'
                             : 'bg-metrik-black/50 text-metrik-silver hover:bg-metrik-turquoise/20'
@@ -473,7 +435,7 @@ export default function PitWallPage() {
                 </div>
 
                 {/* Progress Bar */}
-                <div className="flex-1 min-w-[200px]">
+                <div className="flex-1 min-w-[200px] w-full md:w-auto">
                   <input
                     type="range"
                     min="0"
@@ -493,12 +455,12 @@ export default function PitWallPage() {
             </div>
 
             {/* Tabs */}
-            <div className="flex items-center justify-center gap-4">
+            <div className="flex items-center justify-center gap-2 md:gap-4 flex-wrap">
               {(['gaps', 'positions', 'strategy'] as const).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
-                  className={`px-8 py-3 rounded-xl font-rajdhani font-black tracking-wider uppercase transition-all flex items-center gap-2 ${
+                  className={`px-4 md:px-8 py-2 md:py-3 rounded-lg md:rounded-xl text-xs md:text-base font-rajdhani font-black tracking-wider uppercase transition-all flex items-center gap-2 ${
                     activeTab === tab
                       ? 'bg-gradient-to-r from-metrik-turquoise to-cyan-500 text-metrik-black shadow-lg shadow-metrik-turquoise/50'
                       : 'bg-metrik-black/50 border border-metrik-turquoise/30 text-metrik-silver hover:bg-metrik-turquoise/20'
@@ -506,18 +468,18 @@ export default function PitWallPage() {
                 >
                   {tab === 'gaps' ? (
                     <>
-                      <Route size={20} />
-                      Race Progression
+                      <Route size={16} className="md:w-5 md:h-5" />
+                      <span className="hidden sm:inline">Race</span>
                     </>
                   ) : tab === 'positions' ? (
                     <>
-                      <Users size={20} />
-                      Position Evolution
+                      <Users size={16} className="md:w-5 md:h-5" />
+                      <span className="hidden sm:inline">Positions</span>
                     </>
                   ) : (
                     <>
-                      <Target size={20} />
-                      Strategy
+                      <Target size={16} className="md:w-5 md:h-5" />
+                      <span className="hidden sm:inline">Strategy</span>
                     </>
                   )}
                 </button>
@@ -525,18 +487,17 @@ export default function PitWallPage() {
             </div>
 
             {/* Tab Content */}
-            <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-2xl p-8 shadow-lg shadow-metrik-turquoise/20">
+            <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-xl md:rounded-2xl p-4 md:p-8 shadow-lg shadow-metrik-turquoise/20">
               {activeTab === 'gaps' && (
                 <div className="space-y-6">
-                  <h2 className="text-3xl font-rajdhani font-black text-metrik-turquoise mb-6 tracking-wide flex items-center gap-2 uppercase">
-                    <Route size={28} />
+                  <h2 className="text-2xl md:text-3xl font-rajdhani font-black text-metrik-turquoise mb-6 tracking-wide flex items-center gap-2 uppercase">
+                    <Route size={24} className="md:w-7 md:h-7" />
                     Race Progression
                   </h2>
 
                   {currentPositions.length > 0 ? (
-                    <div className="space-y-4">
+                    <div className="space-y-4 md:space-y-6">
                       {currentPositions.slice(0, 10).map((pos) => {
-                        // Use cumulative gap from the Map
                         const gap = cumulativeGaps.get(pos.driver) || 0;
                         const percentage = maxGap > 0 ? Math.min((gap / maxGap) * 100, 100) : 0;
                         const inBattle = pos.position > 1 && gap < 2.0;
@@ -544,7 +505,6 @@ export default function PitWallPage() {
                         const isOvertaking = currentOvertakes.some(ot => ot.driver === pos.driver);
                         const hasPitStop = currentPitStops.some(ps => ps.driver === pos.driver);
                         
-                        // Mini sparkline data (last 5 laps) - cumulative gaps
                         const sparklineData: number[] = [];
                         const leaderDriver = currentPositions.find(p => p.position === 1)?.driver;
                         
@@ -572,10 +532,30 @@ export default function PitWallPage() {
                             key={pos.driver}
                             className="group relative"
                           >
+                            {/* Driver Info Mobile - Above track */}
+                            <div className="md:hidden flex items-center justify-between mb-2 px-2">
+                              <div className="flex items-center gap-2">
+                                <div className={`text-xs font-rajdhani font-bold ${
+                                  pos.position === 1 ? 'text-yellow-400' :
+                                  pos.position === 2 ? 'text-gray-300' :
+                                  pos.position === 3 ? 'text-orange-400' :
+                                  'text-metrik-silver'
+                                }`}>
+                                  P{pos.position}
+                                </div>
+                                <div className="text-sm font-rajdhani font-black text-white">
+                                  {getDriverAbbr(pos.driver)}
+                                </div>
+                              </div>
+                              <div className="text-xs text-metrik-silver/70 font-inter truncate max-w-[120px]">
+                                {pos.team}
+                              </div>
+                            </div>
+
                             {/* Track Container */}
                             <div className="relative">
-                              {/* Driver Info - Left */}
-                              <div className="absolute -left-32 top-1/2 -translate-y-1/2 text-right w-28">
+                              {/* Driver Info - Left - Desktop only */}
+                              <div className="hidden md:block absolute -left-32 top-1/2 -translate-y-1/2 text-right w-28">
                                 <div className={`text-xs font-rajdhani font-bold mb-1 ${
                                   pos.position === 1 ? 'text-yellow-400' :
                                   pos.position === 2 ? 'text-gray-300' :
@@ -593,44 +573,37 @@ export default function PitWallPage() {
                               </div>
 
                               {/* Track Base */}
-                              <div className={`relative h-12 rounded-full overflow-hidden transition-all duration-300 ${
+                              <div className={`relative h-10 md:h-12 rounded-full overflow-hidden transition-all duration-300 ${
                                 inBattle ? 'bg-red-500/10 border-2 border-red-500/30' : 'bg-metrik-black/30 border border-metrik-turquoise/20'
                               }`}>
-                                {/* Turquoise Track Line */}
                                 <div className="absolute inset-0 bg-gradient-to-r from-metrik-turquoise/20 via-metrik-turquoise/10 to-transparent" />
                                 
-                                {/* Checkpoints */}
                                 <div className="absolute inset-y-0 left-1/4 w-px bg-metrik-turquoise/30" />
                                 <div className="absolute inset-y-0 left-1/2 w-px bg-metrik-turquoise/40" />
                                 <div className="absolute inset-y-0 left-3/4 w-px bg-metrik-turquoise/30" />
                                 
-                                {/* Checkpoint Labels */}
-                                <div className="absolute -bottom-5 left-1/4 -translate-x-1/2 text-xs text-metrik-silver/50 font-rajdhani">25%</div>
-                                <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-xs text-metrik-silver/50 font-rajdhani">50%</div>
-                                <div className="absolute -bottom-5 left-3/4 -translate-x-1/2 text-xs text-metrik-silver/50 font-rajdhani">75%</div>
+                                <div className="hidden md:block absolute -bottom-5 left-1/4 -translate-x-1/2 text-xs text-metrik-silver/50 font-rajdhani">25%</div>
+                                <div className="hidden md:block absolute -bottom-5 left-1/2 -translate-x-1/2 text-xs text-metrik-silver/50 font-rajdhani">50%</div>
+                                <div className="hidden md:block absolute -bottom-5 left-3/4 -translate-x-1/2 text-xs text-metrik-silver/50 font-rajdhani">75%</div>
 
-                                {/* Trail Effect */}
                                 <div
                                   className="absolute inset-y-0 left-0 bg-gradient-to-r from-transparent via-metrik-turquoise/20 to-metrik-turquoise/5 transition-all duration-1000 ease-out"
                                   style={{ width: `${percentage}%` }}
                                 />
 
-                                {/* Car Position */}
                                 <div
                                   className={`absolute top-1/2 -translate-y-1/2 transition-all duration-1000 ease-out ${
                                     isOvertaking ? 'animate-pulse' : ''
                                   }`}
                                   style={{ left: `${percentage}%` }}
                                 >
-                                  {/* Overtake Flash */}
                                   {isOvertaking && (
                                     <div className="absolute inset-0 animate-ping">
-                                      <div className="w-8 h-8 rounded-full bg-metrik-turquoise/50" />
+                                      <div className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-metrik-turquoise/50" />
                                     </div>
                                   )}
 
-                                  {/* Car Icon */}
-                                  <div className={`relative w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs transition-all duration-300 ${
+                                  <div className={`relative w-6 h-6 md:w-8 md:h-8 rounded-lg flex items-center justify-center font-bold text-xs transition-all duration-300 ${
                                     pos.position === 1 ? 'bg-yellow-400 text-black shadow-lg shadow-yellow-400/50' :
                                     pos.position === 2 ? 'bg-gray-300 text-black shadow-lg shadow-gray-300/50' :
                                     pos.position === 3 ? 'bg-orange-400 text-black shadow-lg shadow-orange-400/50' :
@@ -639,52 +612,46 @@ export default function PitWallPage() {
                                     {pos.position}
                                   </div>
 
-                                  {/* Battle Zone Indicator */}
                                   {inBattle && (
-                                    <div className="absolute -top-6 left-1/2 -translate-x-1/2 flex items-center gap-1 text-red-400 animate-bounce">
-                                      <Zap size={12} className="animate-pulse" />
-                                      <span className="text-xs font-rajdhani font-black">BATTLE</span>
+                                    <div className="absolute -top-5 md:-top-6 left-1/2 -translate-x-1/2 flex items-center gap-1 text-red-400 animate-bounce">
+                                      <Zap size={10} className="md:w-3 md:h-3 animate-pulse" />
+                                      <span className="text-xs font-rajdhani font-black hidden md:inline">BATTLE</span>
                                     </div>
                                   )}
 
-                                  {/* DRS Indicator */}
                                   {drsEnabled && (
-                                    <div className="absolute -top-6 left-1/2 -translate-x-1/2 flex items-center gap-1 text-green-400">
-                                      <Wind size={12} />
-                                      <span className="text-xs font-rajdhani font-black">DRS</span>
+                                    <div className="absolute -top-5 md:-top-6 left-1/2 -translate-x-1/2 flex items-center gap-1 text-green-400">
+                                      <Wind size={10} className="md:w-3 md:h-3" />
+                                      <span className="text-xs font-rajdhani font-black hidden md:inline">DRS</span>
                                     </div>
                                   )}
 
-                                  {/* Pit Stop Indicator */}
                                   {hasPitStop && (
-                                    <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-1 text-yellow-400">
-                                      <Wrench size={12} />
-                                      <span className="text-xs font-rajdhani font-black">PIT</span>
+                                    <div className="absolute -bottom-5 md:-bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-1 text-yellow-400">
+                                      <Wrench size={10} className="md:w-3 md:h-3" />
+                                      <span className="text-xs font-rajdhani font-black hidden md:inline">PIT</span>
                                     </div>
                                   )}
 
-                                  {/* Gap Label */}
-                                  <div className="absolute -right-20 top-1/2 -translate-y-1/2 whitespace-nowrap">
+                                  <div className="absolute -right-16 md:-right-20 top-1/2 -translate-y-1/2 whitespace-nowrap">
                                     {pos.position === 1 ? (
-                                      <div className="text-sm font-rajdhani font-black text-metrik-turquoise">
-                                        LEADER
+                                      <div className="text-xs md:text-sm font-rajdhani font-black text-metrik-turquoise">
+                                        LEAD
                                       </div>
                                     ) : (
-                                      <div className="text-sm font-rajdhani font-black text-white">
-                                        +{gap.toFixed(3)}s
+                                      <div className="text-xs md:text-sm font-rajdhani font-black text-white">
+                                        +{gap.toFixed(2)}s
                                       </div>
                                     )}
                                   </div>
                                 </div>
 
-                                {/* Finish Line */}
-                                <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-white/20 to-transparent flex items-center justify-center">
-                                  <Flag size={16} className="text-white opacity-50" />
+                                <div className="absolute right-0 top-0 bottom-0 w-6 md:w-8 bg-gradient-to-l from-white/20 to-transparent flex items-center justify-center">
+                                  <Flag size={12} className="md:w-4 md:h-4 text-white opacity-50" />
                                 </div>
                               </div>
 
-                              {/* Mini Sparkline */}
-                              <div className="absolute -right-44 top-1/2 -translate-y-1/2 w-32 h-8 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <div className="hidden lg:block absolute -right-44 top-1/2 -translate-y-1/2 w-32 h-8 opacity-0 group-hover:opacity-100 transition-opacity">
                                 <svg width="100%" height="100%" className="overflow-visible">
                                   <polyline
                                     points={sparklineData.map((val, i) => {
@@ -701,8 +668,7 @@ export default function PitWallPage() {
                               </div>
                             </div>
 
-                            {/* Hover Tooltip */}
-                            <div className="absolute left-0 -top-24 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 w-full">
+                            <div className="hidden md:block absolute left-0 -top-24 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 w-full">
                               <div className="backdrop-blur-xl bg-metrik-black/95 border border-metrik-turquoise/50 rounded-xl p-3 shadow-xl shadow-metrik-turquoise/30">
                                 <div className="grid grid-cols-3 gap-3 text-xs">
                                   <div>
@@ -738,19 +704,17 @@ export default function PitWallPage() {
 
               {activeTab === 'positions' && positionEvolution && (
                 <div className="space-y-6">
-                  <h2 className="text-3xl font-rajdhani font-black text-metrik-turquoise mb-6 tracking-wide flex items-center gap-2 uppercase">
-                    <Users size={28} />
-                    Position Evolution - Top 10
+                  <h2 className="text-2xl md:text-3xl font-rajdhani font-black text-metrik-turquoise mb-6 tracking-wide flex items-center gap-2 uppercase">
+                    <Users size={24} className="md:w-7 md:h-7" />
+                    Position Evolution
                   </h2>
 
                   {positionEvolution.drivers.length > 0 ? (
                     <div className="relative">
                       {(() => {
-                        // Get CURRENT top 10 based on current lap positions
                         const currentEvolution = positionEvolution.evolution[currentLap];
                         const prevEvolution = currentLap > 0 ? positionEvolution.evolution[currentLap - 1] : null;
                         
-                        // Get all drivers with their positions at current lap
                         const driversWithPositions = positionEvolution.drivers
                           .map(driver => ({
                             driver,
@@ -767,24 +731,39 @@ export default function PitWallPage() {
 
                         return (
                           <>
-                            {/* Driver Labels - Aligned with their current position */}
-                            <div className="absolute left-0 top-0 w-24 h-[600px] pointer-events-none z-10">
+                            {/* Mobile Legend - Above chart */}
+                            <div className="lg:hidden grid grid-cols-2 gap-2 mb-4">
+                              {driversWithPositions.map(({ driver, team }) => {
+                                const teamColor = getTeamColor(team);
+                                return (
+                                  <div key={driver} className="flex items-center gap-2">
+                                    <div 
+                                      className="w-3 h-3 rounded-sm"
+                                      style={{ backgroundColor: teamColor }}
+                                    />
+                                    <span className="text-xs font-rajdhani font-bold text-white truncate">
+                                      {getDriverAbbr(driver)}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+
+                            {/* Driver Labels - Desktop only */}
+                            <div className="hidden lg:block absolute left-0 top-0 w-24 h-[600px] pointer-events-none z-10">
                               {driversWithPositions.map((driverData, idx) => {
                                 const { driver, position, prevPosition, team } = driverData;
                                 const posChange = prevPosition !== 999 ? prevPosition - position : 0;
                                 
-                                // Calculate Y position to match chart
                                 const chartHeight = 600;
                                 const marginTop = 20;
                                 const marginBottom = 20;
                                 const effectiveHeight = chartHeight - marginTop - marginBottom;
                                 
-                                // YAxis domain is [1, 20], reversed
                                 const positionRatio = (position - 1) / (20 - 1);
                                 const yPixels = marginTop + (positionRatio * effectiveHeight);
                                 const yPercent = (yPixels / chartHeight) * 100;
                                 
-                                // Get team color
                                 const teamColor = getTeamColor(team);
 
                                 return (
@@ -796,7 +775,6 @@ export default function PitWallPage() {
                                       transform: 'translateY(-50%)'
                                     }}
                                   >
-                                    {/* Position Indicator */}
                                     <div 
                                       className="w-6 h-6 rounded-md flex items-center justify-center text-xs font-rajdhani font-black shadow-lg"
                                       style={{ 
@@ -808,7 +786,6 @@ export default function PitWallPage() {
                                       {position}
                                     </div>
                                     
-                                    {/* Driver Name */}
                                     <span 
                                       className="text-sm font-rajdhani font-black drop-shadow-lg"
                                       style={{ color: teamColor }}
@@ -816,7 +793,6 @@ export default function PitWallPage() {
                                       {getDriverAbbr(driver)}
                                     </span>
                                     
-                                    {/* Position Change Animation */}
                                     {posChange > 0 && (
                                       <div className="flex items-center gap-0.5 text-green-400 animate-bounce">
                                         <ArrowUp size={12} className="animate-pulse" />
@@ -835,10 +811,11 @@ export default function PitWallPage() {
                             </div>
 
                             {/* Chart */}
-                            <ResponsiveContainer width="100%" height={600}>
+                            <MobileResponsiveChart height={600} mobileHeight={400}>
                               <LineChart
                                 data={chartData}
-                                margin={{ top: 20, right: 30, bottom: 20, left: 110 }}
+                                margin={{ top: 20, right: 10, bottom: 20, left: 10 }}
+                                className="lg:ml-[110px]"
                               >
                                 <CartesianGrid
                                   strokeDasharray="3 3"
@@ -857,7 +834,7 @@ export default function PitWallPage() {
                                   ticks={[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20]}
                                   stroke="#14b8a6"
                                   tick={{ fill: '#94a3b8', fontSize: 12, fontFamily: 'Rajdhani' }}
-                                  label={{ value: 'Position', angle: -90, position: 'insideLeft', fill: '#14b8a6', fontFamily: 'Rajdhani', fontWeight: 'bold' }}
+                                  label={{ value: 'Pos', angle: -90, position: 'insideLeft', fill: '#14b8a6', fontFamily: 'Rajdhani', fontWeight: 'bold' }}
                                 />
                                 <Tooltip
                                   contentStyle={{
@@ -870,7 +847,7 @@ export default function PitWallPage() {
                                   labelStyle={{ color: '#14b8a6', fontWeight: 'bold' }}
                                   formatter={(value: any, name: string) => {
                                     const driverTeam = (positionEvolution as any).teams?.[name];
-                                    return [`P${value} - ${driverTeam || ''}`, getDriverAbbr(name)];
+                                    return [`P${value}`, getDriverAbbr(name)];
                                   }}
                                 />
                                 {currentTop10.map((driver, idx) => {
@@ -893,7 +870,7 @@ export default function PitWallPage() {
                                   );
                                 })}
                               </LineChart>
-                            </ResponsiveContainer>
+                            </MobileResponsiveChart>
                           </>
                         );
                       })()}
@@ -908,36 +885,35 @@ export default function PitWallPage() {
 
               {activeTab === 'strategy' && strategyData && (
                 <div className="space-y-6">
-                  <h2 className="text-3xl font-rajdhani font-black text-metrik-turquoise mb-6 tracking-wide flex items-center gap-2 uppercase">
-                    <Clock size={28} />
-                    Tire Strategy Comparison
+                  <h2 className="text-2xl md:text-3xl font-rajdhani font-black text-metrik-turquoise mb-6 tracking-wide flex items-center gap-2 uppercase">
+                    <Clock size={24} className="md:w-7 md:h-7" />
+                    Tire Strategy
                   </h2>
 
                   {strategyData.strategies.length > 0 ? (
-                    <div className="space-y-6">
+                    <div className="space-y-4 md:space-y-6">
                       {strategyData.strategies.map((strategy) => {
                         const totalLaps = strategy.stints.reduce((sum, s) => sum + s.laps, 0);
                         return (
                           <div
                             key={strategy.driver}
-                            className="backdrop-blur-xl bg-metrik-black/50 border border-metrik-turquoise/20 rounded-xl p-6 hover:shadow-lg hover:shadow-metrik-turquoise/20 transition-all duration-300"
+                            className="backdrop-blur-xl bg-metrik-black/50 border border-metrik-turquoise/20 rounded-xl p-4 md:p-6 hover:shadow-lg hover:shadow-metrik-turquoise/20 transition-all duration-300"
                           >
                             <div className="flex items-center justify-between mb-4">
                               <div>
-                                <div className="font-rajdhani font-black text-white text-xl">
+                                <div className="font-rajdhani font-black text-white text-lg md:text-xl">
                                   {strategy.driver}
                                 </div>
-                                <div className="text-sm text-metrik-silver font-inter">
+                                <div className="text-xs md:text-sm text-metrik-silver font-inter truncate">
                                   {strategy.team} • {strategy.totalStops} stop{strategy.totalStops !== 1 ? 's' : ''}
                                 </div>
                               </div>
-                              <div className="text-metrik-turquoise font-rajdhani font-black text-lg">
-                                {totalLaps} laps
+                              <div className="text-metrik-turquoise font-rajdhani font-black text-base md:text-lg">
+                                {totalLaps}L
                               </div>
                             </div>
 
-                            {/* Strategy Bar */}
-                            <div className="flex gap-1 h-12 rounded-lg overflow-hidden shadow-lg">
+                            <div className="flex gap-1 h-10 md:h-12 rounded-lg overflow-hidden shadow-lg">
                               {strategy.stints.map((stint, idx) => {
                                 const percentage = (stint.laps / totalLaps) * 100;
                                 return (
@@ -947,32 +923,26 @@ export default function PitWallPage() {
                                     style={{
                                       width: `${percentage}%`,
                                       backgroundColor: getCompoundColor(stint.compound),
-                                      minWidth: stint.laps > 2 ? '40px' : '15px'
+                                      minWidth: stint.laps > 2 ? '30px' : '15px'
                                     }}
-                                    title={`Stint ${stint.stint}: ${stint.compound} (${stint.laps} laps, Lap ${stint.startLap}-${stint.startLap + stint.laps - 1})`}
+                                    title={`${stint.compound} (${stint.laps}L)`}
                                   >
-                                    {stint.laps > 5 && (
+                                    {stint.laps > 3 && (
                                       <div className="flex flex-col items-center">
-                                        <span className="text-shadow text-base drop-shadow-lg">
+                                        <span className="text-shadow text-sm md:text-base drop-shadow-lg">
                                           {stint.compound.charAt(0)}
                                         </span>
                                         <span className="text-shadow text-xs drop-shadow-lg">
-                                          {stint.laps}L
+                                          {stint.laps}
                                         </span>
                                       </div>
-                                    )}
-                                    {stint.laps >= 3 && stint.laps <= 5 && (
-                                      <span className="text-shadow text-sm drop-shadow-lg">
-                                        {stint.compound.charAt(0)}{stint.laps}
-                                      </span>
                                     )}
                                   </div>
                                 );
                               })}
                             </div>
 
-                            {/* Timeline markers */}
-                            <div className="flex justify-between mt-3 text-xs text-metrik-silver/70 font-rajdhani font-bold">
+                            <div className="hidden md:flex justify-between mt-3 text-xs text-metrik-silver/70 font-rajdhani font-bold">
                               <span>Lap 1</span>
                               {strategy.stints.length > 1 && strategy.stints.slice(0, -1).map((stint, idx) => {
                                 const lapNumber = strategy.stints.slice(0, idx + 1).reduce((sum, s) => sum + s.laps, 0);
@@ -994,13 +964,12 @@ export default function PitWallPage() {
                     </div>
                   )}
 
-                  {/* Compound Legend */}
-                  <div className="backdrop-blur-xl bg-metrik-black/50 border border-metrik-turquoise/20 rounded-xl p-6 mt-6">
-                    <div className="flex items-center justify-center gap-6 text-sm flex-wrap">
+                  <div className="backdrop-blur-xl bg-metrik-black/50 border border-metrik-turquoise/20 rounded-xl p-4 md:p-6 mt-6">
+                    <div className="flex items-center justify-center gap-4 md:gap-6 text-xs md:text-sm flex-wrap">
                       {['SOFT', 'MEDIUM', 'HARD', 'INTERMEDIATE', 'WET'].map((compound) => (
                         <div key={compound} className="flex items-center gap-2">
                           <div
-                            className="w-5 h-5 rounded shadow-lg"
+                            className="w-4 h-4 md:w-5 md:h-5 rounded shadow-lg"
                             style={{ backgroundColor: getCompoundColor(compound) }}
                           />
                           <span className="text-metrik-silver font-rajdhani font-bold">{compound}</span>
@@ -1012,23 +981,23 @@ export default function PitWallPage() {
               )}
             </div>
 
-            {/* Race Events - Current Lap */}
-            <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-2xl p-6 shadow-lg shadow-metrik-turquoise/20">
-              <h3 className="text-xl font-rajdhani font-black text-metrik-turquoise mb-4 tracking-wide flex items-center gap-2 uppercase">
-                <Radio size={20} />
-                Current Lap Events
+            {/* Race Events */}
+            <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-xl md:rounded-2xl p-4 md:p-6 shadow-lg shadow-metrik-turquoise/20">
+              <h3 className="text-lg md:text-xl font-rajdhani font-black text-metrik-turquoise mb-4 tracking-wide flex items-center gap-2 uppercase">
+                <Radio size={18} className="md:w-5 md:h-5" />
+                Lap Events
               </h3>
               {currentEvents.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 gap-3">
                   {currentEvents.map((event, idx) => (
                     <div
                       key={idx}
-                      className={`rounded-xl p-4 border ${getSeverityColor(event.severity)} backdrop-blur-xl transition-all duration-300 hover:scale-105`}
+                      className={`rounded-xl p-3 md:p-4 border ${getSeverityColor(event.severity)} backdrop-blur-xl transition-all duration-300 hover:scale-105`}
                     >
                       <div className="text-xs font-rajdhani font-black uppercase tracking-wider mb-1">
                         {event.type.replace('_', ' ')}
                       </div>
-                      <div className="text-sm font-inter">
+                      <div className="text-xs md:text-sm font-inter">
                         {event.description}
                       </div>
                     </div>
