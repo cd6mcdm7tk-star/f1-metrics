@@ -813,10 +813,15 @@ export default function PitWallPage() {
                             {/* Chart */}
                             <MobileResponsiveChart height={600} mobileHeight={400}>
                               <LineChart
-                                data={chartData}
-                                margin={{ top: 20, right: 10, bottom: 20, left: 10 }}
-                                className="lg:ml-[110px]"
-                              >
+  data={chartData}
+  margin={{ 
+    top: 20, 
+    right: window.innerWidth >= 1024 ? 80 : 10,  // ← 60px sur desktop, 10px sur mobile
+    bottom: 20, 
+    left: 10 
+  }}
+  className="lg:ml-[110px]"
+>
                                 <CartesianGrid
                                   strokeDasharray="3 3"
                                   stroke="rgba(20, 184, 166, 0.1)"
