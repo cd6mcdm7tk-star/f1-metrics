@@ -44,6 +44,15 @@ export default function PitWallPage() {
     }
   }, [isPlaying, speed, raceData]);
 
+  const [isDesktop, setIsDesktop] = useState(false);
+
+useEffect(() => {
+  const checkDesktop = () => setIsDesktop(window.innerWidth >= 1024);
+  checkDesktop();
+  window.addEventListener('resize', checkDesktop);
+  return () => window.removeEventListener('resize', checkDesktop);
+}, []);
+
   const loadRaceData = async () => {
     setLoading(true);
     try {
@@ -816,7 +825,7 @@ export default function PitWallPage() {
   data={chartData}
   margin={{ 
     top: 20, 
-    right: window.innerWidth >= 1024 ? 80 : 10,  // ← 60px sur desktop, 10px sur mobile
+    right: isDesktop ? 80 : 10,  // ← Utilise le state
     bottom: 20, 
     left: 10 
   }}
