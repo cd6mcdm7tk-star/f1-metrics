@@ -5,6 +5,7 @@ import pandas as pd
 import requests
 from app.utils.cache import cache
 from app.utils.error_handler import handle_fastf1_error, log_request, log_success, log_error
+from stripe_routes import router as stripe_router
 
 # Créer l'app FastAPI
 app = FastAPI()
@@ -17,6 +18,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include Stripe router
+app.include_router(stripe_router, prefix="/api/stripe", tags=["stripe"])
 
 # Cache FastF1
 cache_dir = 'cache'
