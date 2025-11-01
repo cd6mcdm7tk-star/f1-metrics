@@ -8,3 +8,4 @@ websockets==14.1
 pydantic==2.10.3
 python-multipart==0.0.18
 httpx==0.28.1
+stripe==13.1.1
