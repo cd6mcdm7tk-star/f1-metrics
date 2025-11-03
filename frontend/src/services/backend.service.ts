@@ -101,17 +101,17 @@ class BackendService {
   }
 
   async getRacePace(year: number, gpRound: number, driver: string): Promise<RacePaceData> {
-    const response = await fetch(`${API_BASE_URL}/race-pace/${year}/${gpRound}/${driver}`);
-    if (!response.ok) throw new Error('Failed to fetch race pace');
-    return response.json();
-  }
+  const response = await fetch(`${API_BASE_URL}/race-pace/${year}/${gpRound}/${driver}`);
+  if (!response.ok) throw new Error('Failed to fetch race pace');
+  return response.json();
+}
 
   async getMultiDriverPace(year: number, gpRound: number, drivers: string[], sessionType: string) {
-    const driversParam = drivers.join(',');
-    const response = await fetch(`${API_BASE_URL}/multi-driver-pace/${year}/${gpRound}/${sessionType}?drivers=${driversParam}`);
-    if (!response.ok) throw new Error('Failed to fetch multi-driver pace');
-    return response.json();
-  }
+  const driversParam = drivers.join(',');
+  const response = await fetch(`${API_BASE_URL}/multi-driver-pace/${year}/${gpRound}/${sessionType}?drivers=${driversParam}`);
+  if (!response.ok) throw new Error('Failed to fetch multi-driver pace');
+  return response.json();
+}
 
   async getStintAnalysis(year: number, gpRound: number, driver: string): Promise<StintAnalysisData> {
     const response = await fetch(`${API_BASE_URL}/stint-analysis/${year}/${gpRound}/${driver}`);
@@ -120,10 +120,10 @@ class BackendService {
   }
 
   async getSectorEvolution(year: number, gpRound: number, driver: string): Promise<SectorEvolutionData> {
-    const response = await fetch(`${API_BASE_URL}/sector-evolution/${year}/${gpRound}/${driver}`);
-    if (!response.ok) throw new Error('Failed to fetch sector evolution');
-    return response.json();
-  }
+  const response = await fetch(`${API_BASE_URL}/sector-evolution/${year}/${gpRound}/${driver}`);
+  if (!response.ok) throw new Error('Failed to fetch sector evolution');
+  return response.json();
+}
 
   async getMultiDriverSectors(year: number, gpRound: number, sessionType: string, drivers: string[]) {
     const driversParam = drivers.join(',');
@@ -181,11 +181,13 @@ export const getPitStops = (year: number, gpRound: number) => backendService.get
 export const getRaceEvents = (year: number, gpRound: number) => backendService.getRaceEvents(year, gpRound);
 export const getPositionEvolution = (year: number, gpRound: number) => backendService.getPositionEvolution(year, gpRound);
 export const getStrategyComparison = (year: number, gpRound: number) => backendService.getStrategyComparison(year, gpRound);
-export const getRacePace = (year: number, gpRound: number, driver: string) => backendService.getRacePace(year, gpRound, driver);
+export const getRacePace = (year: number, gpRound: number, driver: string) => 
+  backendService.getRacePace(year, gpRound, driver);
 export const getMultiDriverPace = (year: number, gpRound: number, drivers: string[], sessionType: string) =>
   backendService.getMultiDriverPace(year, gpRound, drivers, sessionType);
 export const getStintAnalysis = (year: number, gpRound: number, driver: string) => backendService.getStintAnalysis(year, gpRound, driver);
-export const getSectorEvolution = (year: number, gpRound: number, driver: string) => backendService.getSectorEvolution(year, gpRound, driver);
+export const getSectorEvolution = (year: number, gpRound: number, driver: string) => 
+  backendService.getSectorEvolution(year, gpRound, driver);
 export const getMultiDriverSectors = (year: number, gpRound: number, sessionType: string, drivers: string[]) =>
   backendService.getMultiDriverSectors(year, gpRound, sessionType, drivers);
 export const getDriverStandings = (year: number) => backendService.getDriverStandings(year);

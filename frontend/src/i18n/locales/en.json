@@ -1,0 +1,302 @@
+{
+  "nav": {
+    "home": "Home",
+    "telemetry": "Telemetry",
+    "animation": "GPS Animation",
+    "pitWall": "Pit Wall",
+    "championship": "Championship",
+    "trackDatabase": "Track Database",
+    "anatomy": "F1 Anatomy",
+    "login": "Login",
+    "signup": "Sign Up",
+    "logout": "Logout",
+    "upgrade": "Upgrade to METRIK+",
+    "account": "My Account"
+  },
+  "common": {
+    "back": "Back",
+    "loading": "Loading",
+    "loadData": "Load Data",
+    "year": "Year",
+    "session": "Session",
+    "driver": "Driver",
+    "drivers": "Drivers",
+    "race": "Race",
+    "qualifying": "Qualifying",
+    "practice": "Practice",
+    "sprint": "Sprint",
+    "selectDrivers": "Select Drivers",
+    "selected": "Selected",
+    "compare": "Compare",
+    "export": "Export",
+    "exportPNG": "Export PNG",
+    "exportPDF": "Export PDF",
+    "exporting": "Exporting...",
+    "showOutliers": "Show outliers (pit stops)",
+    "lapTime": "Lap Time",
+    "lapNumber": "Lap Number",
+    "speed": "Speed",
+    "distance": "Distance",
+    "sector": "Sector",
+    "sectors": "Sectors"
+  },
+  "home": {
+    "hero": {
+      "title": "F1 TELEMETRY ANALYSIS",
+      "subtitle": "Professional Formula 1 Data Analysis Platform",
+      "cta": "Start Analysis"
+    },
+    "features": {
+      "telemetry": {
+        "title": "Advanced Telemetry",
+        "desc": "Detailed driver data comparison"
+      },
+      "animation": {
+        "title": "GPS Animations",
+        "desc": "Relive on-track battles"
+      },
+      "championship": {
+        "title": "Championship",
+        "desc": "Complete standings and statistics"
+      },
+      "trackDatabase": {
+        "title": "Track Database",
+        "desc": "All circuits in 3D"
+      }
+    }
+  },
+  "telemetry": {
+    "title": "TELEMETRY ANALYSIS",
+    "tabs": {
+      "telemetry": "Telemetry",
+      "telemetryDesc": "2 Drivers Comparison",
+      "pace": "Race Pace",
+      "paceDesc": "Lap Times Evolution",
+      "comparison": "Multi-Driver",
+      "comparisonDesc": "Compare Multiple Drivers",
+      "dominance": "Track Dominance",
+      "dominanceDesc": "Speed Advantage Map",
+      "sectors": "Sectors",
+      "sectorsDesc": "Sector Times"
+    },
+    "raceOnly": "Race only",
+    "qualifyingOnly": "Qualifying only",
+    "stats": {
+      "avgLapTime": "Avg Lap Time",
+      "bestLap": "Best Lap",
+      "totalLaps": "Total Laps",
+      "consistency": "Consistency",
+      "delta": "Delta",
+      "maxSpeed": "Max Speed"
+    },
+    "charts": {
+      "speedComparison": "SPEED COMPARISON",
+      "deltaAnalysis": "DELTA ANALYSIS",
+      "deltaDesc": "Cumulative time gap throughout the lap",
+      "throttle": "THROTTLE APPLICATION",
+      "brake": "BRAKE APPLICATION",
+      "gear": "GEAR SELECTION",
+      "lapTimeEvolution": "LAP TIME EVOLUTION",
+      "multiDriver": "MULTI-DRIVER COMPARISON",
+      "trackDominance": "CIRCUIT DOMINANCE MAP",
+      "trackDominanceDesc": "Real GPS circuit layout with speed advantage gradient",
+      "sectorEvolution": "SECTOR EVOLUTION"
+    },
+    "gpsNotAvailable": {
+      "title": "GPS DATA NOT AVAILABLE",
+      "desc": "Track Dominance Map requires GPS coordinates from telemetry data. This feature is only available for races from 2018 onwards.",
+      "hint": "Try selecting a more recent Grand Prix (2018+) to view the circuit dominance analysis."
+    }
+  },
+  "animation": {
+    "title": "GPS ANIMATION",
+    "selectBattle": "Select a battle",
+    "play": "Play",
+    "pause": "Pause",
+    "reset": "Reset",
+    "speed": "Speed"
+  },
+  "pitWall": {
+    "title": "PIT WALL STRATEGY",
+    "raceProgression": "Race Progression",
+    "pitStops": "Pit Stops",
+    "tyreStrategy": "Tyre Strategy"
+  },
+  "championship": {
+    "title": "CHAMPIONSHIP",
+    "drivers": "Drivers",
+    "constructors": "Constructors",
+    "podiums": "Podiums",
+    "standings": "Standings",
+    "points": "Points",
+    "wins": "Wins",
+    "selectYear": "Select year"
+  },
+  "trackDatabase": {
+    "title": "TRACK DATABASE",
+    "circuits": "Circuits",
+    "length": "Length",
+    "corners": "Corners",
+    "lapRecord": "Lap Record",
+    "country": "Country"
+  },
+  "anatomy": {
+    "title": "F1 ANATOMY",
+    "aerodynamics": "Aerodynamics",
+    "engine": "Engine",
+    "suspension": "Suspension",
+    "tires": "Tyres"
+  },
+  "auth": {
+    "login": "Login",
+    "signup": "Sign Up",
+    "email": "Email",
+    "password": "Password",
+    "confirmPassword": "Confirm Password",
+    "forgotPassword": "Forgot password?",
+    "noAccount": "Don't have an account?",
+    "hasAccount": "Already have an account?",
+    "loginSuccess": "Login successful!",
+    "signupSuccess": "Sign up successful!",
+    "error": "An error occurred"
+  },
+  "upgrade": {
+    "title": "Upgrade to METRIK+",
+    "price": "€4.99/month",
+    "features": {
+      "unlimited": "Unlimited requests",
+      "export": "PDF/PNG Export",
+      "priority": "Priority support",
+      "exclusive": "Access to exclusive features"
+    },
+    "cta": "Upgrade to METRIK+",
+    "cancel": "Cancel"
+  },
+  "rateLimit": {
+    "title": "Limit reached",
+    "message": "You've reached the limit of 12 requests per day.",
+    "upgrade": "Upgrade to METRIK+ for unlimited requests!"
+  },
+  "footer": {
+    "about": "About",
+    "contact": "Contact",
+    "privacy": "Privacy",
+    "terms": "Terms",
+    "followUs": "Follow us",
+    "copyright": "© 2025 METRIK DELTA. All rights reserved."
+
+  },
+  "anatomy": {
+    "title": "F1 ANATOMY",
+    "subtitle": "Interactive 3D Car • 12 Components • CFD Simulation",
+    "controls": {
+      "rotation": "Rotation",
+      "wheels": "Wheels",
+      "labels": "Labels",
+      "env": "Env",
+      "drs": "DRS",
+      "exploded": "Exploded View",
+      "cfd": "CFD"
+    },
+    "info": "🖱️ Rotate • 🔍 Zoom • 🎯 Hotspots • 🌊 CFD • ⚡ DRS • 💥 Exploded View",
+    "features": {
+      "title": "Features",
+      "cfd": {
+        "title": "CFD Wind Tunnel",
+        "desc": "Animated flow lines showing real aerodynamics. Wing, ground effect, and DRS impact visible."
+      },
+      "drs": {
+        "title": "Active DRS",
+        "desc": "The wing opens progressively. Visible impact on airflow (reduced turbulence)."
+      },
+      "wheels": {
+        "title": "Realistic Wheels",
+        "desc": "All 4 wheels rotate on the spot with detailed rims and spokes."
+      },
+      "exploded": {
+        "title": "Exploded View",
+        "desc": "Each component moves precisely away from its axis to see inside."
+      }
+    },
+    "components": "Components",
+    "close": "Close",
+    "specs": "Specifications",
+    "cfdTitle": "💨 CFD Aerodynamics & Technologies Explained",
+    "cfdSections": {
+      "laminar": {
+        "title": "Laminar Flow",
+        "desc": "Blue lines show airflow. The front wing splits the flow, air accelerates under the floor (Venturi effect), and the rear wing creates downforce while generating turbulence."
+      },
+      "drsImpact": {
+        "title": "DRS Impact",
+        "desc": "DRS closed: Large rear turbulence creating high drag. DRS open: Smooth flow, drag reduced by 20-30%, speed gain of 10-15 km/h on straights. Only usable in races under conditions."
+      },
+      "groundEffect": {
+        "title": "Ground Effect",
+        "desc": "Flow lines descend under the car and accelerate (Venturi). Creates 40-45% of total downforce. Critical ride height of 5-10mm from ground. 2022 regulations reintroduced this effect to improve racing."
+      },
+      "hybrid": {
+        "title": "Hybrid System",
+        "desc": "The MGU-K recovers energy during braking (up to 2 MJ per lap) and redeploys it for 160hp extra for a maximum of 33 seconds per lap. The MGU-H recovers energy from the turbo with no time limit."
+      },
+      "tyres": {
+        "title": "Tyre Management",
+        "desc": "5 Pirelli compounds (C0-C5). Optimal window: 100-110°C. Crucial strategy with thermal management, degradation and graining. Teams must use at least 2 different compounds in the race."
+      },
+      "electronics": {
+        "title": "Onboard Electronics",
+        "desc": "Over 300 sensors on the car. Real-time data transmission to the pits. Analysis of brake temperature, tyre pressure, wear, fuel consumption, and engine parameters to optimize strategy."
+      }
+    },
+    "parts": {
+      "frontWing": {
+        "name": "Front Wing",
+        "desc": "Generates 25-30% of total aerodynamic downforce. Composed of 5 adjustable elements to optimize aerodynamic balance. The design directly influences airflow to the rest of the car."
+      },
+      "rearWing": {
+        "name": "Rear Wing + DRS",
+        "desc": "Mobile wing with DRS (Drag Reduction System). Opens to reduce aerodynamic drag and gain 10-15 km/h on straights. Electronically controlled from the cockpit."
+      },
+      "cockpit": {
+        "name": "Cockpit + Halo",
+        "desc": "Titanium protection introduced in 2018. The Halo withstands 12 tonnes of force and has already saved several lives. The cockpit integrates all vital controls accessible to the driver."
+      },
+      "wheels": {
+        "name": "Wheels (x4)",
+        "desc": "18-inch Pirelli tyres with magnesium rims. Teams can change all 4 wheels in under 2 seconds during a pit stop. Optimal temperature is crucial for performance."
+      },
+      "sidepods": {
+        "name": "Sidepods",
+        "desc": "Crucial aerodynamic elements that cool the engine via 4 radiators. Their design also creates the Venturi effect that generates downforce. Major innovation area between teams."
+      },
+      "floor": {
+        "name": "Floor",
+        "desc": "Surface that generates ground effect. Responsible for 40-45% of total downforce thanks to Venturi created under the car. Ride height is critical (5-10mm from ground)."
+      },
+      "engine": {
+        "name": "V6 Hybrid Engine",
+        "desc": "Hybrid power unit combining a 1.6L Turbo V6 with two energy recovery systems (MGU-K and MGU-H). Develops around 1000 horsepower total with record 50% thermal efficiency."
+      },
+      "suspension": {
+        "name": "Suspension",
+        "desc": "Ultra-sophisticated push-rod/pull-rod system that maintains the car at optimal ride height. Continuously adjustable to adapt to fuel level and tyre wear."
+      },
+      "gearbox": {
+        "name": "Gearbox",
+        "desc": "8-speed sequential transmission + reverse. Gear changes occur in less than 50 milliseconds via steering wheel paddles. Load-bearing carbon structure."
+      },
+      "steering": {
+        "name": "Steering Wheel",
+        "desc": "Control center with over 25 buttons and settings. The driver controls braking, differential, ERS, radio, drinks and strategy from the wheel. Cost: ~€50,000."
+      },
+      "battery": {
+        "name": "ES Battery",
+        "desc": "4 MJ Energy Store system. Powers the MGU-K which delivers 160 extra horsepower for a maximum of 33 seconds per lap."
+      },
+      "diffuser": {
+        "name": "Diffuser",
+        "desc": "Rear aerodynamic element that accelerates airflow exiting under the car. Creates suction effect that pins the car to the ground. Complex design with multiple channels."
+      }
+    }
+  }
+}

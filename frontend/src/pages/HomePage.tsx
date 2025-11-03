@@ -1,9 +1,12 @@
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useEffect, useRef } from 'react';
 import { Activity, Film, Trophy, Map, Target, Cpu, Gauge, Zap, TrendingUp, Users } from 'lucide-react';
+import SEO from '../components/SEO';
 
 export default function HomePage() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // F1 Data Matrix Effect + Speed Particles
@@ -212,17 +215,17 @@ export default function HomePage() {
   const features = [
     {
       id: 'telemetry',
-      title: 'Télémétrie Avancée',
-      description: '8 graphiques détaillés : Speed, Throttle, Brake, RPM, Gear, Pace, Stints, Secteurs',
+      title: t('home.features.telemetry.title'),
+      description: t('home.features.telemetry.desc'),
       icon: Activity,
       path: '/telemetry',
-      tags: ['Comparaison', 'Race & Qualif'],
+      tags: [t('common.compare'), 'Race & Qualif'],
       color: 'cyan'
     },
     {
       id: 'animation',
-      title: 'Battle Animation',
-      description: 'Visualisez les duels pilote par pilote avec trajectoires en temps réel',
+      title: t('home.features.animation.title'),
+      description: t('home.features.animation.desc'),
       icon: Film,
       path: '/animation',
       tags: ['Canvas 2D', 'Écart dynamique'],
@@ -239,8 +242,8 @@ export default function HomePage() {
     },
     {
       id: 'championship',
-      title: 'Championship',
-      description: 'Classements pilotes, constructeurs, résultats course & qualifications',
+      title: t('home.features.championship.title'),
+      description: t('home.features.championship.desc'),
       icon: Trophy,
       path: '/championship',
       tags: ['Multi-années', '4 onglets'],
@@ -248,8 +251,8 @@ export default function HomePage() {
     },
     {
       id: 'track-database',
-      title: 'Track Database 3D',
-      description: 'Globe 3D interactif avec les 24 circuits F1, infos techniques et records',
+      title: t('home.features.trackDatabase.title'),
+      description: t('home.features.trackDatabase.desc'),
       icon: Map,
       path: '/track-database',
       tags: ['Globe 3D', 'Records'],
@@ -274,7 +277,9 @@ export default function HomePage() {
   ];
 
   return (
-    <div className="min-h-screen bg-metrik-black text-white overflow-hidden relative">
+    <>
+      <SEO path="/" />
+      <div className="min-h-screen bg-metrik-black text-white overflow-hidden relative">
       {/* Animated Canvas Background */}
       <canvas
         ref={canvasRef}
@@ -293,13 +298,13 @@ export default function HomePage() {
           <div className="inline-flex items-center justify-center gap-4 mb-6 backdrop-blur-xl bg-metrik-card/50 border border-metrik-turquoise/30 rounded-full px-8 py-3 shadow-2xl shadow-metrik-turquoise/20">
             <div className="w-3 h-3 rounded-full bg-metrik-turquoise animate-pulse shadow-lg shadow-metrik-turquoise/50" />
             <span className="text-sm font-rajdhani font-bold text-metrik-turquoise uppercase tracking-wider">
-              Real-time F1 Telemetry Platform
-            </span>
+  {t('home.hero.subtitle')}
+</span>
           </div>
 
           <h1 className="text-7xl md:text-9xl font-rajdhani font-black mb-6 bg-gradient-to-r from-white via-metrik-turquoise to-cyan-400 bg-clip-text text-transparent leading-tight animate-gradient drop-shadow-2xl">
-            F1 METRIK
-          </h1>
+  {t('home.hero.title')}
+</h1>
           
           <p className="text-xl md:text-2xl text-gray-300 font-inter mb-4 max-w-3xl mx-auto drop-shadow-lg">
             Advanced Formula 1 Telemetry & Analytics Platform
@@ -406,11 +411,11 @@ export default function HomePage() {
           </p>
           <div className="flex items-center justify-center gap-4 flex-wrap">
             <button
-              onClick={() => navigate('/telemetry')}
-              className="px-8 py-4 bg-gradient-to-r from-metrik-turquoise to-cyan-500 rounded-xl font-rajdhani font-black text-lg text-metrik-black hover:shadow-2xl hover:shadow-metrik-turquoise/50 transition-all duration-300 hover:scale-105"
-            >
-              Commencer l'analyse
-            </button>
+  onClick={() => navigate('/telemetry')}
+  className="px-8 py-4 bg-gradient-to-r from-metrik-turquoise to-cyan-500 rounded-xl font-rajdhani font-black text-lg text-metrik-black hover:shadow-2xl hover:shadow-metrik-turquoise/50 transition-all duration-300 hover:scale-105"
+>
+  {t('home.hero.cta')}
+</button>
             <button
               onClick={() => navigate('/track-database')}
               className="px-8 py-4 bg-metrik-card/80 backdrop-blur-xl border border-metrik-turquoise/30 rounded-xl font-rajdhani font-black text-lg text-metrik-turquoise hover:bg-metrik-turquoise/20 hover:shadow-xl hover:shadow-metrik-turquoise/30 transition-all duration-300"
@@ -446,6 +451,7 @@ export default function HomePage() {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }
