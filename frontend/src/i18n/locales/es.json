@@ -1,0 +1,302 @@
+{
+  "nav": {
+    "home": "Inicio",
+    "telemetry": "Telemetría",
+    "animation": "Animación GPS",
+    "pitWall": "Muro de Boxes",
+    "championship": "Campeonato",
+    "trackDatabase": "Base de Circuitos",
+    "anatomy": "Anatomía F1",
+    "login": "Iniciar Sesión",
+    "signup": "Registrarse",
+    "logout": "Cerrar Sesión",
+    "upgrade": "Actualizar a METRIK+",
+    "account": "Mi Cuenta"
+  },
+  "common": {
+    "back": "Volver",
+    "loading": "Cargando",
+    "loadData": "Cargar Datos",
+    "year": "Año",
+    "session": "Sesión",
+    "driver": "Piloto",
+    "drivers": "Pilotos",
+    "race": "Carrera",
+    "qualifying": "Clasificación",
+    "practice": "Entrenamientos",
+    "sprint": "Sprint",
+    "selectDrivers": "Seleccionar pilotos",
+    "selected": "Seleccionado",
+    "compare": "Comparar",
+    "export": "Exportar",
+    "exportPNG": "Exportar PNG",
+    "exportPDF": "Exportar PDF",
+    "exporting": "Exportando...",
+    "showOutliers": "Mostrar valores atípicos (paradas en boxes)",
+    "lapTime": "Tiempo de Vuelta",
+    "lapNumber": "Número de Vuelta",
+    "speed": "Velocidad",
+    "distance": "Distancia",
+    "sector": "Sector",
+    "sectors": "Sectores"
+  },
+  "home": {
+    "hero": {
+      "title": "ANÁLISIS TELEMETRÍA F1",
+      "subtitle": "Plataforma Profesional de Análisis de Datos de Fórmula 1",
+      "cta": "Comenzar Análisis"
+    },
+    "features": {
+      "telemetry": {
+        "title": "Telemetría Avanzada",
+        "desc": "Comparación detallada de datos de pilotos"
+      },
+      "animation": {
+        "title": "Animaciones GPS",
+        "desc": "Revive las batallas en pista"
+      },
+      "championship": {
+        "title": "Campeonato",
+        "desc": "Clasificaciones y estadísticas completas"
+      },
+      "trackDatabase": {
+        "title": "Base de Circuitos",
+        "desc": "Todos los circuitos en 3D"
+      }
+    }
+  },
+  "telemetry": {
+    "title": "ANÁLISIS TELEMETRÍA",
+    "tabs": {
+      "telemetry": "Telemetría",
+      "telemetryDesc": "Comparación 2 pilotos",
+      "pace": "Ritmo de Carrera",
+      "paceDesc": "Evolución tiempos de vuelta",
+      "comparison": "Multi-Pilotos",
+      "comparisonDesc": "Comparar varios pilotos",
+      "dominance": "Dominación del Circuito",
+      "dominanceDesc": "Mapa de ventaja de velocidad",
+      "sectors": "Sectores",
+      "sectorsDesc": "Tiempos por sector"
+    },
+    "raceOnly": "Solo carrera",
+    "qualifyingOnly": "Solo clasificación",
+    "stats": {
+      "avgLapTime": "Tiempo Medio",
+      "bestLap": "Mejor Vuelta",
+      "totalLaps": "Vueltas Totales",
+      "consistency": "Regularidad",
+      "delta": "Delta",
+      "maxSpeed": "Velocidad Máx"
+    },
+    "charts": {
+      "speedComparison": "COMPARACIÓN VELOCIDAD",
+      "deltaAnalysis": "ANÁLISIS DELTA",
+      "deltaDesc": "Diferencia de tiempo acumulada en la vuelta",
+      "throttle": "ACELERACIÓN",
+      "brake": "FRENADO",
+      "gear": "SELECCIÓN MARCHA",
+      "lapTimeEvolution": "EVOLUCIÓN TIEMPO DE VUELTA",
+      "multiDriver": "COMPARACIÓN MULTI-PILOTOS",
+      "trackDominance": "MAPA DOMINACIÓN CIRCUITO",
+      "trackDominanceDesc": "Trazado GPS real con gradiente de ventaja de velocidad",
+      "sectorEvolution": "EVOLUCIÓN SECTORES"
+    },
+    "gpsNotAvailable": {
+      "title": "DATOS GPS NO DISPONIBLES",
+      "desc": "El mapa de dominación del circuito requiere coordenadas GPS. Esta función solo está disponible para carreras desde 2018.",
+      "hint": "Intenta seleccionar un Gran Premio más reciente (2018+) para ver el análisis de dominación del circuito."
+    }
+  },
+  "animation": {
+    "title": "ANIMACIÓN GPS",
+    "selectBattle": "Seleccionar una batalla",
+    "play": "Reproducir",
+    "pause": "Pausa",
+    "reset": "Reiniciar",
+    "speed": "Velocidad"
+  },
+  "pitWall": {
+    "title": "ESTRATEGIA MURO DE BOXES",
+    "raceProgression": "Progresión de Carrera",
+    "pitStops": "Paradas en Boxes",
+    "tyreStrategy": "Estrategia Neumáticos"
+  },
+  "championship": {
+    "title": "CAMPEONATO",
+    "drivers": "Pilotos",
+    "constructors": "Constructores",
+    "podiums": "Podios",
+    "standings": "Clasificación",
+    "points": "Puntos",
+    "wins": "Victorias",
+    "selectYear": "Seleccionar año"
+  },
+  "trackDatabase": {
+    "title": "BASE DE DATOS CIRCUITOS",
+    "circuits": "Circuitos",
+    "length": "Longitud",
+    "corners": "Curvas",
+    "lapRecord": "Récord de vuelta",
+    "country": "País"
+  },
+  "anatomy": {
+    "title": "ANATOMÍA F1",
+    "aerodynamics": "Aerodinámica",
+    "engine": "Motor",
+    "suspension": "Suspensión",
+    "tires": "Neumáticos"
+  },
+  "auth": {
+    "login": "Iniciar Sesión",
+    "signup": "Registrarse",
+    "email": "Correo Electrónico",
+    "password": "Contraseña",
+    "confirmPassword": "Confirmar Contraseña",
+    "forgotPassword": "¿Olvidaste tu contraseña?",
+    "noAccount": "¿No tienes cuenta?",
+    "hasAccount": "¿Ya tienes cuenta?",
+    "loginSuccess": "¡Inicio de sesión exitoso!",
+    "signupSuccess": "¡Registro exitoso!",
+    "error": "Ocurrió un error"
+  },
+  "upgrade": {
+    "title": "Actualizar a METRIK+",
+    "price": "4,99€/mes",
+    "features": {
+      "unlimited": "Solicitudes ilimitadas",
+      "export": "Exportar PDF/PNG",
+      "priority": "Soporte prioritario",
+      "exclusive": "Acceso a funciones exclusivas"
+    },
+    "cta": "Actualizar a METRIK+",
+    "cancel": "Cancelar"
+  },
+  "rateLimit": {
+    "title": "Límite alcanzado",
+    "message": "Has alcanzado el límite de 12 solicitudes por día.",
+    "upgrade": "¡Actualiza a METRIK+ para solicitudes ilimitadas!"
+  },
+  "footer": {
+    "about": "Acerca de",
+    "contact": "Contacto",
+    "privacy": "Privacidad",
+    "terms": "Términos",
+    "followUs": "Síguenos",
+    "copyright": "© 2025 METRIK DELTA. Todos los derechos reservados."
+  
+  },
+  "anatomy": {
+    "title": "ANATOMÍA F1",
+    "subtitle": "Coche 3D Interactivo • 12 Componentes • Simulación CFD",
+    "controls": {
+      "rotation": "Rotación",
+      "wheels": "Ruedas",
+      "labels": "Etiquetas",
+      "env": "Entorno",
+      "drs": "DRS",
+      "exploded": "Vista Explosionada",
+      "cfd": "CFD"
+    },
+    "info": "🖱️ Rotar • 🔍 Zoom • 🎯 Puntos de interés • 🌊 CFD • ⚡ DRS • 💥 Vista explosionada",
+    "features": {
+      "title": "Características",
+      "cfd": {
+        "title": "Túnel de Viento CFD",
+        "desc": "Líneas de flujo animadas mostrando la aerodinámica real. Efecto alerón, suelo y DRS visible."
+      },
+      "drs": {
+        "title": "DRS Activo",
+        "desc": "El alerón se abre progresivamente. Impacto visible en el flujo de aire (menos turbulencias)."
+      },
+      "wheels": {
+        "title": "Ruedas Realistas",
+        "desc": "Las 4 ruedas giran en su lugar con llantas detalladas y radios."
+      },
+      "exploded": {
+        "title": "Vista Explosionada",
+        "desc": "Cada componente se aleja precisamente de su eje para ver el interior."
+      }
+    },
+    "components": "Componentes",
+    "close": "Cerrar",
+    "specs": "Especificaciones",
+    "cfdTitle": "💨 Aerodinámica CFD y Tecnologías Explicadas",
+    "cfdSections": {
+      "laminar": {
+        "title": "Flujo Laminar",
+        "desc": "Las líneas azules muestran el flujo de aire. El alerón delantero divide el flujo, el aire se acelera bajo el suelo (efecto Venturi), y el alerón trasero crea carga aerodinámica generando turbulencias."
+      },
+      "drsImpact": {
+        "title": "Impacto DRS",
+        "desc": "DRS cerrado: Gran turbulencia trasera creando alta resistencia. DRS abierto: Flujo suave, resistencia reducida 20-30%, ganancia de velocidad de 10-15 km/h en rectas. Solo usable en carrera bajo condiciones."
+      },
+      "groundEffect": {
+        "title": "Efecto Suelo",
+        "desc": "Las líneas de flujo descienden bajo el coche y se aceleran (Venturi). Crea 40-45% de la carga total. Altura crítica de 5-10mm del suelo. El reglamento 2022 reintrodujo este efecto para mejorar las carreras."
+      },
+      "hybrid": {
+        "title": "Sistema Híbrido",
+        "desc": "El MGU-K recupera energía en el frenado (hasta 2 MJ por vuelta) y la redistribuye para 160cv adicionales durante un máximo de 33 segundos por vuelta. El MGU-H recupera energía del turbo sin límite de tiempo."
+      },
+      "tyres": {
+        "title": "Gestión Neumáticos",
+        "desc": "5 compuestos Pirelli (C0-C5). Ventana óptima: 100-110°C. Estrategia crucial con gestión térmica, degradación y graining. Los equipos deben usar al menos 2 compuestos diferentes en carrera."
+      },
+      "electronics": {
+        "title": "Electrónica Embarcada",
+        "desc": "Más de 300 sensores en el coche. Transmisión de datos en tiempo real a los boxes. Análisis de temperatura de frenos, presión de neumáticos, desgaste, consumo de combustible y parámetros del motor para optimizar estrategia."
+      }
+    },
+    "parts": {
+      "frontWing": {
+        "name": "Alerón Delantero",
+        "desc": "Genera 25-30% de la carga aerodinámica total. Compuesto de 5 elementos ajustables para optimizar el equilibrio aerodinámico. El diseño influye directamente en el flujo de aire hacia el resto del coche."
+      },
+      "rearWing": {
+        "name": "Alerón Trasero + DRS",
+        "desc": "Alerón móvil con sistema DRS (Sistema de Reducción de Resistencia). Se abre para reducir la resistencia aerodinámica y ganar 10-15 km/h en rectas. Controlado electrónicamente desde el cockpit."
+      },
+      "cockpit": {
+        "name": "Cockpit + Halo",
+        "desc": "Protección de titanio introducida en 2018. El Halo resiste 12 toneladas de fuerza y ya ha salvado varias vidas. El cockpit integra todos los controles vitales accesibles al piloto."
+      },
+      "wheels": {
+        "name": "Ruedas (x4)",
+        "desc": "Neumáticos Pirelli de 18 pulgadas con llantas de magnesio. Los equipos pueden cambiar las 4 ruedas en menos de 2 segundos durante una parada en boxes. La temperatura óptima es crucial para el rendimiento."
+      },
+      "sidepods": {
+        "name": "Pontones",
+        "desc": "Elementos aerodinámicos cruciales que enfrían el motor mediante 4 radiadores. Su diseño también crea el efecto Venturi que genera carga. Zona de innovación importante entre equipos."
+      },
+      "floor": {
+        "name": "Fondo Plano",
+        "desc": "Superficie que genera el efecto suelo. Responsable del 40-45% de la carga total gracias al Venturi creado bajo el coche. La altura de rodaje es crítica (5-10mm del suelo)."
+      },
+      "engine": {
+        "name": "Motor V6 Híbrido",
+        "desc": "Unidad de potencia híbrida que combina un V6 1.6L Turbo con dos sistemas de recuperación de energía (MGU-K y MGU-H). Desarrolla alrededor de 1000 caballos en total con eficiencia térmica récord del 50%."
+      },
+      "suspension": {
+        "name": "Suspensión",
+        "desc": "Sistema push-rod/pull-rod ultra-sofisticado que mantiene el coche a altura óptima. Ajustable continuamente para adaptarse al nivel de combustible y desgaste de neumáticos."
+      },
+      "gearbox": {
+        "name": "Caja de Cambios",
+        "desc": "Transmisión secuencial de 8 velocidades + marcha atrás. Los cambios de marcha se realizan en menos de 50 milisegundos mediante levas en el volante. Estructura portante de carbono."
+      },
+      "steering": {
+        "name": "Volante",
+        "desc": "Centro neurálgico con más de 25 botones y ajustes. El piloto controla frenado, diferencial, ERS, radio, bebidas y estrategia desde el volante. Coste: ~€50,000."
+      },
+      "battery": {
+        "name": "Batería ES",
+        "desc": "Sistema de almacenamiento de energía de 4 MJ. Alimenta el MGU-K que entrega 160 caballos adicionales durante un máximo de 33 segundos por vuelta."
+      },
+      "diffuser": {
+        "name": "Difusor",
+        "desc": "Elemento aerodinámico trasero que acelera el flujo de aire saliendo bajo el coche. Crea efecto de succión que pega el coche al suelo. Diseño complejo con múltiples canales."
+      }
+    }
+  }
+}

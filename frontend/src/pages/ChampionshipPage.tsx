@@ -6,6 +6,10 @@ import GrandPrixSelector from '../components/GrandPrixSelector';
 import LoadingSpinner from '../components/LoadingSpinner';
 import SkeletonCard from '../components/SkeletonCard';
 import type { DriverStanding, ConstructorStanding, Circuit, RaceResultsData, StandingsAfterRace } from '../types/championship';
+import { useRateLimit } from '../hooks/useRateLimit';
+import UpgradeModal from '../components/UpgradeModal';
+import { useTranslation } from 'react-i18next';
+import SEO from '../components/SEO';
 
 interface Standing {
   position: number;
@@ -85,6 +89,7 @@ const getDriverAbbr = (fullName: string): string => {
 
 export default function ChampionshipPage() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [year, setYear] = useState(2025);
   const [selectedGP, setSelectedGP] = useState<number>(1);
   const [activeTab, setActiveTab] = useState<'drivers' | 'constructors' | 'after' | 'evolution'>('drivers');
@@ -94,6 +99,8 @@ export default function ChampionshipPage() {
   const [constructorStandingsAfter, setConstructorStandingsAfter] = useState<Standing[]>([]);
   const [loading, setLoading] = useState(false);
   const [raceName, setRaceName] = useState<string>('');
+  const { canMakeRequest, incrementRequest } = useRateLimit();
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   
   // Race Evolution states
   const [raceEvolutionData, setRaceEvolutionData] = useState<RaceEvolutionData[]>([]);
@@ -314,6 +321,31 @@ export default function ChampionshipPage() {
     }
   };
 
+  const loadChampionshipData = async () => {
+  // Check rate limit ONCE for the entire year data load
+  if (!canMakeRequest) {
+    setShowUpgradeModal(true);
+    return;
+  }
+  
+  // Load data based on active tab
+  if (activeTab === 'drivers') {
+    await loadDriverStandings();
+  } else if (activeTab === 'constructors') {
+    await loadConstructorStandings();
+  } else if (activeTab === 'after') {
+    await loadStandingsAfterRace();
+  } else if (activeTab === 'evolution') {
+    setIsAnimating(false);
+    setAnimationFrame(0);
+    setRaceEvolutionData([]);
+    await loadRaceEvolution();
+  }
+  
+  // Increment ONCE after successful load
+  incrementRequest();
+};
+
   useEffect(() => {
     if (!isAnimating || raceEvolutionData.length === 0) return;
 
@@ -331,20 +363,8 @@ export default function ChampionshipPage() {
   }, [isAnimating, raceEvolutionData.length]);
 
   useEffect(() => {
-    if (activeTab === 'drivers') {
-      loadDriverStandings();
-    } else if (activeTab === 'constructors') {
-      loadConstructorStandings();
-    } else if (activeTab === 'after') {
-      loadStandingsAfterRace();
-    } else if (activeTab === 'evolution') {
-      // Reset animation states when loading new data
-      setIsAnimating(false);
-      setAnimationFrame(0);
-      setRaceEvolutionData([]);
-      loadRaceEvolution();
-    }
-  }, [year, selectedGP, activeTab, evolutionType]);
+  loadChampionshipData();
+}, [year, selectedGP, activeTab, evolutionType]);
 
   const getCurrentStandings = () => {
     if (activeTab === 'drivers') return driverStandings;
@@ -360,8 +380,15 @@ export default function ChampionshipPage() {
   const champion = currentStandings[0];
   const totalCompetitors = currentStandings.length;
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-metrik-black via-gray-900 to-metrik-black">
+ return (
+    <>
+      <SEO 
+        path="/championship"
+        title="F1 Championship Standings & Results - METRIK DELTA"
+        description="F1 championship standings, race results, driver rankings and constructor standings 2018-2025. Complete F1 results and podiums history."
+        keywords="f1 standings, classement f1, clasificación f1, f1 results, résultat f1, resultados f1, grand prix results, f1 championship, podiums f1"
+      />
+      <div className="min-h-screen bg-metrik-black text-white">
       <div className="container mx-auto px-4 py-4 md:py-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-6 md:mb-8">
@@ -1019,8 +1046,19 @@ export default function ChampionshipPage() {
               </div>
             )}
           </div>
-        </div>
+          {/* Upgrade Modal */}</div>
+        
+        {/* Upgrade Modal */}
+        <UpgradeModal 
+          isOpen={showUpgradeModal}
+          onClose={() => setShowUpgradeModal(false)}
+          onUpgrade={() => {
+            setShowUpgradeModal(false);
+            window.location.href = '/';
+          }}
+        />
       </div>
     </div>
+    </>
   );
 }

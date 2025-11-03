@@ -10,6 +10,8 @@ import YearSelector from '../components/YearSelector';
 import LoadingSpinner from '../components/LoadingSpinner';
 import SkeletonChart from '../components/SkeletonChart';
 import { MobileResponsiveChart } from '../components/MobileResponsiveChart';
+import { useRateLimit } from '../hooks/useRateLimit';
+import UpgradeModal from '../components/UpgradeModal';
 
 export default function PitWallPage() {
   const navigate = useNavigate();
@@ -28,6 +30,8 @@ export default function PitWallPage() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [activeTab, setActiveTab] = useState<'gaps' | 'positions' | 'strategy'>('gaps');
+  const { canMakeRequest, incrementRequest } = useRateLimit();
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
   useEffect(() => {
     if (isPlaying && raceData) {
@@ -54,28 +58,35 @@ useEffect(() => {
 }, []);
 
   const loadRaceData = async () => {
-    setLoading(true);
-    try {
-      const [race, pitStops, events, positions, strategy] = await Promise.all([
-        getRaceData(year, selectedGP),
-        getPitStops(year, selectedGP),
-        getRaceEvents(year, selectedGP),
-        getPositionEvolution(year, selectedGP),
-        getStrategyComparison(year, selectedGP)
-      ]);
-      setRaceData(race);
-      setPitStopsData(pitStops);
-      setEventsData(events);
-      setPositionEvolution(positions);
-      setStrategyData(strategy);
-      setCurrentLap(0);
-      setIsPlaying(false);
-    } catch (error) {
-      console.error('Error loading race data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Check rate limit
+  if (!canMakeRequest) {
+    setShowUpgradeModal(true);
+    return;
+  }
+  
+  setLoading(true);
+  try {
+    const [race, pitStops, events, positions, strategy] = await Promise.all([
+      getRaceData(year, selectedGP),
+      getPitStops(year, selectedGP),
+      getRaceEvents(year, selectedGP),
+      getPositionEvolution(year, selectedGP),
+      getStrategyComparison(year, selectedGP)
+    ]);
+    setRaceData(race);
+    setPitStopsData(pitStops);
+    setEventsData(events);
+    setPositionEvolution(positions);
+    setStrategyData(strategy);
+    setCurrentLap(0);
+    setIsPlaying(false);
+    incrementRequest(); // Increment after successful request
+  } catch (error) {
+    console.error('Error loading race data:', error);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handlePlayPause = () => setIsPlaying(!isPlaying);
   
@@ -1026,6 +1037,15 @@ useEffect(() => {
           </>
         )}
       </div>
+      {/* Upgrade Modal */}
+      <UpgradeModal 
+        isOpen={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        onUpgrade={() => {
+          setShowUpgradeModal(false);
+          window.location.href = '/';
+        }}
+      />
     </div>
   );
 }
