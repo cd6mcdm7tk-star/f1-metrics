@@ -5,11 +5,13 @@ import AuthModal from '../components/AuthModal'
 
 interface AuthContextType {
   user: User | null
-  signUp: (email: string, password: string) => Promise<any>  // ← Change void en any
-  signIn: (email: string, password: string) => Promise<any>  // ← Change void en any
+  signUp: (email: string, password: string) => Promise<any>
+  signIn: (email: string, password: string) => Promise<any>
   signOut: () => Promise<void>
   loading: boolean
   setAuthModalOpen: (open: boolean) => void
+  isPremium: boolean  // ← NOUVEAU
+  premiumLoading: boolean  // ← NOUVEAU
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -19,6 +21,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
   const [authModalOpen, setAuthModalOpen] = useState(false)
+  const [isPremium, setIsPremium] = useState(false)  // ← NOUVEAU
+  const [premiumLoading, setPremiumLoading] = useState(true)  // ← NOUVEAU
+
+  // Vérifier le statut premium quand l'utilisateur change
+  useEffect(() => {
+    const checkPremiumStatus = async () => {
+      if (!user) {
+        setIsPremium(false)
+        setPremiumLoading(false)
+        return
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('subscriptions')
+          .select('status, plan')
+          .eq('user_id', user.id)
+          .eq('status', 'active')
+          .single()
+
+        if (data && !error) {
+          setIsPremium(true)
+          console.log('✅ Premium user detected:', data.plan)
+        } else {
+          setIsPremium(false)
+          console.log('ℹ️ Free user')
+        }
+      } catch (error) {
+        console.log('No active subscription found')
+        setIsPremium(false)
+      } finally {
+        setPremiumLoading(false)
+      }
+    }
+
+    checkPremiumStatus()
+  }, [user])
 
   useEffect(() => {
     // Get initial session
@@ -58,14 +97,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     await supabase.auth.signOut()
+    setIsPremium(false)  // Reset premium status
   }
 
   return (
-  <AuthContext.Provider value={{ user, loading, signUp, signIn, signOut, setAuthModalOpen }}>
-    {children}
-    <AuthModal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} />
-  </AuthContext.Provider>
-)
+    <AuthContext.Provider value={{ 
+      user, 
+      loading, 
+      signUp, 
+      signIn, 
+      signOut, 
+      setAuthModalOpen,
+      isPremium,  // ← NOUVEAU
+      premiumLoading  // ← NOUVEAU
+    }}>
+      {children}
+      <AuthModal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} />
+    </AuthContext.Provider>
+  )
 }
 
 export function useAuth() {

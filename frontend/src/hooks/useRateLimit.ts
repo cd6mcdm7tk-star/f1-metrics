@@ -11,53 +11,20 @@ interface RequestData {
 }
 
 export function useRateLimit() {
-  const { user } = useAuth()
+  const { user, isPremium, premiumLoading } = useAuth()  // ← Utilise isPremium du AuthContext
   const [requestCount, setRequestCount] = useState(0)
   const [canMakeRequest, setCanMakeRequest] = useState(true)
-  const [isUnlimited, setIsUnlimited] = useState(false)
-  const [loading, setLoading] = useState(true)
 
-  // Vérifier si l'utilisateur a un abonnement actif
+  // Charger le compteur depuis localStorage (seulement pour les utilisateurs gratuits)
   useEffect(() => {
-    const checkSubscription = async () => {
-      if (!user) {
-        setIsUnlimited(false)
-        setLoading(false)
-        return
-      }
-
-      try {
-        const { data, error } = await supabase
-          .from('subscriptions')
-          .select('status, plan')
-          .eq('user_id', user.id)
-          .eq('status', 'active')
-          .single()
-
-        if (data && !error) {
-          setIsUnlimited(true)
-          console.log('✅ User has active subscription:', data.plan)
-        } else {
-          setIsUnlimited(false)
-        }
-      } catch (error) {
-        console.log('No active subscription found')
-        setIsUnlimited(false)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    checkSubscription()
-  }, [user])
-
-  // Charger le compteur depuis localStorage
-  useEffect(() => {
-    if (isUnlimited) {
+    // Si premium, pas de limite
+    if (isPremium) {
       setCanMakeRequest(true)
+      setRequestCount(0)
       return
     }
 
+    // Si pas connecté ou gratuit, gérer le rate limiting
     const today = new Date().toISOString().split('T')[0]
     const stored = localStorage.getItem(STORAGE_KEY)
 
@@ -85,18 +52,18 @@ export function useRateLimit() {
       setRequestCount(0)
       setCanMakeRequest(true)
     }
-  }, [isUnlimited])
+  }, [isPremium])
 
   const incrementRequest = () => {
-    // Si abonnement illimité, ne rien faire
-    if (isUnlimited) {
-      console.log('✨ Unlimited user - no rate limit')
+    // Si abonnement premium, ne rien incrémenter
+    if (isPremium) {
+      console.log('✨ METRIK+ user - unlimited requests')
       return
     }
 
     const today = new Date().toISOString().split('T')[0]
     const newCount = requestCount + 1
-    
+
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ count: newCount, date: today }))
     setRequestCount(newCount)
     setCanMakeRequest(newCount < DAILY_LIMIT)
@@ -117,7 +84,7 @@ export function useRateLimit() {
     incrementRequest,
     resetCount,
     dailyLimit: DAILY_LIMIT,
-    isUnlimited,
-    loading
+    isUnlimited: isPremium,  // ← Utilise isPremium
+    loading: premiumLoading
   }
 }

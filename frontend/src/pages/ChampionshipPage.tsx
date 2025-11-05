@@ -10,6 +10,8 @@ import { useRateLimit } from '../hooks/useRateLimit';
 import UpgradeModal from '../components/UpgradeModal';
 import { useTranslation } from 'react-i18next';
 import SEO from '../components/SEO';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import React from 'react';
 
 interface Standing {
   position: number;
@@ -929,122 +931,301 @@ export default function ChampionshipPage() {
               </div>
             )}
 
-            {/* Race Evolution Tab - NOUVEAU DESIGN AVEC COULEURS ÉCURIE */}
-            {!loading && activeTab === 'evolution' && raceEvolutionData.length > 0 && (
-              <div className="space-y-6 md:space-y-8">
-                <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-xl md:rounded-2xl p-4 md:p-6">
-                  <div className="text-center">
-                    <div className="text-metrik-turquoise font-rajdhani text-sm md:text-lg mb-2">
-                      Round {raceEvolutionData[animationFrame]?.round} of {raceEvolutionData.length}
+{/* Race Evolution Tab - NOUVEAU LINE CHART AVEC LABELS ANIMÉS */}
+            {!loading && activeTab === 'evolution' && raceEvolutionData.length > 0 && (() => {
+              // Helper: Get driver abbreviation (3 letters)
+              const getDriverAbbr = (fullName: string): string => {
+                const parts = fullName.split(' ');
+                if (parts.length >= 2) {
+                  return parts[parts.length - 1].substring(0, 3).toUpperCase();
+                }
+                return fullName.substring(0, 3).toUpperCase();
+              };
+
+              // Helper: Get unique color per driver/constructor
+              const getDriverColor = (name: string): string => {
+                const n = name.toLowerCase();
+                // Red Bull Racing
+                if (n.includes('verstappen')) return '#3671C6';
+                if (n.includes('perez')) return '#1E3A8A';
+                // Ferrari
+                if (n.includes('leclerc')) return '#E8002D';
+                if (n.includes('sainz')) return '#DC143C';
+                // McLaren
+                if (n.includes('norris')) return '#FF8700';
+                if (n.includes('piastri')) return '#FF6B00';
+                // Mercedes
+                if (n.includes('hamilton')) return '#27F4D2';
+                if (n.includes('russell')) return '#00D2BE';
+                // Aston Martin
+                if (n.includes('alonso')) return '#229971';
+                if (n.includes('stroll')) return '#2D6A4F';
+                // Alpine
+                if (n.includes('gasly')) return '#FF87BC';
+                if (n.includes('ocon')) return '#FE6DB7';
+                // Williams
+                if (n.includes('albon')) return '#00A0DE';
+                if (n.includes('sargeant') || n.includes('colapinto')) return '#0082C6';
+                // Haas
+                if (n.includes('magnussen')) return '#B6BABD';
+                if (n.includes('hulkenberg')) return '#929599';
+                // Alfa Romeo / Sauber
+                if (n.includes('bottas')) return '#C92D4B';
+                if (n.includes('zhou')) return '#A52942';
+                // AlphaTauri / RB
+                if (n.includes('tsunoda')) return '#6692FF';
+                if (n.includes('ricciardo') || n.includes('lawson')) return '#4263EB';
+                // Constructors
+                if (n.includes('red bull')) return '#3671C6';
+                if (n.includes('ferrari')) return '#E8002D';
+                if (n.includes('mclaren')) return '#FF8700';
+                if (n.includes('mercedes')) return '#27F4D2';
+                if (n.includes('aston')) return '#229971';
+                if (n.includes('alpine')) return '#FF87BC';
+                if (n.includes('williams')) return '#00A0DE';
+                if (n.includes('haas')) return '#B6BABD';
+                if (n.includes('alfa') || n.includes('sauber')) return '#C92D4B';
+                if (n.includes('alphatauri') || n.includes('rb ')) return '#6692FF';
+                return '#00E5CC'; // Default METRIK color
+              };
+
+              // Get current standings sorted by position
+              const currentStandings = raceEvolutionData[animationFrame]?.standings
+                .slice()
+                .sort((a, b) => a.position - b.position) || [];
+
+              // Calculate max points for chart scaling
+              const allPoints = raceEvolutionData.flatMap(race => 
+                race.standings.map(s => s.points)
+              );
+              const maxPoints = Math.max(...allPoints, 100);
+
+              return (
+                <div className="space-y-6 md:space-y-8">
+                  {/* Header with current race info */}
+                  <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-xl md:rounded-2xl p-4 md:p-6">
+                    <div className="text-center">
+                      <div className="text-metrik-turquoise font-rajdhani font-bold text-sm md:text-base uppercase tracking-wider mb-2">
+                        ROUND {animationFrame + 1} / {raceEvolutionData.length}
+                      </div>
+                      <h2 className="text-2xl md:text-4xl font-rajdhani font-black text-white uppercase tracking-wide">
+                        {raceEvolutionData[animationFrame]?.raceName || 'Loading...'}
+                      </h2>
                     </div>
-                    <h2 className="text-2xl md:text-4xl font-rajdhani font-black text-white">
-                      {raceEvolutionData[animationFrame]?.raceName || 'Loading...'}
-                    </h2>
                   </div>
-                </div>
 
-                <div className="flex justify-center gap-3 md:gap-4">
-                  <button
-                    onClick={() => setIsAnimating(!isAnimating)}
-                    className="flex items-center gap-2 px-6 md:px-8 py-3 md:py-4 bg-gradient-to-r from-metrik-turquoise to-cyan-500 text-metrik-black rounded-xl font-rajdhani font-bold text-base md:text-lg shadow-lg shadow-metrik-turquoise/50 hover:scale-105 transition-transform duration-300"
-                  >
-                    {isAnimating ? (
-                      <>
-                        <Pause size={20} />
-                        PAUSE
-                      </>
-                    ) : (
-                      <>
-                        <Play size={20} />
-                        PLAY
-                      </>
-                    )}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setAnimationFrame(0);
-                      setIsAnimating(false);
-                    }}
-                    className="px-6 md:px-8 py-3 md:py-4 bg-metrik-black/50 text-metrik-silver border border-metrik-turquoise/30 rounded-xl font-rajdhani font-bold text-base md:text-lg hover:text-white hover:bg-metrik-turquoise/10 transition-all duration-300"
-                  >
-                    RESET
-                  </button>
-                </div>
-
-                <div className="space-y-2 md:space-y-3">
-                  {raceEvolutionData[animationFrame]?.standings
-                    .sort((a, b) => b.points - a.points)
-                    .map((standing, index) => {
-                      const maxPoints = Math.max(...raceEvolutionData[animationFrame].standings.map(s => s.points));
-                      const barWidth = maxPoints > 0 ? (standing.points / maxPoints) * 100 : 0;
-                      const teamColor = getTeamColor(standing.driver);
-                      const driverAbbr = getDriverAbbr(standing.driver);
-
-                      return (
-                        <div
-                          key={standing.driver}
-                          className="backdrop-blur-xl bg-metrik-black/50 border border-metrik-turquoise/20 rounded-lg md:rounded-xl overflow-hidden hover:shadow-lg hover:shadow-metrik-turquoise/20 transition-all duration-1000"
-                        >
-                          <div className="flex items-center p-2 md:p-3 gap-2 md:gap-3">
-                            <div className={`w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br ${teamColor} rounded-lg flex items-center justify-center shadow-lg flex-shrink-0`}>
-                              <span className="text-lg md:text-xl font-rajdhani font-black text-white drop-shadow-lg">
-                                {index + 1}
-                              </span>
-                            </div>
-
-                            <div className="flex-1 min-w-0">
-                              <div className="font-rajdhani font-bold text-white mb-1">
-                                <span className="hidden md:inline text-base md:text-lg">{standing.driver}</span>
-                                <span className="md:hidden text-sm">{driverAbbr}</span>
-                              </div>
-                              
-                              <div className="relative h-8 md:h-10 bg-white/10 rounded-lg overflow-hidden">
-                                <div
-                                  className={`absolute inset-y-0 left-0 bg-gradient-to-r ${teamColor} transition-all duration-1000 ease-out`}
-                                  style={{ width: `${barWidth}%` }}
-                                >
-                                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-pulse" />
-                                </div>
-                                
-                                <div className="absolute inset-0 flex items-center px-3">
-                                  <span className="text-base md:text-xl font-rajdhani font-black text-white drop-shadow-lg relative z-10">
-                                    {standing.points} pts
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                </div>
-
-                <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-xl md:rounded-2xl p-4 md:p-6">
-                  <div className="flex items-center gap-3 md:gap-4">
-                    <div className="text-xs md:text-sm font-rajdhani font-bold text-metrik-turquoise uppercase flex-shrink-0">
-                      Timeline
-                    </div>
-                    <input
-                      type="range"
-                      min="0"
-                      max={raceEvolutionData.length - 1}
-                      value={animationFrame}
-                      onChange={(e) => {
-                        setAnimationFrame(parseInt(e.target.value));
+                  {/* Controls */}
+                  <div className="flex justify-center items-center gap-3 md:gap-4">
+                    <button
+                      onClick={() => setIsAnimating(!isAnimating)}
+                      className="flex items-center gap-2 px-6 md:px-8 py-3 md:py-4 bg-gradient-to-r from-metrik-turquoise to-cyan-500 text-metrik-black rounded-xl font-rajdhani font-bold text-base md:text-lg shadow-lg shadow-metrik-turquoise/50 hover:scale-105 transition-all duration-300"
+                    >
+                      {isAnimating ? (
+                        <>
+                          <Pause size={20} />
+                          <span>PAUSE</span>
+                        </>
+                      ) : (
+                        <>
+                          <Play size={20} />
+                          <span>PLAY</span>
+                        </>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setAnimationFrame(0);
                         setIsAnimating(false);
                       }}
-                      className="flex-1 h-2 bg-white/20 rounded-lg appearance-none cursor-pointer accent-metrik-turquoise"
-                      style={{
-                        background: `linear-gradient(to right, rgb(0, 229, 204) 0%, rgb(0, 229, 204) ${(animationFrame / (raceEvolutionData.length - 1)) * 100}%, rgba(255,255,255,0.2) ${(animationFrame / (raceEvolutionData.length - 1)) * 100}%, rgba(255,255,255,0.2) 100%)`
-                      }}
-                    />
-                    <div className="text-xs md:text-sm font-inter text-metrik-silver flex-shrink-0">
-                      {animationFrame + 1} / {raceEvolutionData.length}
+                      className="px-6 md:px-8 py-3 md:py-4 bg-metrik-black/50 text-metrik-silver border border-metrik-turquoise/30 rounded-xl font-rajdhani font-bold text-base md:text-lg hover:text-white hover:bg-metrik-turquoise/10 transition-all duration-300"
+                    >
+                      RESET
+                    </button>
+                  </div>
+
+                  {/* Main Chart Container with animated labels */}
+                  <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-xl md:rounded-2xl p-4 md:p-8">
+                    <h3 className="text-xl md:text-2xl font-rajdhani font-black text-white uppercase tracking-wide mb-6 md:mb-8 text-center">
+                      {evolutionType === 'drivers' ? 'DRIVERS' : 'CONSTRUCTORS'} CHAMPIONSHIP EVOLUTION
+                    </h3>
+                    
+                    <div className="relative">
+                      {/* Animated Labels on the left */}
+                      <div className="absolute left-0 top-0 bottom-0 w-16 md:w-20 flex flex-col justify-around pointer-events-none z-10">
+                        {currentStandings.slice(0, 10).map((standing) => {
+                          const yPosition = (standing.points / maxPoints) * 100;
+                          return (
+                            <div
+                              key={standing.driver}
+                              className="absolute left-0 transition-all duration-1000 ease-out"
+                              style={{
+                                bottom: `${yPosition}%`,
+                                transform: 'translateY(50%)'
+                              }}
+                            >
+                              <span 
+                                className="font-rajdhani font-black text-sm md:text-base drop-shadow-lg"
+                                style={{ 
+                                  color: getDriverColor(standing.driver),
+                                  textShadow: `0 0 10px ${getDriverColor(standing.driver)}50`
+                                }}
+                              >
+                                {getDriverAbbr(standing.driver)}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Chart */}
+                      <div className="pl-20 md:pl-24">
+                        <ResponsiveContainer width="100%" height={500}>
+                          <LineChart 
+                            data={raceEvolutionData.slice(0, animationFrame + 1)}
+                            margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                            
+                            <XAxis 
+                              dataKey="round" 
+                              stroke="#9CA3AF"
+                              style={{ fontSize: '14px', fontWeight: 'bold' }}
+                              label={{ 
+                                value: 'ROUND', 
+                                position: 'insideBottom', 
+                                offset: -10,
+                                style: { fill: '#9CA3AF', fontSize: '12px', fontWeight: 'bold' }
+                              }}
+                            />
+                            
+                            <YAxis 
+                              stroke="#9CA3AF"
+                              style={{ fontSize: '14px', fontWeight: 'bold' }}
+                              domain={[0, maxPoints]}
+                              label={{ 
+                                value: 'POINTS', 
+                                angle: -90, 
+                                position: 'insideLeft',
+                                style: { fill: '#9CA3AF', fontSize: '12px', fontWeight: 'bold' }
+                              }}
+                            />
+                            
+                            <Tooltip 
+                              contentStyle={{ 
+                                backgroundColor: '#0A0F1E', 
+                                border: '2px solid #00E5CC',
+                                borderRadius: '12px',
+                                padding: '12px',
+                                boxShadow: '0 0 20px rgba(0, 229, 204, 0.3)'
+                              }}
+                              labelStyle={{ 
+                                color: '#00E5CC', 
+                                fontWeight: 'bold', 
+                                marginBottom: '8px',
+                                fontFamily: 'Rajdhani, sans-serif',
+                                textTransform: 'uppercase'
+                              }}
+                              itemStyle={{ 
+                                color: '#F3F4F6', 
+                                padding: '4px 0',
+                                fontFamily: 'Rajdhani, sans-serif',
+                                fontWeight: 'bold'
+                              }}
+                            />
+                            
+                            {/* Lines without legend */}
+                            {raceEvolutionData[0]?.standings.slice(0, 10).map((driver, index) => (
+                              <Line 
+                                key={driver.driver}
+                                type="monotone" 
+                                dataKey={(data) => {
+                                  const standing = data.standings.find(s => s.driver === driver.driver);
+                                  return standing ? standing.points : null;
+                                }}
+                                stroke={getDriverColor(driver.driver)}
+                                strokeWidth={index < 3 ? 4 : 3}
+                                dot={false}
+                                activeDot={{ r: 6, strokeWidth: 2 }}
+                                name={getDriverAbbr(driver.driver)}
+                                connectNulls
+                              />
+                            ))}
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
                     </div>
                   </div>
+
+                  {/* Timeline Slider */}
+                  <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-xl md:rounded-2xl p-4 md:p-6">
+                    <div className="flex items-center gap-3 md:gap-4">
+                      <div className="text-xs md:text-sm font-rajdhani font-bold text-metrik-turquoise uppercase tracking-wider flex-shrink-0">
+                        TIMELINE
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max={raceEvolutionData.length - 1}
+                        value={animationFrame}
+                        onChange={(e) => {
+                          setAnimationFrame(parseInt(e.target.value));
+                          setIsAnimating(false);
+                        }}
+                        className="flex-1 h-3 bg-white/20 rounded-lg appearance-none cursor-pointer"
+                        style={{
+                          background: `linear-gradient(to right, rgb(0, 229, 204) 0%, rgb(0, 229, 204) ${(animationFrame / (raceEvolutionData.length - 1)) * 100}%, rgba(255,255,255,0.2) ${(animationFrame / (raceEvolutionData.length - 1)) * 100}%, rgba(255,255,255,0.2) 100%)`
+                        }}
+                      />
+                      <div className="text-sm md:text-base font-rajdhani font-bold text-metrik-silver flex-shrink-0">
+                        {animationFrame + 1} / {raceEvolutionData.length}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Current Top 3 */}
+                  {currentStandings.length > 0 && (
+                    <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-xl md:rounded-2xl p-4 md:p-6">
+                      <h3 className="text-lg md:text-xl font-rajdhani font-black text-white uppercase tracking-wide mb-4 text-center">
+                        CURRENT TOP 3
+                      </h3>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {currentStandings.slice(0, 3).map((standing, index) => {
+                          const positions = ['1ST', '2ND', '3RD'];
+                          const posColors = ['text-yellow-400', 'text-gray-300', 'text-orange-400'];
+                          return (
+                            <div 
+                              key={standing.driver} 
+                              className="bg-metrik-black/50 rounded-xl p-4 border"
+                              style={{ borderColor: getDriverColor(standing.driver) }}
+                            >
+                              <div className={`text-3xl font-rajdhani font-black ${posColors[index]} mb-2`}>
+                                {positions[index]}
+                              </div>
+                              <div className="flex items-center gap-3 mb-2">
+                                <div 
+                                  className="w-10 h-10 rounded-lg flex items-center justify-center"
+                                  style={{ backgroundColor: getDriverColor(standing.driver) }}
+                                >
+                                  <span className="text-white font-rajdhani font-black text-sm">
+                                    {getDriverAbbr(standing.driver)}
+                                  </span>
+                                </div>
+                                <div className="text-white font-rajdhani font-bold text-lg">
+                                  {standing.driver.split(' ').pop()}
+                                </div>
+                              </div>
+                              <div className="text-metrik-turquoise font-rajdhani font-black text-2xl">
+                                {standing.points} PTS
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </div>
           {/* Upgrade Modal */}</div>
         
