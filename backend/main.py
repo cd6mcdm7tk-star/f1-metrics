@@ -763,7 +763,7 @@ async def get_strategy_comparison(year: int, gp_round: int):
 
 
 @app.get("/api/race-pace/{year}/{gp_round}/{driver}")
-async def get_race_pace(year: int, gp_round: int, driver: str):
+async def get_race_pace(year: int, gp_round: int, driver: str, show_outliers: bool = False):
     try:
         import math
         
@@ -772,7 +772,9 @@ async def get_race_pace(year: int, gp_round: int, driver: str):
         
         driver_laps = session.laps.pick_drivers(driver)
         
-        pace_data = []
+        lap_times = []
+        pace_data_full = []
+        
         for _, lap in driver_laps.iterrows():
             lap_time = None
             if lap['LapTime'] is not None:
@@ -780,7 +782,8 @@ async def get_race_pace(year: int, gp_round: int, driver: str):
                 if not math.isnan(lap_time_seconds) and not math.isinf(lap_time_seconds):
                     lap_time = lap_time_seconds
             
-            pace_data.append({
+            lap_times.append(lap_time)
+            pace_data_full.append({
                 'lapNumber': int(lap['LapNumber']),
                 'lapTime': lap_time,
                 'compound': str(lap['Compound']) if 'Compound' in lap else 'UNKNOWN',
@@ -789,6 +792,17 @@ async def get_race_pace(year: int, gp_round: int, driver: str):
                 'position': int(lap['Position']) if lap['Position'] is not None and not math.isnan(lap['Position']) else 99,
                 'pitOutTime': bool(lap['PitOutTime']) if 'PitOutTime' in lap and lap['PitOutTime'] is not None else False,
                 'pitInTime': bool(lap['PitInTime']) if 'PitInTime' in lap and lap['PitInTime'] is not None else False,
+            })
+        
+        # Filtrer les pit stops
+        filtered_times, original_times = filter_pit_stops(lap_times)
+        
+        # Appliquer le filtre selon show_outliers
+        pace_data = []
+        for i, lap_data in enumerate(pace_data_full):
+            pace_data.append({
+                **lap_data,
+                'lapTime': filtered_times[i] if not show_outliers else original_times[i]
             })
         
         return {
@@ -801,8 +815,37 @@ async def get_race_pace(year: int, gp_round: int, driver: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+import numpy as np
+
+def filter_pit_stops(lap_times, threshold_seconds=20):
+    """
+    Filtre les outliers (pit stops) des temps au tour.
+    """
+    if not lap_times or len(lap_times) == 0:
+        return lap_times, lap_times
+    
+    valid_times = [t for t in lap_times if t is not None]
+    
+    if len(valid_times) == 0:
+        return lap_times, lap_times
+    
+    median_time = np.median(valid_times)
+    threshold = median_time + threshold_seconds
+    
+    filtered = []
+    for t in lap_times:
+        if t is None:
+            filtered.append(None)
+        elif t > threshold:
+            filtered.append(None)  # Outlier (pit stop)
+        else:
+            filtered.append(t)
+    
+    return filtered, lap_times  # Retourne (filtré, original)
+
+
 @app.get("/api/multi-driver-pace/{year}/{gp_round}/{session_type}")
-async def get_multi_driver_pace(year: int, gp_round: int, session_type: str, drivers: str):
+async def get_multi_driver_pace(year: int, gp_round: int, session_type: str, drivers: str, show_outliers: bool = False):
     try:
         import math
         
@@ -816,7 +859,9 @@ async def get_multi_driver_pace(year: int, gp_round: int, session_type: str, dri
             driver = driver.strip()
             driver_laps = session.laps.pick_drivers(driver)
             
-            pace_data = []
+            lap_times = []
+            pace_data_full = []
+            
             for _, lap in driver_laps.iterrows():
                 lap_time = None
                 if lap['LapTime'] is not None:
@@ -824,7 +869,8 @@ async def get_multi_driver_pace(year: int, gp_round: int, session_type: str, dri
                     if not math.isnan(lap_time_seconds) and not math.isinf(lap_time_seconds):
                         lap_time = lap_time_seconds
                 
-                pace_data.append({
+                lap_times.append(lap_time)
+                pace_data_full.append({
                     'lapNumber': int(lap['LapNumber']),
                     'lapTime': lap_time,
                     'compound': str(lap['Compound']) if 'Compound' in lap else 'UNKNOWN',
@@ -832,7 +878,18 @@ async def get_multi_driver_pace(year: int, gp_round: int, session_type: str, dri
                     'stint': int(lap['Stint']) if 'Stint' in lap and not math.isnan(lap['Stint']) else 1,
                 })
             
-            all_drivers_data[driver] = pace_data
+            # Filtrer les pit stops
+            filtered_times, original_times = filter_pit_stops(lap_times)
+            
+            # Créer les données avec et sans outliers
+            pace_data_filtered = []
+            for i, lap_data in enumerate(pace_data_full):
+                pace_data_filtered.append({
+                    **lap_data,
+                    'lapTime': filtered_times[i] if not show_outliers else original_times[i]
+                })
+            
+            all_drivers_data[driver] = pace_data_filtered
         
         return {
             'drivers': driver_list,
@@ -917,7 +974,7 @@ async def get_stint_analysis(year: int, gp_round: int, driver: str):
 
 
 @app.get("/api/sector-evolution/{year}/{gp_round}/{driver}")
-async def get_sector_evolution(year: int, gp_round: int, driver: str):
+async def get_sector_evolution(year: int, gp_round: int, driver: str, show_outliers: bool = False):
     try:
         import math
         
@@ -926,7 +983,10 @@ async def get_sector_evolution(year: int, gp_round: int, driver: str):
         
         driver_laps = session.laps.pick_drivers(driver)
         
-        sector_data = []
+        sector1_times = []
+        sector2_times = []
+        sector3_times = []
+        sector_data_full = []
         
         for _, lap in driver_laps.iterrows():
             sector1 = None
@@ -948,13 +1008,34 @@ async def get_sector_evolution(year: int, gp_round: int, driver: str):
                 if not math.isnan(s3) and not math.isinf(s3):
                     sector3 = s3
             
-            sector_data.append({
+            sector1_times.append(sector1)
+            sector2_times.append(sector2)
+            sector3_times.append(sector3)
+            
+            sector_data_full.append({
                 'lapNumber': int(lap['LapNumber']),
                 'sector1': sector1,
                 'sector2': sector2,
                 'sector3': sector3,
                 'compound': str(lap['Compound']) if 'Compound' in lap else 'UNKNOWN',
                 'tyreLife': int(lap['TyreLife']) if lap['TyreLife'] is not None and not math.isnan(lap['TyreLife']) else 0,
+            })
+        
+        # Filtrer les outliers pour chaque secteur
+        filtered_s1, original_s1 = filter_pit_stops(sector1_times, threshold_seconds=10)
+        filtered_s2, original_s2 = filter_pit_stops(sector2_times, threshold_seconds=10)
+        filtered_s3, original_s3 = filter_pit_stops(sector3_times, threshold_seconds=10)
+        
+        # Appliquer le filtre selon show_outliers
+        sector_data = []
+        for i, lap_data in enumerate(sector_data_full):
+            sector_data.append({
+                'lapNumber': lap_data['lapNumber'],
+                'sector1': filtered_s1[i] if not show_outliers else original_s1[i],
+                'sector2': filtered_s2[i] if not show_outliers else original_s2[i],
+                'sector3': filtered_s3[i] if not show_outliers else original_s3[i],
+                'compound': lap_data['compound'],
+                'tyreLife': lap_data['tyreLife'],
             })
         
         return {
