@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import type { StudioConfig } from '../../pages/StudioProPage';
 import YearSelector from '../YearSelector';
 import GrandPrixSelector from '../GrandPrixSelector';
+import { getDrivers } from '../../services/backend.service';
 
 interface SimpleConfigPanelProps {
   config: StudioConfig;
@@ -47,28 +48,20 @@ export default function SimpleConfigPanel({ config, onChange, onBack }: SimpleCo
   }, [config.year, config.round, config.contentType]);
 
   const fetchDrivers = async () => {
-    setIsLoadingDrivers(true);
-    try {
-      const API_URL = import.meta.env.VITE_API_URL || 'https://f1-metrics-backend-production.up.railway.app';
-      const needsQualifying = config.contentType === 'quali-table' || config.contentType === 'track-telemetry';
-      const session = needsQualifying ? 'Q' : 'R';
-      
-      const url = `${API_URL}/api/drivers/${config.year}/${config.round}/${session}`;
-      const response = await fetch(url);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      
-      const data = await response.json();
-      setAvailableDrivers(data);
-    } catch (error) {
-      console.error('Error fetching drivers:', error);
-      setAvailableDrivers([]);
-    } finally {
-      setIsLoadingDrivers(false);
-    }
-  };
+  setIsLoadingDrivers(true);
+  try {
+    const needsQualifying = config.contentType === 'quali-table' || config.contentType === 'track-telemetry';
+    const session = needsQualifying ? 'Q' : 'R';
+    
+    const data = await getDrivers(config.year, config.round, session);
+    setAvailableDrivers(data);
+  } catch (error) {
+    console.error('Error fetching drivers:', error);
+    setAvailableDrivers([]);
+  } finally {
+    setIsLoadingDrivers(false);
+  }
+};
 
   const requiresDrivers = () => {
     return ['track-telemetry', 'race-pace', 'head-to-head'].includes(config.contentType || '');
