@@ -302,21 +302,22 @@ export default function StudioProPage() {
 
             {/* Step 2: Configuration + Preview - LAYOUT HORIZONTAL GP TEMPO STYLE */}
             {config.contentType && (
-              <div className="flex gap-6 h-[calc(100vh-200px)]">
-                {/* Left Sidebar: Config - FIXE ET COMPACT (320px) */}
-                <div className="w-80 flex-shrink-0 overflow-y-auto">
-                  <SimpleConfigPanel
-                    config={config}
-                    onChange={setConfig}
-                    onBack={() => setConfig({ ...config, contentType: null })}
-                  />
-                </div>
+  <div className="flex flex-col lg:flex-row gap-6 min-h-[calc(100vh-200px)]">
+    {/* Left Sidebar: Config - RESPONSIVE */}
+    <div className="w-full lg:w-80 flex-shrink-0 overflow-y-auto">
+      <SimpleConfigPanel
+        config={config}
+        onChange={setConfig}
+        onBack={() => setConfig({ ...config, contentType: null })}
+      />
+    </div>
 
-                {/* Right: Preview + Export - PLEINE LARGEUR */}
-                <div className="flex-1 min-w-0 overflow-y-auto">
-                  <ExportPanelV2 config={config} />
-                </div>
-              </div>
+    {/* Right: Preview + Export - RESPONSIVE */}
+    <div className="flex-1 min-w-0 overflow-y-auto">
+      <ExportPanelV2 config={config} />
+    </div>
+  </div>
+
             )}
           </div>
         </div>
