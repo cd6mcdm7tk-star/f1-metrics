@@ -1561,3 +1561,568 @@ async def get_racing_line_analyzer(year: int, round: int, session: str, driver: 
         raise HTTPException(status_code=500, detail=str(e))# Updated CORS config
 
 # Force Railway redeploy with CORS fix
+
+@app.get("/api/studio/race-pace")
+async def get_race_pace_data(
+    year: int = Query(...),
+    round: int = Query(...),
+    driver: str = Query(...),
+    driver2: str = Query(None)  # ✅ Optionnel
+):
+    try:
+        session = fastf1.get_session(year, round, 'R')
+        session.load()
+        
+        # Driver 1
+        driver_obj = session.laps.pick_driver(driver)
+        if driver_obj.empty:
+            raise HTTPException(status_code=404, detail=f"Driver {driver} not found")
+        
+        driver_info = session.get_driver(driver)
+        driver_full_name = f"{driver_info['FirstName']} {driver_info['LastName']}"
+        
+        pace_data = []
+        for idx, lap in driver_obj.iterrows():
+            lap_time_seconds = None
+            if lap['LapTime'] and not pd.isna(lap['LapTime']):
+                lap_time_seconds = lap['LapTime'].total_seconds()
+            
+            pace_data.append({
+                "lapNumber": int(lap['LapNumber']),
+                "lapTime": lap_time_seconds,
+                "compound": lap['Compound'] if lap['Compound'] else None,
+                "tyreLife": int(lap['TyreLife']) if lap['TyreLife'] and not pd.isna(lap['TyreLife']) else 0,
+                "stint": int(lap['Stint']) if lap['Stint'] and not pd.isna(lap['Stint']) else 1,
+                "pitOutTime": bool(lap['PitOutTime']) if 'PitOutTime' in lap and not pd.isna(lap['PitOutTime']) else False,
+                "pitInTime": bool(lap['PitInTime']) if 'PitInTime' in lap and not pd.isna(lap['PitInTime']) else False,
+            })
+        
+        result = {
+            "driver": driver_full_name,
+            "driverCode": driver,
+            "year": year,
+            "round": round,
+            "raceName": session.event['EventName'],
+            "paceData": pace_data
+        }
+        
+        # ✅ Driver 2 (si présent)
+        if driver2:
+            driver2_obj = session.laps.pick_driver(driver2)
+            if not driver2_obj.empty:
+                driver2_info = session.get_driver(driver2)
+                driver2_full_name = f"{driver2_info['FirstName']} {driver2_info['LastName']}"
+                
+                pace_data2 = []
+                for idx, lap in driver2_obj.iterrows():
+                    lap_time_seconds = None
+                    if lap['LapTime'] and not pd.isna(lap['LapTime']):
+                        lap_time_seconds = lap['LapTime'].total_seconds()
+                    
+                    pace_data2.append({
+                        "lapNumber": int(lap['LapNumber']),
+                        "lapTime": lap_time_seconds,
+                        "compound": lap['Compound'] if lap['Compound'] else None,
+                        "tyreLife": int(lap['TyreLife']) if lap['TyreLife'] and not pd.isna(lap['TyreLife']) else 0,
+                        "stint": int(lap['Stint']) if lap['Stint'] and not pd.isna(lap['Stint']) else 1,
+                        "pitOutTime": bool(lap['PitOutTime']) if 'PitOutTime' in lap and not pd.isna(lap['PitOutTime']) else False,
+                        "pitInTime": bool(lap['PitInTime']) if 'PitInTime' in lap and not pd.isna(lap['PitInTime']) else False,
+                    })
+                
+                result["driver2"] = driver2_full_name
+                result["driver2Code"] = driver2
+                result["paceData2"] = pace_data2
+        
+        return result
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/studio/qualifying")
+async def get_qualifying_data(
+    year: int = Query(...),
+    round: int = Query(...)
+):
+    try:
+        log_request("/api/studio/qualifying", {"year": year, "round": round})
+        
+        # Charger la session de qualifications
+        session = fastf1.get_session(year, round, 'Q')
+        session.load()
+        
+        results = []
+        
+        # Pour chaque pilote, récupérer son meilleur temps
+        for driver_code in session.drivers:
+            try:
+                driver_info = session.get_driver(driver_code)
+                driver_laps = session.laps.pick_driver(driver_code)
+                
+                if driver_laps.empty:
+                    continue
+                
+                # Meilleur tour
+                fastest_lap = driver_laps.pick_fastest()
+                
+                if fastest_lap is None or fastest_lap.empty or pd.isna(fastest_lap['LapTime']):
+                    continue
+                
+                best_time = float(fastest_lap['LapTime'].total_seconds())
+                
+                # ✅ CORRECTION : Utiliser Abbreviation au lieu de driver_code
+                driver_abbreviation = str(driver_info['Abbreviation']) if 'Abbreviation' in driver_info else str(driver_code)
+                
+                results.append({
+                    "driver": f"{driver_info['FirstName']} {driver_info['LastName']}",
+                    "driverCode": driver_abbreviation,  # ✅ NOR, VER, etc.
+                    "team": str(driver_info['TeamName']),
+                    "time": best_time
+                })
+                
+            except Exception as e:
+                print(f"⚠️ Error processing driver {driver_code}: {str(e)}")
+                continue
+        
+        # Trier par temps (du plus rapide au plus lent)
+        results.sort(key=lambda x: x['time'])
+        
+        # Attribuer les positions
+        for i, result in enumerate(results):
+            result['position'] = i + 1
+            
+            # Gap par rapport au pole
+            if i > 0:
+                result['gap'] = result['time'] - results[0]['time']
+            else:
+                result['gap'] = None
+        
+        log_success("/api/studio/qualifying")
+        
+        return {
+            "year": year,
+            "round": round,
+            "raceName": session.event['EventName'],
+            "circuitName": session.event['Location'],
+            "results": results
+        }
+        
+    except Exception as e:
+        log_error("/api/studio/qualifying", e)
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/studio/race-results")
+async def get_race_results(
+    year: int = Query(...),
+    round: int = Query(...)
+):
+    try:
+        log_request("/api/studio/race-results", {"year": year, "round": round})
+        
+        # Charger la session de course
+        session = fastf1.get_session(year, round, 'R')
+        session.load()
+        
+        results = []
+        
+        # Pour chaque pilote
+        for driver_code in session.drivers:
+            try:
+                driver_info = session.get_driver(driver_code)
+                driver_laps = session.laps.pick_driver(driver_code)
+                
+                if driver_laps.empty:
+                    continue
+                
+                # Position finale
+                last_lap = driver_laps.iloc[-1]
+                position = int(last_lap['Position']) if pd.notna(last_lap['Position']) else 99
+                
+                # Meilleur tour
+                fastest_lap = driver_laps.pick_fastest()
+                best_lap_time = None
+                if fastest_lap is not None and not fastest_lap.empty and pd.notna(fastest_lap['LapTime']):
+                    best_lap_time = float(fastest_lap['LapTime'].total_seconds())
+                
+                # Nombre de pit stops
+                pit_stops = len(driver_laps[driver_laps['PitInTime'].notna()])
+                
+                # Stratégie pneus (stints)
+                compounds = driver_laps['Compound'].dropna().unique().tolist()
+                tire_strategy = [str(c) for c in compounds if str(c) not in ['nan', 'None']]
+                
+                # Total des temps de tour (pour calculer le gap)
+                race_time = None
+                if len(driver_laps) > 0:
+                    # Somme de tous les temps de tour
+                    valid_times = driver_laps['LapTime'].dropna()
+                    if not valid_times.empty:
+                        race_time = float(valid_times.sum().total_seconds())
+                
+                # Nombre de tours complétés
+                total_laps = len(driver_laps)
+                
+                # Code pilote
+                driver_abbreviation = str(driver_info['Abbreviation']) if 'Abbreviation' in driver_info else str(driver_code)
+                
+                results.append({
+                    "position": position,
+                    "driver": f"{driver_info['FirstName']} {driver_info['LastName']}",
+                    "driverCode": driver_abbreviation,
+                    "team": str(driver_info['TeamName']),
+                    "bestLapTime": best_lap_time,
+                    "pitStops": pit_stops,
+                    "tireStrategy": tire_strategy,
+                    "totalLaps": total_laps,
+                    "raceTime": race_time,  # ✅ Temps total de course
+                })
+                
+            except Exception as e:
+                print(f"⚠️ Error processing driver {driver_code}: {str(e)}")
+                continue
+        
+        # Trier par position
+        results.sort(key=lambda x: x['position'])
+        
+        # ✅ CALCULER LES GAPS PAR RAPPORT AU VAINQUEUR
+        if results:
+            winner_laps = results[0]['totalLaps']
+            winner_time = results[0]['raceTime']
+            
+            for i, result in enumerate(results):
+                if i == 0:
+                    # Le vainqueur n'a pas de gap
+                    result['gap'] = None
+                    result['gapType'] = 'winner'
+                    result['status'] = 'Finished'
+                else:
+                    laps_diff = winner_laps - result['totalLaps']
+                    
+                    if laps_diff > 0:
+                        # Pilote en retard de X tours
+                        result['gap'] = laps_diff
+                        result['gapType'] = 'laps'
+                        result['status'] = f"+{laps_diff} lap{'s' if laps_diff > 1 else ''}"
+                    else:
+                        # Même nombre de tours → calculer le gap en temps
+                        if result['raceTime'] and winner_time:
+                            time_gap = result['raceTime'] - winner_time
+                            result['gap'] = time_gap
+                            result['gapType'] = 'time'
+                            result['status'] = 'Finished'
+                        else:
+                            result['gap'] = None
+                            result['gapType'] = 'unknown'
+                            result['status'] = 'Finished'
+        
+        log_success("/api/studio/race-results")
+        
+        return {
+            "year": year,
+            "round": round,
+            "raceName": session.event['EventName'],
+            "circuitName": session.event['Location'],
+            "results": results
+        }
+        
+    except Exception as e:
+        log_error("/api/studio/race-results", e)
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/studio/head-to-head")
+async def get_head_to_head(
+    year: int = Query(...),
+    driver1: str = Query(...),
+    driver2: str = Query(...)
+):
+    try:
+        log_request("/api/studio/head-to-head", {"year": year, "driver1": driver1, "driver2": driver2})
+        
+        jolpica_base = "https://api.jolpi.ca/ergast/f1"
+        
+        print(f"\n🔍 Fetching data for {year} - {driver1} vs {driver2}")
+        
+        # ✅ ÉTAPE 1 : RÉCUPÉRER LE DRIVER ID DEPUIS LE CODE
+        drivers_response = requests.get(f"{jolpica_base}/{year}/drivers.json")
+        drivers_info = drivers_response.json()
+        drivers_list = drivers_info['MRData']['DriverTable']['Drivers']
+        
+        driver1_info = next((d for d in drivers_list if d['code'] == driver1), None)
+        driver2_info = next((d for d in drivers_list if d['code'] == driver2), None)
+        
+        if not driver1_info or not driver2_info:
+            raise HTTPException(status_code=404, detail=f"Drivers {driver1} or {driver2} not found in {year}")
+        
+        driver1_id = driver1_info['driverId']
+        driver2_id = driver2_info['driverId']
+        
+        print(f"✅ Driver IDs: {driver1} = {driver1_id}, {driver2} = {driver2_id}")
+        
+        # ✅ ÉTAPE 2 : UTILISER LES DRIVER IDs POUR LES REQUÊTES
+        
+        # Résultats de course pour driver1
+        driver1_races_url = f"{jolpica_base}/{year}/drivers/{driver1_id}/results.json?limit=100"
+        print(f"📡 Fetching {driver1} races: {driver1_races_url}")
+        driver1_races_response = requests.get(driver1_races_url)
+        driver1_races_data = driver1_races_response.json()
+        driver1_races = driver1_races_data['MRData']['RaceTable']['Races']
+        print(f"✅ Found {len(driver1_races)} races for {driver1}")
+        
+        # Résultats de course pour driver2
+        driver2_races_url = f"{jolpica_base}/{year}/drivers/{driver2_id}/results.json?limit=100"
+        print(f"📡 Fetching {driver2} races: {driver2_races_url}")
+        driver2_races_response = requests.get(driver2_races_url)
+        driver2_races_data = driver2_races_response.json()
+        driver2_races = driver2_races_data['MRData']['RaceTable']['Races']
+        print(f"✅ Found {len(driver2_races)} races for {driver2}")
+        
+        # Qualifications pour driver1
+        driver1_quali_url = f"{jolpica_base}/{year}/drivers/{driver1_id}/qualifying.json?limit=100"
+        print(f"📡 Fetching {driver1} qualifying: {driver1_quali_url}")
+        driver1_quali_response = requests.get(driver1_quali_url)
+        driver1_quali_data = driver1_quali_response.json()
+        driver1_quali_races = driver1_quali_data['MRData']['RaceTable']['Races']
+        print(f"✅ Found {len(driver1_quali_races)} qualifying sessions for {driver1}")
+        
+        # Qualifications pour driver2
+        driver2_quali_url = f"{jolpica_base}/{year}/drivers/{driver2_id}/qualifying.json?limit=100"
+        print(f"📡 Fetching {driver2} qualifying: {driver2_quali_url}")
+        driver2_quali_response = requests.get(driver2_quali_url)
+        driver2_quali_data = driver2_quali_response.json()
+        driver2_quali_races = driver2_quali_data['MRData']['RaceTable']['Races']
+        print(f"✅ Found {len(driver2_quali_races)} qualifying sessions for {driver2}")
+        
+        # Initialiser les stats
+        driver1_stats = {
+            'wins': 0,
+            'podiums': 0,
+            'poles': 0,
+            'points': 0,
+            'dnfs': 0,
+            'raceFinishes': [],
+            'qualiPositions': [],
+            'qualiWins': 0,
+            'raceWins': 0,
+            'fastestLaps': 0,
+        }
+        
+        driver2_stats = {
+            'wins': 0,
+            'podiums': 0,
+            'poles': 0,
+            'points': 0,
+            'dnfs': 0,
+            'raceFinishes': [],
+            'qualiPositions': [],
+            'qualiWins': 0,
+            'raceWins': 0,
+            'fastestLaps': 0,
+        }
+        
+        # Créer un dict pour mapper les rounds
+        driver2_results_by_round = {}
+        for race in driver2_races:
+            round_num = race['round']
+            if race['Results']:
+                driver2_results_by_round[round_num] = race['Results'][0]
+        
+        driver2_quali_by_round = {}
+        for quali_race in driver2_quali_races:
+            round_num = quali_race['round']
+            if quali_race['QualifyingResults']:
+                driver2_quali_by_round[round_num] = quali_race['QualifyingResults'][0]
+        
+        # Traiter les résultats de driver1
+        for race in driver1_races:
+            round_num = race['round']
+            race_name = race['raceName']
+            
+            if not race['Results']:
+                continue
+                
+            driver1_result = race['Results'][0]
+            position = int(driver1_result['position'])
+            points = float(driver1_result['points'])
+            status = driver1_result['status']
+            
+            print(f"\n🏁 Round {round_num}: {race_name}")
+            print(f"  {driver1}: P{position} - {points} pts - Status: {status}")
+            
+            driver1_stats['points'] += points
+            
+            if position == 1:
+                driver1_stats['wins'] += 1
+                print(f"    ✅ {driver1} WIN!")
+                
+            if position <= 3:
+                driver1_stats['podiums'] += 1
+                print(f"    🏆 {driver1} PODIUM!")
+            
+            # Fastest lap
+            if 'FastestLap' in driver1_result:
+                if 'rank' in driver1_result['FastestLap'] and driver1_result['FastestLap']['rank'] == '1':
+                    driver1_stats['fastestLaps'] += 1
+                    print(f"    ⚡ {driver1} FASTEST LAP!")
+            
+            # Vérifier si le pilote a fini
+            if any(keyword in status for keyword in ['Finished', 'Lap', '+']):
+                driver1_stats['raceFinishes'].append(position)
+            else:
+                driver1_stats['dnfs'] += 1
+                print(f"    ❌ {driver1} DNF: {status}")
+            
+            # Comparer avec driver2 pour ce round
+            if round_num in driver2_results_by_round:
+                driver2_result = driver2_results_by_round[round_num]
+                pos2 = int(driver2_result['position'])
+                status2 = driver2_result['status']
+                
+                print(f"  {driver2}: P{pos2} - {driver2_result['points']} pts - Status: {status2}")
+                
+                # H2H en course
+                if any(keyword in status for keyword in ['Finished', 'Lap', '+']) and \
+                   any(keyword in status2 for keyword in ['Finished', 'Lap', '+']):
+                    if position < pos2:
+                        driver1_stats['raceWins'] += 1
+                        print(f"    ⚔️ {driver1} beats {driver2} in race ({position} vs {pos2})")
+                    elif pos2 < position:
+                        driver2_stats['raceWins'] += 1
+                        print(f"    ⚔️ {driver2} beats {driver1} in race ({pos2} vs {position})")
+        
+        # Traiter les résultats de driver2
+        for race in driver2_races:
+            if not race['Results']:
+                continue
+                
+            driver2_result = race['Results'][0]
+            position = int(driver2_result['position'])
+            points = float(driver2_result['points'])
+            status = driver2_result['status']
+            
+            driver2_stats['points'] += points
+            
+            if position == 1:
+                driver2_stats['wins'] += 1
+                
+            if position <= 3:
+                driver2_stats['podiums'] += 1
+            
+            if 'FastestLap' in driver2_result:
+                if 'rank' in driver2_result['FastestLap'] and driver2_result['FastestLap']['rank'] == '1':
+                    driver2_stats['fastestLaps'] += 1
+            
+            if any(keyword in status for keyword in ['Finished', 'Lap', '+']):
+                driver2_stats['raceFinishes'].append(position)
+            else:
+                driver2_stats['dnfs'] += 1
+        
+        # Traiter les qualifications
+        print(f"\n🏎️ Processing qualifying sessions...")
+        
+        for quali_race in driver1_quali_races:
+            round_num = quali_race['round']
+            
+            if not quali_race['QualifyingResults']:
+                continue
+                
+            driver1_quali_result = quali_race['QualifyingResults'][0]
+            position = int(driver1_quali_result['position'])
+            
+            driver1_stats['qualiPositions'].append(position)
+            
+            if position == 1:
+                driver1_stats['poles'] += 1
+                print(f"  Round {round_num}: {driver1} POLE!")
+            
+            # Comparer avec driver2
+            if round_num in driver2_quali_by_round:
+                driver2_quali_result = driver2_quali_by_round[round_num]
+                pos2 = int(driver2_quali_result['position'])
+                
+                if position < pos2:
+                    driver1_stats['qualiWins'] += 1
+                else:
+                    driver2_stats['qualiWins'] += 1
+        
+        # Traiter les qualifs de driver2
+        for quali_race in driver2_quali_races:
+            if not quali_race['QualifyingResults']:
+                continue
+                
+            driver2_quali_result = quali_race['QualifyingResults'][0]
+            position = int(driver2_quali_result['position'])
+            
+            driver2_stats['qualiPositions'].append(position)
+            
+            if position == 1:
+                driver2_stats['poles'] += 1
+                print(f"  Round {quali_race['round']}: {driver2} POLE!")
+        
+        # Calculer moyennes
+        if driver1_stats['raceFinishes']:
+            driver1_stats['avgRacePosition'] = round(sum(driver1_stats['raceFinishes']) / len(driver1_stats['raceFinishes']), 1)
+        else:
+            driver1_stats['avgRacePosition'] = 20.0
+        
+        if driver2_stats['raceFinishes']:
+            driver2_stats['avgRacePosition'] = round(sum(driver2_stats['raceFinishes']) / len(driver2_stats['raceFinishes']), 1)
+        else:
+            driver2_stats['avgRacePosition'] = 20.0
+        
+        if driver1_stats['qualiPositions']:
+            driver1_stats['avgQualiPosition'] = round(sum(driver1_stats['qualiPositions']) / len(driver1_stats['qualiPositions']), 1)
+        else:
+            driver1_stats['avgQualiPosition'] = 20.0
+        
+        if driver2_stats['qualiPositions']:
+            driver2_stats['avgQualiPosition'] = round(sum(driver2_stats['qualiPositions']) / len(driver2_stats['qualiPositions']), 1)
+        else:
+            driver2_stats['avgQualiPosition'] = 20.0
+        
+        # Équipes
+        driver1_team = "Unknown"
+        driver2_team = "Unknown"
+        
+        if driver1_races and len(driver1_races) > 0:
+            last_race = driver1_races[-1]
+            if last_race['Results']:
+                driver1_team = last_race['Results'][0]['Constructor']['name']
+        
+        if driver2_races and len(driver2_races) > 0:
+            last_race = driver2_races[-1]
+            if last_race['Results']:
+                driver2_team = last_race['Results'][0]['Constructor']['name']
+        
+        # Log final
+        print(f"\n📊 FINAL STATS:")
+        print(f"{driver1}: {driver1_stats}")
+        print(f"{driver2}: {driver2_stats}")
+        
+        log_success("/api/studio/head-to-head")
+        
+        return {
+            "year": year,
+            "totalRaces": len(driver1_races),
+            "driver1": {
+                "code": driver1,
+                "name": f"{driver1_info['givenName']} {driver1_info['familyName']}",
+                "team": driver1_team,
+                "stats": driver1_stats,
+            },
+            "driver2": {
+                "code": driver2,
+                "name": f"{driver2_info['givenName']} {driver2_info['familyName']}",
+                "team": driver2_team,
+                "stats": driver2_stats,
+            },
+        }
+        
+    except Exception as e:
+        log_error("/api/studio/head-to-head", e)
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+        

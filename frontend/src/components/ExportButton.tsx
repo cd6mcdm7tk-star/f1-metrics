@@ -26,17 +26,46 @@ const ExportButton: React.FC<ExportButtonProps> = ({
 }) => {
   const [isExporting, setIsExporting] = useState(false);
 
-  const addWatermark = (canvas: HTMLCanvasElement): HTMLCanvasElement => {
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return canvas;
+  const addWatermarkToCanvas = (sourceCanvas: HTMLCanvasElement): HTMLCanvasElement => {
+    // Créer un nouveau canvas pour ne pas modifier l'original
+    const watermarkedCanvas = document.createElement('canvas');
+    watermarkedCanvas.width = sourceCanvas.width;
+    watermarkedCanvas.height = sourceCanvas.height;
+    
+    const ctx = watermarkedCanvas.getContext('2d');
+    if (!ctx) return sourceCanvas;
 
-    // Watermark "METRIK DELTA" en bas à droite
-    ctx.font = '16px Inter, sans-serif';
-    ctx.fillStyle = 'rgba(0, 229, 204, 0.5)'; // Turquoise semi-transparent
-    ctx.textAlign = 'right';
-    ctx.fillText('METRIK DELTA', canvas.width - 20, canvas.height - 20);
+    // Copier l'image originale
+    ctx.drawImage(sourceCanvas, 0, 0);
 
-    return canvas;
+    // Configuration du watermark
+    const padding = 30;
+    const x = watermarkedCanvas.width - padding;
+    const y = watermarkedCanvas.height - padding;
+
+    // Fond semi-transparent pour le watermark
+    ctx.fillStyle = 'rgba(10, 14, 26, 0.85)';
+    ctx.fillRect(x - 200, y - 50, 180, 45);
+
+    // Bordure turquoise
+    ctx.strokeStyle = 'rgba(0, 229, 204, 0.6)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x - 200, y - 50, 180, 45);
+
+    // Texte "METRIK DELTA"
+    ctx.font = 'bold 20px Inter, sans-serif';
+    ctx.fillStyle = '#00E5CC';
+    ctx.textAlign = 'left';
+    ctx.fillText('METRIK DELTA', x - 190, y - 25);
+
+    // Texte "metrikdelta.com"
+    ctx.font = '14px Inter, sans-serif';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+    ctx.fillText('metrikdelta.com', x - 190, y - 8);
+
+    console.log('✅ Watermark added to canvas:', watermarkedCanvas.width, 'x', watermarkedCanvas.height);
+
+    return watermarkedCanvas;
   };
 
   const exportToPNG = async () => {
@@ -50,21 +79,28 @@ const ExportButton: React.FC<ExportButtonProps> = ({
         return;
       }
 
+      console.log('📸 Capturing element for PNG export...');
+      
       const canvas = await html2canvas(element, {
-        scale: 2, // Haute qualité
-        backgroundColor: '#0a0e1a', // Fond dark
+        scale: 2,
+        backgroundColor: '#0a0e1a',
         logging: false,
       });
 
-      const watermarkedCanvas = addWatermark(canvas);
+      console.log('✅ Canvas created:', canvas.width, 'x', canvas.height);
+
+      // Ajouter le watermark
+      const watermarkedCanvas = addWatermarkToCanvas(canvas);
 
       // Télécharger PNG
       const link = document.createElement('a');
       link.download = `${fileName}.png`;
       link.href = watermarkedCanvas.toDataURL('image/png');
       link.click();
+      
+      console.log('✅ PNG exported successfully');
     } catch (error) {
-      console.error('Error exporting PNG:', error);
+      console.error('❌ Error exporting PNG:', error);
     } finally {
       setIsExporting(false);
     }
@@ -75,6 +111,8 @@ const ExportButton: React.FC<ExportButtonProps> = ({
 
     setIsExporting(true);
     try {
+      console.log('📄 Starting PDF export with', elements.length, 'pages...');
+      
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
@@ -86,16 +124,19 @@ const ExportButton: React.FC<ExportButtonProps> = ({
           continue;
         }
 
+        console.log(`📸 Capturing page ${i + 1}/${elements.length}...`);
+
         const canvas = await html2canvas(element, {
           scale: 2,
           backgroundColor: '#0a0e1a',
           logging: false,
         });
 
-        const watermarkedCanvas = addWatermark(canvas);
+        // Ajouter le watermark
+        const watermarkedCanvas = addWatermarkToCanvas(canvas);
 
         const imgData = watermarkedCanvas.toDataURL('image/png');
-        const imgWidth = pageWidth - 20; // Marges
+        const imgWidth = pageWidth - 20;
         const imgHeight = (watermarkedCanvas.height * imgWidth) / watermarkedCanvas.width;
 
         if (i > 0) {
@@ -106,8 +147,9 @@ const ExportButton: React.FC<ExportButtonProps> = ({
       }
 
       pdf.save(`${fileName}.pdf`);
+      console.log('✅ PDF exported successfully');
     } catch (error) {
-      console.error('Error exporting PDF:', error);
+      console.error('❌ Error exporting PDF:', error);
     } finally {
       setIsExporting(false);
     }

@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { Home, Activity, Trophy, Map, Target, Film, Menu, X, Cpu, LogIn, Zap } from 'lucide-react';
+import { Home, Activity, Trophy, Map, Target, Film, Menu, X, Cpu, LogIn, Zap, Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import LanguageSelector from './components/LanguageSelector';
 import { useState } from 'react';
@@ -10,6 +10,7 @@ import PitWallPage from './pages/PitWallPage';
 import ChampionshipPage from './pages/ChampionshipPage';
 import TrackDatabasePage from './pages/TrackDatabasePage';
 import F1AnatomyPage from './pages/F1AnatomyPage';
+import StudioProPage from './pages/StudioProPage';
 import { useToast } from './hooks/useToast';
 import Toast from './components/Toast';
 import DonkeyLogo from './components/DonkeyLogo';
@@ -90,6 +91,28 @@ function Navigation() {
                 );
               })}
 
+              {/* Studio Pro Link - NOUVEAU */}
+              <Link
+                to="/studio-pro"
+                className={`
+                  flex items-center gap-2 px-4 py-2 rounded-lg font-rajdhani font-semibold
+                  transition-all duration-200 relative group
+                  ${isActive('/studio-pro')
+                    ? 'text-metrik-turquoise bg-metrik-turquoise/10'
+                    : 'text-metrik-silver hover:text-white hover:bg-metrik-surface'
+                  }
+                `}
+              >
+                <Sparkles size={18} />
+                <span>Studio Pro</span>
+                <span className="ml-1 px-1.5 py-0.5 bg-metrik-turquoise text-metrik-black rounded text-[10px] font-black">
+                  NEW
+                </span>
+                {isActive('/studio-pro') && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-metrik-turquoise" />
+                )}
+              </Link>
+
               <div className="ml-4 flex items-center gap-3">
                 <LanguageSelector />
                 
@@ -154,6 +177,26 @@ function Navigation() {
                 </Link>
               );
             })}
+
+            {/* Studio Pro Link Mobile - NOUVEAU */}
+            <Link
+              to="/studio-pro"
+              onClick={closeMobileMenu}
+              className={`
+                flex items-center gap-3 px-6 py-4 rounded-xl font-rajdhani font-bold text-lg
+                transition-all duration-200 w-full max-w-xs
+                ${isActive('/studio-pro')
+                  ? 'text-metrik-turquoise bg-metrik-turquoise/10 border border-metrik-turquoise/30'
+                  : 'text-metrik-silver hover:text-white hover:bg-metrik-surface'
+                }
+              `}
+            >
+              <Sparkles size={24} />
+              <span>Studio Pro</span>
+              <span className="ml-2 px-2 py-0.5 bg-metrik-turquoise text-metrik-black rounded text-xs font-black">
+                NEW
+              </span>
+            </Link>
 
             <div className="flex justify-center w-full max-w-xs mb-2">
               <LanguageSelector />
@@ -222,6 +265,7 @@ function App() {
               <Route path="/championship" element={<ChampionshipPage />} />
               <Route path="/track-database" element={<TrackDatabasePage />} />
               <Route path="/f1-anatomy" element={<F1AnatomyPage />} />
+              <Route path="/studio-pro" element={<StudioProPage />} /> {/* NOUVEAU */}
               <Route path="/success" element={<SuccessPage />} />
               <Route path="/cancel" element={<CancelPage />} />
             </Routes>
