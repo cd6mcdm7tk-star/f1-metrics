@@ -63,7 +63,7 @@ export default function ExportPanelV2({ config }: ExportPanelProps) {
       console.log('🎬 Generating chart for:', config);
       
       let data;
-      const API_URL = import.meta.env.VITE_API_URL || 'https://metrikdelta-backend-eu-production.up.railway.app/api';
+      const API_URL = import.meta.env.VITE_API_URL_EU || 'https://metrikdelta-backend-eu-production.up.railway.app';
       if (config.contentType === 'race-pace') {
         if (!config.drivers || config.drivers.length === 0) {
           throw new Error('Please select at least one driver');
