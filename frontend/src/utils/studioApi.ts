@@ -1,7 +1,7 @@
 // Studio Pro API Functions
 import type { DataSourceConfig } from '../types/studio';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://f1-metrics-backend-production.up.railway.app';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://f1-metrics-backend-production.up.railway.app/api';
 
 export interface TelemetryData {
   telemetry: Array<{
