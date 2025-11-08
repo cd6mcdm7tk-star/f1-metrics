@@ -16,7 +16,8 @@ export type ContentType =
   | 'quali-table'
   | 'race-table';
 
-export interface StudioConfig {
+// ✅ RENOMMÉ pour éviter conflit avec studio.ts
+export interface SimpleStudioConfig {
   contentType: ContentType | null;
   year: number;
   round: number;
@@ -30,7 +31,7 @@ export default function StudioProPage() {
   const { isUnlimited: hasAccess } = useRateLimit();
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
-  const [config, setConfig] = useState<StudioConfig>({
+  const [config, setConfig] = useState<SimpleStudioConfig>({
     contentType: null,
     year: 2025,
     round: 1,
