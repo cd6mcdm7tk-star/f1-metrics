@@ -5,7 +5,7 @@ import type { PositionEvolution, StrategyComparison } from '../types/pitwall';
 import type { RacePaceData, MultiDriverPaceData, StintAnalysisData, SectorEvolutionData } from '../types/raceevolution';
 import type { DriverStanding, ConstructorStanding, Circuit } from '../types/championship';
 
-const API_BASE_URL = 'https://metrikdelta-backend-eu-production.up.railway.app';
+const API_BASE_URL = 'https://metrikdelta-backend-eu-production.up.railway.app/api';
 
 export const getGrandsPrix = async (year: number) => {
   const response = await fetch(`${API_BASE_URL}/grands-prix/${year}`);

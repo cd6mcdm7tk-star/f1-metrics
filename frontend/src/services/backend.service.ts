@@ -7,8 +7,8 @@ import type { DriverStanding, ConstructorStanding, Circuit } from '../types/cham
 
 // Utilise l'URL Railway EU en production, localhost en dev
 const API_BASE_URL = import.meta.env.PROD 
-  ? 'https://metrikdelta-backend-eu-production.up.railway.app'
-  : 'https://metrikdelta-backend-usa-production.up.railway.app';
+  ? 'https://metrikdelta-backend-eu-production.up.railway.app/api'
+  : 'https://metrikdelta-backend-usa-production.up.railway.app/api';
 
 class BackendService {
   async getSchedule(year: number) {
