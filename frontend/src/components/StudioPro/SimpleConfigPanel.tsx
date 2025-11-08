@@ -1,13 +1,13 @@
 import { ArrowLeft, Users, Calendar, Trophy, ChevronDown } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
-import type { StudioConfig } from '../../pages/StudioProPage';
+import type { SimpleStudioConfig } from '../../pages/StudioProPage';
 import YearSelector from '../YearSelector';
 import GrandPrixSelector from '../GrandPrixSelector';
 import { getDrivers } from '../../services/backend.service';
 
 interface SimpleConfigPanelProps {
-  config: StudioConfig;
-  onChange: (config: StudioConfig) => void;
+  config: SimpleStudioConfig;
+  onChange: (config: SimpleStudioConfig) => void;
   onBack: () => void;
 }
 
