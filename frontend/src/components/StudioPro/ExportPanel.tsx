@@ -63,7 +63,7 @@ export default function ExportPanelV2({ config }: ExportPanelProps) {
       console.log('🎬 Generating chart for:', config);
       
       let data;
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+      const API_URL = import.meta.env.VITE_API_URL || 'https://f1-metrics-backend-production.up.railway.app';
       
       if (config.contentType === 'race-pace') {
         if (!config.drivers || config.drivers.length === 0) {
