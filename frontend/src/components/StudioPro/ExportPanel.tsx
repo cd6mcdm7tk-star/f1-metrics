@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Sparkles, Download, FileImage, FileText, Maximize2, AlertTriangle, Zap, Crown } from 'lucide-react';
-import type { StudioConfig } from '../../pages/StudioProPage';
+import type { SimpleStudioConfig} from '../../pages/StudioProPage';
 import RacePaceChart from './charts/RacePaceChart';
 import TelemetryBattleChart from './charts/TelemetryBattleChart';
 import QualifyingResultsChart from './charts/QualifyingResultsChart';
@@ -9,7 +9,7 @@ import HeadToHeadChart from './charts/HeadToHeadChart';
 import { useRateLimit } from '../../hooks/useRateLimit';
 
 interface ExportPanelProps {
-  config: StudioConfig;
+  config: SimpleStudioConfig;
 }
 
 // 🎨 PRESETS D'EXPORT PROFESSIONNELS
@@ -63,8 +63,7 @@ export default function ExportPanelV2({ config }: ExportPanelProps) {
       console.log('🎬 Generating chart for:', config);
       
       let data;
-      const API_URL = import.meta.env.VITE_API_URL || 'https://f1-metrics-backend-production.up.railway.app.api/';
-      
+      const API_URL = import.meta.env.VITE_API_URL || 'https://metrikdelta-backend-eu-production.up.railway.app/api';
       if (config.contentType === 'race-pace') {
         if (!config.drivers || config.drivers.length === 0) {
           throw new Error('Please select at least one driver');
