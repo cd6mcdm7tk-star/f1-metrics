@@ -49,7 +49,7 @@ export default function SimpleConfigPanel({ config, onChange, onBack }: SimpleCo
   const fetchDrivers = async () => {
     setIsLoadingDrivers(true);
     try {
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+      const API_URL = import.meta.env.VITE_API_URL || 'https://f1-metrics-backend-production.up.railway.app';
       const needsQualifying = config.contentType === 'quali-table' || config.contentType === 'track-telemetry';
       const session = needsQualifying ? 'Q' : 'R';
       
