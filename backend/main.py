@@ -117,208 +117,60 @@ async def get_telemetry_comparison(year: int, gp_round: int, session_type: str, 
             missing_driver = driver1 if lap1 is None else driver2
             raise Exception(f"Driver {missing_driver} not found or no valid laps available")
         
-        import numpy as np
-        from scipy.interpolate import interp1d
-        
-        # Récupérer les télémétries
+        # ✅ RÉCUPÉRATION TÉLÉMÉTRIE BRUTE
         tel1 = lap1.get_telemetry().add_distance()
         tel2 = lap2.get_telemetry().add_distance()
         
-        # Plage commune
-        min_dist = max(tel1['Distance'].min(), tel2['Distance'].min())
-        max_dist = min(tel1['Distance'].max(), tel2['Distance'].max())
-        circuit_length = max_dist - min_dist
+        # ✅ INTERPOLATION SUR GRILLE COMMUNE (synchronisation parfaite)
+        import numpy as np
+        from scipy.interpolate import interp1d
         
-        # Grille tous les 5m
-        distances = np.arange(min_dist, max_dist, 5)
+        # Déterminer la plage de distance commune
+        min_distance = max(tel1['Distance'].min(), tel2['Distance'].min())
+        max_distance = min(tel1['Distance'].max(), tel2['Distance'].max())
         
-        # Interpolations pour toutes les données
-        def safe_interp(tel, column, kind='linear'):
-            valid_mask = tel[column].notna()
-            if valid_mask.sum() < 2:
-                return lambda x: 0
-            return interp1d(
-                tel.loc[valid_mask, 'Distance'].values,
-                tel.loc[valid_mask, column].values,
-                kind=kind,
-                bounds_error=False,
-                fill_value=(tel.loc[valid_mask, column].iloc[0], tel.loc[valid_mask, column].iloc[-1])
-            )
+        # Créer grille uniforme de 1000 points
+        common_distance = np.linspace(min_distance, max_distance, 1000)
         
-        # Interpoler toutes les télémétries
-        speed1_f = safe_interp(tel1, 'Speed')
-        speed2_f = safe_interp(tel2, 'Speed')
-        throttle1_f = safe_interp(tel1, 'Throttle')
-        throttle2_f = safe_interp(tel2, 'Throttle')
-        brake1_f = safe_interp(tel1, 'Brake', 'nearest')
-        brake2_f = safe_interp(tel2, 'Brake', 'nearest')
-        gear1_f = safe_interp(tel1, 'nGear', 'nearest')
-        gear2_f = safe_interp(tel2, 'nGear', 'nearest')
-        drs1_f = safe_interp(tel1, 'DRS', 'nearest')
-        drs2_f = safe_interp(tel2, 'DRS', 'nearest')
-        x_f = safe_interp(tel1, 'X')
-        y_f = safe_interp(tel1, 'Y')
+        # ===== DRIVER 1 =====
+        # Interpolation linéaire pour valeurs continues
+        interp_speed1 = interp1d(tel1['Distance'], tel1['Speed'], kind='linear', bounds_error=False, fill_value=0)
+        interp_throttle1 = interp1d(tel1['Distance'], tel1['Throttle'], kind='linear', bounds_error=False, fill_value=0)
         
-        # 🔥 CALCUL DES TEMPS CUMULÉS PAR INTÉGRATION DE LA VITESSE
-        cumulative_time1 = [0.0]
-        cumulative_time2 = [0.0]
+        # Interpolation nearest pour valeurs discrètes
+        interp_brake1 = interp1d(tel1['Distance'], tel1['Brake'].astype(int), kind='nearest', bounds_error=False, fill_value=0)
+        interp_gear1 = interp1d(tel1['Distance'], tel1['nGear'], kind='nearest', bounds_error=False, fill_value=0)
+        interp_drs1 = interp1d(tel1['Distance'], tel1['DRS'], kind='nearest', bounds_error=False, fill_value=0)
         
-        for i in range(1, len(distances)):
-            segment_dist = distances[i] - distances[i-1]  # en mètres
-            
-            # Vitesse moyenne sur le segment (en km/h)
-            avg_speed1 = (speed1_f(distances[i-1]) + speed1_f(distances[i])) / 2
-            avg_speed2 = (speed2_f(distances[i-1]) + speed2_f(distances[i])) / 2
-            
-            # Convertir en m/s et calculer le temps (en secondes)
-            time1 = segment_dist / (avg_speed1 / 3.6) if avg_speed1 > 0 else 0
-            time2 = segment_dist / (avg_speed2 / 3.6) if avg_speed2 > 0 else 0
-            
-            cumulative_time1.append(cumulative_time1[-1] + time1)
-            cumulative_time2.append(cumulative_time2[-1] + time2)
+        # Interpoler positions GPS (linéaire) - On prend juste le premier point pour X/Y
+        interp_x1 = interp1d(tel1['Distance'], tel1['X'], kind='linear', bounds_error=False, fill_value='extrapolate')
+        interp_y1 = interp1d(tel1['Distance'], tel1['Y'], kind='linear', bounds_error=False, fill_value='extrapolate')
         
-        # 🔥 NORMALISATION MULTI-POINTS (comme GP Tempo)
+        # ===== DRIVER 2 =====
+        interp_speed2 = interp1d(tel2['Distance'], tel2['Speed'], kind='linear', bounds_error=False, fill_value=0)
+        interp_throttle2 = interp1d(tel2['Distance'], tel2['Throttle'], kind='linear', bounds_error=False, fill_value=0)
+        interp_brake2 = interp1d(tel2['Distance'], tel2['Brake'].astype(int), kind='nearest', bounds_error=False, fill_value=0)
+        interp_gear2 = interp1d(tel2['Distance'], tel2['nGear'], kind='nearest', bounds_error=False, fill_value=0)
+        interp_drs2 = interp1d(tel2['Distance'], tel2['DRS'], kind='nearest', bounds_error=False, fill_value=0)
         
-        # Temps de tour réels
-        lap_time1 = float(lap1['LapTime'].total_seconds())
-        lap_time2 = float(lap2['LapTime'].total_seconds())
-        
-        # Temps de secteurs réels
-        sector1_time1 = float(lap1['Sector1Time'].total_seconds()) if pd.notna(lap1['Sector1Time']) else None
-        sector2_time1 = float(lap1['Sector2Time'].total_seconds()) if pd.notna(lap1['Sector2Time']) else None
-        sector1_time2 = float(lap2['Sector1Time'].total_seconds()) if pd.notna(lap2['Sector1Time']) else None
-        sector2_time2 = float(lap2['Sector2Time'].total_seconds()) if pd.notna(lap2['Sector2Time']) else None
-        
-        # Points de normalisation (distance, temps_réel_driver1, temps_réel_driver2)
-        norm_points = [(min_dist, 0.0, 0.0)]  # Départ
-        
-        # Secteur 1 (33% du circuit)
-        if sector1_time1 and sector1_time2:
-            s1_dist = min_dist + circuit_length * 0.33
-            norm_points.append((s1_dist, sector1_time1, sector1_time2))
-        
-        # Secteur 2 (66% du circuit)
-        if sector1_time1 and sector2_time1 and sector1_time2 and sector2_time2:
-            s2_dist = min_dist + circuit_length * 0.66
-            cumul_s2_time1 = sector1_time1 + sector2_time1
-            cumul_s2_time2 = sector1_time2 + sector2_time2
-            norm_points.append((s2_dist, cumul_s2_time1, cumul_s2_time2))
-        
-        # Fin du tour
-        norm_points.append((max_dist, lap_time1, lap_time2))
-        
-        # 🔥 APPLIQUER LA NORMALISATION
-        normalized_times1 = []
-        normalized_times2 = []
-        
-        for i, dist in enumerate(distances):
-            calc_time1 = cumulative_time1[i]
-            calc_time2 = cumulative_time2[i]
-            
-            # Trouver les points de normalisation encadrants
-            norm_before = norm_points[0]
-            norm_after = norm_points[-1]
-            
-            for j in range(len(norm_points) - 1):
-                if norm_points[j][0] <= dist <= norm_points[j+1][0]:
-                    norm_before = norm_points[j]
-                    norm_after = norm_points[j+1]
-                    break
-            
-            # Ratio de progression entre les deux points
-            if norm_after[0] != norm_before[0]:
-                ratio = (dist - norm_before[0]) / (norm_after[0] - norm_before[0])
-            else:
-                ratio = 0
-            
-            # Interpolation linéaire des temps calculés entre les points de normalisation
-            if cumulative_time1[-1] > 0:
-                # Trouver où on est dans le temps calculé
-                idx_before = 0
-                idx_after = len(distances) - 1
-                
-                for k in range(len(distances)):
-                    if distances[k] >= norm_before[0]:
-                        idx_before = k
-                        break
-                
-                for k in range(len(distances)-1, -1, -1):
-                    if distances[k] <= norm_after[0]:
-                        idx_after = k
-                        break
-                
-                if idx_after > idx_before:
-                    calc_time_at_before = cumulative_time1[idx_before]
-                    calc_time_at_after = cumulative_time1[idx_after]
-                    
-                    # Facteur de correction linéaire
-                    real_time_before = norm_before[1]
-                    real_time_after = norm_after[1]
-                    
-                    if calc_time_at_after > calc_time_at_before:
-                        calc_ratio = (calc_time1 - calc_time_at_before) / (calc_time_at_after - calc_time_at_before)
-                    else:
-                        calc_ratio = ratio
-                    
-                    normalized_time1 = real_time_before + calc_ratio * (real_time_after - real_time_before)
-                else:
-                    normalized_time1 = calc_time1
-            else:
-                normalized_time1 = calc_time1
-            
-            # Même chose pour driver2
-            if cumulative_time2[-1] > 0:
-                idx_before = 0
-                idx_after = len(distances) - 1
-                
-                for k in range(len(distances)):
-                    if distances[k] >= norm_before[0]:
-                        idx_before = k
-                        break
-                
-                for k in range(len(distances)-1, -1, -1):
-                    if distances[k] <= norm_after[0]:
-                        idx_after = k
-                        break
-                
-                if idx_after > idx_before:
-                    calc_time_at_before = cumulative_time2[idx_before]
-                    calc_time_at_after = cumulative_time2[idx_after]
-                    
-                    real_time_before = norm_before[2]
-                    real_time_after = norm_after[2]
-                    
-                    if calc_time_at_after > calc_time_at_before:
-                        calc_ratio = (calc_time2 - calc_time_at_before) / (calc_time_at_after - calc_time_at_before)
-                    else:
-                        calc_ratio = ratio
-                    
-                    normalized_time2 = real_time_before + calc_ratio * (real_time_after - real_time_before)
-                else:
-                    normalized_time2 = calc_time2
-            else:
-                normalized_time2 = calc_time2
-            
-            normalized_times1.append(normalized_time2)
-            normalized_times2.append(normalized_time2)
-        
-        # Créer les données finales
+        # ===== CONSTRUIRE TELEMETRY_DATA SYNCHRONISÉ =====
         telemetry_data = []
-        for i, dist in enumerate(distances):
+        
+        for dist in common_distance:
             telemetry_data.append({
-                'distance': float(tel1.iloc[i]['Distance']),
-                'speed1': float(tel1.iloc[i]['Speed']) if tel1.iloc[i]['Speed'] is not None else 0.0,
-                'speed2': float(tel2.iloc[i]['Speed']) if tel2.iloc[i]['Speed'] is not None else 0.0,
-                'throttle1': float(tel1.iloc[i]['Throttle']) if tel1.iloc[i]['Throttle'] is not None else 0.0,
-                'throttle2': float(tel2.iloc[i]['Throttle']) if tel2.iloc[i]['Throttle'] is not None else 0.0,
-                'brake1': bool(tel1.iloc[i]['Brake']) if tel1.iloc[i]['Brake'] is not None else False,
-                'brake2': bool(tel2.iloc[i]['Brake']) if tel2.iloc[i]['Brake'] is not None else False,
-                'gear1': int(tel1.iloc[i]['nGear']) if tel1.iloc[i]['nGear'] is not None else 0,
-                'gear2': int(tel2.iloc[i]['nGear']) if tel2.iloc[i]['nGear'] is not None else 0,
-                'drs1': int(tel1.iloc[i]['DRS']) if tel1.iloc[i]['DRS'] is not None else 0,
-                'drs2': int(tel2.iloc[i]['DRS']) if tel2.iloc[i]['DRS'] is not None else 0,
-                'x': float(x_val) if pd.notna(x_val) else None,  # ← None au lieu de 0.0
-                'y': float(y_val) if pd.notna(y_val) else None   # ← None au lieu de 0.0
+                'distance': float(dist),
+                'speed1': float(interp_speed1(dist)),
+                'speed2': float(interp_speed2(dist)),
+                'throttle1': float(interp_throttle1(dist)),
+                'throttle2': float(interp_throttle2(dist)),
+                'brake1': bool(interp_brake1(dist)),
+                'brake2': bool(interp_brake2(dist)),
+                'gear1': int(interp_gear1(dist)),
+                'gear2': int(interp_gear2(dist)),
+                'drs1': int(interp_drs1(dist)),
+                'drs2': int(interp_drs2(dist)),
+                'x': float(interp_x1(dist)),
+                'y': float(interp_y1(dist))
             })
         
         result = {
