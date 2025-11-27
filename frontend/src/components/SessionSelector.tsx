@@ -1,22 +1,45 @@
 import { ChevronDown } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { hasSprintWeekend } from '../data/sprintWeekends';
 
 interface SessionSelectorProps {
   selectedSession: string;
   onSelectSession: (session: string) => void;
+  year: number;           // 🔥 NOUVEAU
+  selectedRound: number;  // 🔥 NOUVEAU
 }
 
-const sessions = [
+// Sessions de base (toujours disponibles)
+const baseSessions = [
   { code: 'Q', name: 'Qualifying' },
   { code: 'R', name: 'Race' },
 ];
 
-export default function SessionSelector({ selectedSession, onSelectSession }: SessionSelectorProps) {
+// Sessions Sprint
+const sprintSessions = [
+  { code: 'SQ', name: 'Sprint Shootout' },
+  { code: 'S', name: 'Sprint' },
+];
+
+export default function SessionSelector({ 
+  selectedSession, 
+  onSelectSession,
+  year,
+  selectedRound 
+}: SessionSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const selectedSessionData = sessions.find(s => s.code === selectedSession);
+
+  // 🔥 Sessions disponibles selon si c'est un Sprint Weekend
+  const isSprintWeekend = hasSprintWeekend(year, selectedRound);
+  
+  const availableSessions = isSprintWeekend 
+    ? [...baseSessions, ...sprintSessions] 
+    : baseSessions;
+
+  const selectedSessionData = availableSessions.find(s => s.code === selectedSession);
 
   // Calculer position du dropdown
   useEffect(() => {
@@ -34,7 +57,6 @@ export default function SessionSelector({ selectedSession, onSelectSession }: Se
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent | TouchEvent) => {
       if (buttonRef.current && !buttonRef.current.contains(event.target as Node)) {
-        // Vérifier si le clic est dans le dropdown
         const dropdown = document.getElementById('session-dropdown');
         if (dropdown && !dropdown.contains(event.target as Node)) {
           setIsOpen(false);
@@ -65,7 +87,7 @@ export default function SessionSelector({ selectedSession, onSelectSession }: Se
       }}
       className="bg-metrik-black/98 border border-metrik-turquoise/30 rounded-lg shadow-2xl backdrop-blur-sm overflow-hidden"
     >
-      {sessions.map((session) => (
+      {availableSessions.map((session) => (
         <button
           key={session.code}
           type="button"
@@ -102,6 +124,11 @@ export default function SessionSelector({ selectedSession, onSelectSession }: Se
       <div className="relative">
         <label className="block text-sm font-rajdhani text-metrik-silver mb-2 tracking-wide">
           SESSION
+          {isSprintWeekend && (
+            <span className="ml-2 text-xs bg-yellow-500/20 text-yellow-500 px-2 py-0.5 rounded-full">
+              ⚡ Sprint Weekend
+            </span>
+          )}
         </label>
         
         <button
@@ -130,7 +157,6 @@ export default function SessionSelector({ selectedSession, onSelectSession }: Se
         </button>
       </div>
 
-      {/* Portal pour le dropdown */}
       {isOpen && createPortal(dropdownContent, document.body)}
     </>
   );

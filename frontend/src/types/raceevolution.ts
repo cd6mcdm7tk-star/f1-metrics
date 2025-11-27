@@ -12,6 +12,8 @@ export interface LapPaceData {
 export interface RacePaceData {
   driver: string;
   paceData: LapPaceData[];
+  drivers?: string[];              
+  allDriversData?: RacePaceData[]; 
 }
 
 export interface MultiDriverPaceData {

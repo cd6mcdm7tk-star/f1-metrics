@@ -820,6 +820,8 @@ const sectorsDomain = (() => {
             <SessionSelector
               selectedSession={sessionType}
               onSelectSession={(session: string) => setSessionType(session)}
+              year={year}
+              selectedRound={selectedGP}
             />
           </div>
           {(activeTab === 'telemetry' || (activeTab === 'stints' && sessionType === 'Q')) && (
