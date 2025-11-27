@@ -20,4 +20,14 @@ export interface TelemetryData {
   lapTime2: number;
   driver1: string;
   driver2: string;
+ sectors1?: {
+    sector1: number | null;
+    sector2: number | null;
+    sector3: number | null;
+  };
+  sectors2?: {
+    sector1: number | null;
+    sector2: number | null;
+    sector3: number | null;
+  };
 }
