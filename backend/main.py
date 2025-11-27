@@ -117,6 +117,21 @@ async def get_telemetry_comparison(year: int, gp_round: int, session_type: str, 
             missing_driver = driver1 if lap1 is None else driver2
             raise Exception(f"Driver {missing_driver} not found or no valid laps available")
         
+        # 🔥 RÉCUPÉRER LES SECTEURS (NOUVEAU)
+        import pandas as pd
+        
+        sectors_driver1 = {
+            "sector1": float(lap1['Sector1Time'].total_seconds()) if pd.notna(lap1['Sector1Time']) else None,
+            "sector2": float(lap1['Sector2Time'].total_seconds()) if pd.notna(lap1['Sector2Time']) else None,
+            "sector3": float(lap1['Sector3Time'].total_seconds()) if pd.notna(lap1['Sector3Time']) else None,
+        }
+        
+        sectors_driver2 = {
+            "sector1": float(lap2['Sector1Time'].total_seconds()) if pd.notna(lap2['Sector1Time']) else None,
+            "sector2": float(lap2['Sector2Time'].total_seconds()) if pd.notna(lap2['Sector2Time']) else None,
+            "sector3": float(lap2['Sector3Time'].total_seconds()) if pd.notna(lap2['Sector3Time']) else None,
+        }
+        
         # ✅ RÉCUPÉRATION TÉLÉMÉTRIE BRUTE
         tel1 = lap1.get_telemetry().add_distance()
         tel2 = lap2.get_telemetry().add_distance()
@@ -177,6 +192,8 @@ async def get_telemetry_comparison(year: int, gp_round: int, session_type: str, 
             'telemetry': telemetry_data,
             'lapTime1': float(lap1['LapTime'].total_seconds()),
             'lapTime2': float(lap2['LapTime'].total_seconds()),
+            'sectors1': sectors_driver1,  # 🔥 NOUVEAU
+            'sectors2': sectors_driver2,  # 🔥 NOUVEAU
             'driver1': driver1,
             'driver2': driver2
         }
