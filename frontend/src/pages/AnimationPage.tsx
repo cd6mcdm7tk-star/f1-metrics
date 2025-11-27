@@ -7,8 +7,6 @@ import SessionSelector from '../components/SessionSelector';
 import DriverSelector from '../components/DriverSelector';
 import { getDrivers } from '../services/backend.service';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { useRateLimit } from '../hooks/useRateLimit';
-import UpgradeModal from '../components/UpgradeModal';
 
 interface AnimationPoint {
   driver1: {
@@ -68,8 +66,6 @@ export default function AnimationPage() {
   const [currentFrame, setCurrentFrame] = useState(0);
   const [speed, setSpeed] = useState(1);
   const [error, setError] = useState<string | null>(null);
-  const { canMakeRequest, incrementRequest } = useRateLimit();
-  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
   useEffect(() => {
     if (selectedGP) {
@@ -126,57 +122,50 @@ export default function AnimationPage() {
   };
 
   const loadBattle = async () => {
-  if (!driver1 || !driver2) return;
-  
-  // Check rate limit
-  if (!canMakeRequest) {
-    setShowUpgradeModal(true);
-    return;
-  }
-  
-  setLoading(true);
-  setBattleData(null);
-  setIsPlaying(false);
-  setCurrentFrame(0);
-  setError(null);
-  
-  try {
-    let data;
-    if (sessionType === 'R') {
-      const response = await fetch(
-        `https://metrikdelta-backend-eu-production.up.railway.app/api/animation-race-full/${year}/${selectedGP}/${driver1}/${driver2}`
-      );
-      if (!response.ok) {
-        throw new Error(`Backend error: ${response.status} - ${response.statusText}`);
-      }
-      data = await response.json();
-    } else {
-      const response = await fetch(
-        `https://metrikdelta-backend-eu-production.up.railway.app/api/animation-enhanced/${year}/${selectedGP}/${sessionType}/${driver1}/${driver2}`
-      );
-      if (!response.ok) {
-        throw new Error(`Backend error: ${response.status} - ${response.statusText}`);
-      }
-      data = await response.json();
-    }
-    
-    if (data && data.animation && Array.isArray(data.animation) && data.animation.length > 0) {
-      setBattleData(data);
-      setError(null);
-      incrementRequest(); // Increment after successful request
-    } else {
-      console.error('Invalid battle data structure:', data);
-      setBattleData(null);
-      setError('No animation data available for this session. Please try a different session or driver combination.');
-    }
-  } catch (error: any) {
-    console.error('Error loading battle:', error);
+    if (!driver1 || !driver2) return;
+    setLoading(true);
     setBattleData(null);
-    setError(error.message || 'Failed to load animation. The backend might not have data for this race/session.');
-  } finally {
-    setLoading(false);
-  }
-};
+    setIsPlaying(false);
+    setCurrentFrame(0);
+    setError(null); // Reset error
+
+    try {
+      let data;
+      if (sessionType === 'R') {
+        const response = await fetch(
+          `https://metrikdelta-backend-eu-production.up.railway.app/api/animation-race-full/${year}/${selectedGP}/${driver1}/${driver2}`
+        );
+        if (!response.ok) {
+          throw new Error(`Backend error: ${response.status} - ${response.statusText}`);
+        }
+        data = await response.json();
+      } else {
+        const response = await fetch(
+          `https://metrikdelta-backend-eu-production.up.railway.app/api/animation-enhanced/${year}/${selectedGP}/${sessionType}/${driver1}/${driver2}`
+        );
+        if (!response.ok) {
+          throw new Error(`Backend error: ${response.status} - ${response.statusText}`);
+        }
+        data = await response.json();
+      }
+      
+      // Validate data structure before setting
+      if (data && data.animation && Array.isArray(data.animation) && data.animation.length > 0) {
+        setBattleData(data);
+        setError(null); // Clear any previous error
+      } else {
+        console.error('Invalid battle data structure:', data);
+        setBattleData(null);
+        setError('No animation data available for this session. Please try a different session or driver combination.');
+      }
+    } catch (error: any) {
+      console.error('Error loading battle:', error);
+      setBattleData(null);
+      setError(error.message || 'Failed to load animation. The backend might not have data for this race/session.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handlePlayPause = () => {
     setIsPlaying(!isPlaying);
@@ -518,6 +507,8 @@ export default function AnimationPage() {
             <SessionSelector
               selectedSession={sessionType}
               onSelectSession={setSessionType}
+               year={year} 
+               selectedRound={selectedGP}
             />
           </div>
           <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-xl p-4 shadow-lg shadow-metrik-turquoise/20">
@@ -1039,15 +1030,6 @@ export default function AnimationPage() {
           </div>
         )}
       </div>
-      {/* Upgrade Modal */}
-      <UpgradeModal 
-        isOpen={showUpgradeModal}
-        onClose={() => setShowUpgradeModal(false)}
-        onUpgrade={() => {
-          setShowUpgradeModal(false);
-          window.location.href = '/';
-        }}
-      />
     </div>
   );
 }

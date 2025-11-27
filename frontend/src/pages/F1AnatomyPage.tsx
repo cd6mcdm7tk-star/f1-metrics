@@ -1579,25 +1579,48 @@ export default function F1AnatomyPage() {
                     maxPolarAngle={Math.PI / 2}
                   />
                   
-                  <ambientLight intensity={0.3} />
-                  <directionalLight 
-                    position={[10, 10, 5]} 
-                    intensity={2}
-                    castShadow
-                    shadow-mapSize={[2048, 2048]}
-                  />
-                  <directionalLight position={[-10, 5, -5]} intensity={0.8} />
-                  <spotLight 
-                    position={[0, 10, 0]} 
-                    intensity={1}
-                    angle={0.5} 
-                    penumbra={1} 
-                    castShadow 
-                  />
-                  <pointLight position={[0, 3, 3]} intensity={0.5} color="#00E5CC" />
-                  <pointLight position={[0, 3, -3]} intensity={0.5} color="#00E5CC" />
+                  <ambientLight intensity={0.5} />
+
+{/* Main directional lights */}
+<directionalLight 
+  position={[10, 10, 5]} 
+  intensity={2.5}
+  castShadow
+  shadow-mapSize={[2048, 2048]}
+/>
+<directionalLight position={[-10, 5, -5]} intensity={1.2} />
+
+{/* Spot from top */}
+<spotLight 
+  position={[0, 15, 0]} 
+  intensity={1.5}
+  angle={0.6} 
+  penumbra={1} 
+  castShadow 
+/>
+
+{/* Accent lights turquoise */}
+<pointLight position={[0, 3, 3]} intensity={0.8} color="#00E5CC" />
+<pointLight position={[0, 3, -3]} intensity={0.8} color="#00E5CC" />
+
+{/* Hemisphere light pour simuler un environnement */}
+<hemisphereLight 
+  args={["#87CEEB", "#1A1A1A", 0.8]} 
+  position={[0, 50, 0]} 
+/>
+
+{/* Rim lights pour les contours */}
+<pointLight position={[5, 2, 0]} intensity={0.6} color="#FFFFFF" />
+<pointLight position={[-5, 2, 0]} intensity={0.6} color="#FFFFFF" />
+
+{/* Fill light devant */}
+<directionalLight 
+  position={[0, 5, 10]} 
+  intensity={1} 
+  color="#FFFFFF" 
+/>
                   
-                  {showEnvironment && <Environment preset="city" />}
+                
                   
                   <F1ProceduralCar 
                     animateRotation={animateRotation}
