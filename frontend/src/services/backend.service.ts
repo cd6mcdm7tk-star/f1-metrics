@@ -100,8 +100,8 @@ class BackendService {
     return response.json();
   }
 
-  async getRacePace(year: number, gpRound: number, driver: string): Promise<RacePaceData> {
-  const response = await fetch(`${API_BASE_URL}/race-pace/${year}/${gpRound}/${driver}`);
+  async getRacePace(year: number, gpRound: number, driver: string, sessionType: string = 'R'): Promise<RacePaceData> {  // 🔥 AJOUTER sessionType
+  const response = await fetch(`${API_BASE_URL}/race-pace/${year}/${gpRound}/${sessionType}/${driver}`);  // 🔥 AJOUTER dans URL
   if (!response.ok) throw new Error('Failed to fetch race pace');
   return response.json();
 }
@@ -181,8 +181,8 @@ export const getPitStops = (year: number, gpRound: number) => backendService.get
 export const getRaceEvents = (year: number, gpRound: number) => backendService.getRaceEvents(year, gpRound);
 export const getPositionEvolution = (year: number, gpRound: number) => backendService.getPositionEvolution(year, gpRound);
 export const getStrategyComparison = (year: number, gpRound: number) => backendService.getStrategyComparison(year, gpRound);
-export const getRacePace = (year: number, gpRound: number, driver: string) => 
-  backendService.getRacePace(year, gpRound, driver);
+export const getRacePace = (year: number, gpRound: number, driver: string, sessionType: string = 'R') => 
+  backendService.getRacePace(year, gpRound, driver, sessionType);
 export const getMultiDriverPace = (year: number, gpRound: number, drivers: string[], sessionType: string) =>
   backendService.getMultiDriverPace(year, gpRound, drivers, sessionType);
 export const getStintAnalysis = (year: number, gpRound: number, driver: string) => backendService.getStintAnalysis(year, gpRound, driver);
