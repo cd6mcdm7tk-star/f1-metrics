@@ -770,12 +770,12 @@ const sectorsDomain = (() => {
   } : null;
 
   const tabs = [
-    { id: 'telemetry' as const, name: 'Telemetry', icon: Activity, desc: '2 Drivers Comparison' },
-    { id: 'pace' as const, name: 'Race Pace', icon: TrendingDown, desc: 'Lap Times Evolution', requiresRace: true },
-    { id: 'comparison' as const, name: 'Multi-Driver', icon: BarChart3, desc: 'Compare Multiple Drivers', requiresRace: true },
-    { id: 'stints' as const, name: 'Track Dominance', icon: Target, desc: 'Speed Advantage Map', requiresQualifying: true },
-    { id: 'sectors' as const, name: 'Sectors', icon: Clock, desc: 'Sector Times', requiresRace: true }
-  ];
+  { id: 'telemetry' as const, name: 'Telemetry', icon: Activity, desc: '2 Drivers Comparison' },
+  { id: 'pace' as const, name: 'Race Pace', icon: TrendingDown, desc: 'Lap Times Evolution', requiresRaceOrSprint: true }, // 🔥 MODIFIÉ
+  { id: 'comparison' as const, name: 'Multi-Driver', icon: BarChart3, desc: 'Compare Multiple Drivers', requiresRaceOrSprint: true }, // 🔥 MODIFIÉ
+  { id: 'stints' as const, name: 'Track Dominance', icon: Target, desc: 'Speed Advantage Map', requiresQualifying: true },
+  { id: 'sectors' as const, name: 'Sectors', icon: Clock, desc: 'Sector Times', requiresRaceOrSprint: true } // 🔥 MODIFIÉ
+];
 
   return (
     <>
@@ -851,7 +851,7 @@ const sectorsDomain = (() => {
         )}
 
         {/* Driver Selector for Pace (Race only) - MULTI-DRIVER */}
-{activeTab === 'pace' && (
+{activeTab === 'pace' && (sessionType === 'R' || sessionType === 'S') && (
   <div className="mb-8">
     <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-xl p-6 shadow-lg shadow-metrik-turquoise/20">
       <h3 className="text-lg font-rajdhani font-bold text-metrik-turquoise mb-4">
@@ -903,7 +903,7 @@ const sectorsDomain = (() => {
 )}
 
 {/* Driver Selector for Sectors (Race only) - SINGLE DRIVER */}
-{activeTab === 'sectors' && sessionType === 'R' && (
+{activeTab === 'sectors' && (sessionType === 'R' || sessionType === 'S') && (
   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
     <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-xl p-4 shadow-lg shadow-metrik-turquoise/20">
       <DriverSelector
@@ -955,66 +955,71 @@ const sectorsDomain = (() => {
         <div className="mb-8 overflow-x-auto">
           <div className="flex gap-2 min-w-max">
             {tabs.map((tab) => {
-              const Icon = tab.icon;
-              const isDisabled = (tab.requiresRace && sessionType !== 'R') || (tab.requiresQualifying && sessionType !== 'Q');
-              const isActive = activeTab === tab.id;
-              
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => !isDisabled && setActiveTab(tab.id)}
-                  disabled={isDisabled}
-                  className={`
-                    group relative px-6 py-4 rounded-xl font-rajdhani font-bold uppercase tracking-wide transition-all duration-300
-                    ${isActive 
-                      ? 'bg-gradient-to-r from-metrik-turquoise to-metrik-turquoise/80 text-metrik-black shadow-lg shadow-metrik-turquoise/50' 
-                      : isDisabled
-                        ? 'bg-metrik-card/50 border border-metrik-silver/20 text-metrik-silver/40 cursor-not-allowed'
-                        : 'bg-metrik-card border border-metrik-turquoise/30 text-metrik-silver hover:text-metrik-turquoise hover:border-metrik-turquoise/60 hover:shadow-lg hover:shadow-metrik-turquoise/20'
-                    }
-                  `}
-                >
-                  <div className="flex items-center gap-2">
-                    <Icon size={20} />
-                    <div className="text-left">
-                      <div className="text-sm">{tab.name}</div>
-                      <div className={`text-xs font-normal ${isActive ? 'text-metrik-black/80' : 'text-metrik-silver/60'}`}>
-                        {tab.desc}
-                      </div>
-                    </div>
-                  </div>
-                  {isDisabled && (
-                    <div className="absolute -top-2 -right-2 bg-metrik-card border border-metrik-turquoise/30 text-metrik-turquoise text-xs px-2 py-1 rounded-full">
-                      {tab.requiresRace ? 'Race only' : 'Qualifying only'}
-                    </div>
-                  )}
-                </button>
-              );
-            })}
+  const Icon = tab.icon;
+  
+  // 🔥 NOUVELLE LOGIQUE : autoriser R et S pour race pace
+  const isDisabled = 
+    (tab.requiresRaceOrSprint && sessionType !== 'R' && sessionType !== 'S') || 
+    (tab.requiresQualifying && sessionType !== 'Q' && sessionType !== 'SQ');
+  
+  const isActive = activeTab === tab.id;
+  
+  return (
+    <button
+      key={tab.id}
+      onClick={() => !isDisabled && setActiveTab(tab.id)}
+      disabled={isDisabled}
+      className={`
+        group relative px-6 py-4 rounded-xl font-rajdhani font-bold uppercase tracking-wide transition-all duration-300
+        ${isActive 
+          ? 'bg-gradient-to-r from-metrik-turquoise to-metrik-turquoise/80 text-metrik-black shadow-lg shadow-metrik-turquoise/50' 
+          : isDisabled
+            ? 'bg-metrik-card/50 border border-metrik-silver/20 text-metrik-silver/40 cursor-not-allowed'
+            : 'bg-metrik-card border border-metrik-turquoise/30 text-metrik-silver hover:text-metrik-turquoise hover:border-metrik-turquoise/60 hover:shadow-lg hover:shadow-metrik-turquoise/20'
+        }
+      `}
+    >
+      <div className="flex items-center gap-2">
+        <Icon size={20} />
+        <div className="text-left">
+          <div className="text-sm">{tab.name}</div>
+          <div className={`text-xs font-normal ${isActive ? 'text-metrik-black/80' : 'text-metrik-silver/60'}`}>
+            {tab.desc}
+          </div>
+        </div>
+      </div>
+      {isDisabled && (
+        <div className="absolute -top-2 -right-2 bg-metrik-card border border-metrik-turquoise/30 text-metrik-turquoise text-xs px-2 py-1 rounded-full">
+          {tab.requiresRaceOrSprint ? 'Race/Sprint only' : 'Qualifying only'}
+        </div>
+      )}
+    </button>
+  );
+})}
           </div>
         </div>
 
         {/* Load Data Button */}
         <div className="mb-8">
           <button
-            onClick={() => {
-              if (activeTab === 'telemetry' || (activeTab === 'stints' && sessionType === 'Q')) loadTelemetry();
-              else if (activeTab === 'pace' || (activeTab === 'stints' && sessionType === 'R') || (activeTab === 'sectors' && sessionType === 'R')) loadRaceEvolution();
-              else if (activeTab === 'comparison') loadMultiDriverComparison();
-              else if (activeTab === 'sectors' && sessionType === 'Q') loadQualifyingSectors();
-            }}
-            disabled={loading || ((activeTab === 'telemetry' || (activeTab === 'stints' && sessionType === 'Q')) && (!driver1 || !driver2)) || (activeTab === 'pace' && racePaceDrivers.length === 0) ||  ((activeTab === 'comparison' || (activeTab === 'sectors' && sessionType === 'Q')) && comparisonDrivers.length === 0)}
-            className="w-full backdrop-blur-xl bg-gradient-to-r from-metrik-turquoise to-metrik-turquoise/80 hover:from-metrik-turquoise/90 hover:to-metrik-turquoise/70 disabled:from-metrik-silver/50 disabled:to-metrik-silver/30 text-metrik-black font-rajdhani font-black text-lg py-4 rounded-xl shadow-lg shadow-metrik-turquoise/50 disabled:shadow-none transition-all duration-300 uppercase tracking-wide disabled:cursor-not-allowed"
-          >
-            {loading ? (
-              <span className="flex items-center justify-center gap-2">
-                <Loader2 className="animate-spin" size={20} />
-                Loading...
-              </span>
-            ) : (
-              `Load ${activeTab === 'telemetry' ? 'Telemetry' : activeTab === 'pace' ? 'Race Pace' : activeTab === 'comparison' ? 'Multi-Driver' : activeTab === 'stints' ? (sessionType === 'Q' ? 'Track Dominance' : 'Stint Analysis') : 'Sectors'} Data`
-            )}
-          </button>
+  onClick={() => {
+    if (activeTab === 'telemetry' || (activeTab === 'stints' && sessionType === 'Q')) loadTelemetry();
+    else if (activeTab === 'pace' || (activeTab === 'stints' && (sessionType === 'R' || sessionType === 'S')) || (activeTab === 'sectors' && (sessionType === 'R' || sessionType === 'S'))) loadRaceEvolution(); // 🔥 MODIFIÉ
+    else if (activeTab === 'comparison') loadMultiDriverComparison();
+    else if (activeTab === 'sectors' && (sessionType === 'Q' || sessionType === 'SQ')) loadQualifyingSectors(); // 🔥 MODIFIÉ
+  }}
+  disabled={loading || ((activeTab === 'telemetry' || (activeTab === 'stints' && sessionType === 'Q')) && (!driver1 || !driver2)) || (activeTab === 'pace' && racePaceDrivers.length === 0) ||  ((activeTab === 'comparison' || (activeTab === 'sectors' && (sessionType === 'Q' || sessionType === 'SQ'))) && comparisonDrivers.length === 0)}
+  className="w-full backdrop-blur-xl bg-gradient-to-r from-metrik-turquoise to-metrik-turquoise/80 hover:from-metrik-turquoise/90 hover:to-metrik-turquoise/70 disabled:from-metrik-silver/50 disabled:to-metrik-silver/30 text-metrik-black font-rajdhani font-black text-lg py-4 rounded-xl shadow-lg shadow-metrik-turquoise/50 disabled:shadow-none transition-all duration-300 uppercase tracking-wide disabled:cursor-not-allowed"
+>
+  {loading ? (
+    <span className="flex items-center justify-center gap-2">
+      <Loader2 className="animate-spin" size={20} />
+      Loading...
+    </span>
+  ) : (
+    `Load ${activeTab === 'telemetry' ? 'Telemetry' : activeTab === 'pace' ? 'Race Pace' : activeTab === 'comparison' ? 'Multi-Driver' : activeTab === 'stints' ? (sessionType === 'Q' || sessionType === 'SQ' ? 'Track Dominance' : 'Stint Analysis') : 'Sectors'} Data`
+  )}
+</button>
         </div>
 
         {/* Content */}
