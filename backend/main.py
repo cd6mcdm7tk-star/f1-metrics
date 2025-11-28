@@ -806,12 +806,12 @@ async def get_strategy_comparison(year: int, gp_round: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/api/race-pace/{year}/{gp_round}/{driver}")
-async def get_race_pace(year: int, gp_round: int, driver: str, show_outliers: bool = False):
+@app.get("/api/race-pace/{year}/{gp_round}/{session_type}/{driver}")
+async def get_race_pace(year: int, gp_round: int, session_type: str, driver: str, show_outliers: bool = False):
     try:
         import math
         
-        session = fastf1.get_session(year, gp_round, 'R')
+        session = fastf1.get_session(year, gp_round, session_type)
         session.load()
         
         driver_laps = session.laps.pick_drivers(driver)
