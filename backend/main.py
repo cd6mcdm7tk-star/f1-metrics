@@ -252,9 +252,9 @@ async def get_animation_enhanced(year: int, gp_round: int, session_type: str, dr
         
         animation_data = []
         
-        # ✅ SYNCHRONISATION PAR INDEX (même distance) avec calcul du gap réel
+        # ✨ FIX PRINCIPAL : 5000 points au lieu de 500 pour animation ultra-fluide !
         min_length = min(len(tel1), len(tel2), len(pos1), len(pos2))
-        step = max(1, min_length // 500)  # ~500 points pour l'animation
+        step = max(1, min_length // 5000)  # ✨ CHANGÉ DE 500 → 5000 (10x plus de points !)
         
         for i in range(0, min_length, step):
             try:
@@ -266,8 +266,7 @@ async def get_animation_enhanced(year: int, gp_round: int, session_type: str, dr
                 pos_point1 = pos1.iloc[i]
                 pos_point2 = pos2.iloc[i]
                 
-                # ✅ GAP RÉEL = différence de temps à la même distance
-                # Négatif = driver1 plus rapide (devant), Positif = driver2 plus rapide (devant)
+                # GAP RÉEL = différence de temps à la même distance
                 time_diff = float(point1['Time'].total_seconds() - point2['Time'].total_seconds())
                 
                 animation_data.append({
@@ -292,7 +291,7 @@ async def get_animation_enhanced(year: int, gp_round: int, session_type: str, dr
                         'drs': int(point2['DRS']) if point2['DRS'] is not None else 0,
                         'time': float(point2['Time'].total_seconds())
                     },
-                    'gap': time_diff  # Ce gap fluctue naturellement !
+                    'gap': time_diff
                 })
             except Exception:
                 continue
@@ -342,7 +341,7 @@ async def get_animation_race_full(year: int, gp_round: int, driver1: str, driver
         if laps1.empty or laps2.empty:
             raise HTTPException(status_code=404, detail="No laps found for drivers")
         
-        # ✅ EXTRACTION DES TEMPS DE SECTEUR (tour le plus rapide de chaque pilote)
+        # EXTRACTION DES TEMPS DE SECTEUR
         fastest_lap1 = laps1.pick_fastest()
         fastest_lap2 = laps2.pick_fastest()
         
@@ -385,8 +384,9 @@ async def get_animation_race_full(year: int, gp_round: int, driver1: str, driver
                 min_points1 = min(len(tel1), len(pos1))
                 min_points2 = min(len(tel2), len(pos2))
                 
-                step1 = max(1, min_points1 // 150)
-                step2 = max(1, min_points2 // 150)
+                # ✨ FIX : Plus de points pour les races aussi !
+                step1 = max(1, min_points1 // 500)  # ✨ CHANGÉ DE 150 → 500
+                step2 = max(1, min_points2 // 500)  # ✨ CHANGÉ DE 150 → 500
                 
                 for i in range(0, min_points1, step1):
                     if i >= len(tel1) or i >= len(pos1):
@@ -488,7 +488,6 @@ async def get_animation_race_full(year: int, gp_round: int, driver1: str, driver
             'driver1': driver1,
             'driver2': driver2,
             'totalTime': max_time,
-            # ✅ NOUVEAUX CHAMPS - TEMPS DE SECTEUR RÉELS
             'sector1Time1': sector1_time1,
             'sector2Time1': sector2_time1,
             'sector3Time1': sector3_time1,
