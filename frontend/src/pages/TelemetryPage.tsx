@@ -276,7 +276,7 @@ const formatTooltipValue = (value: any): string => {
 };
 
   const loadRaceEvolution = async () => {
-  if (racePaceDrivers.length === 0 || (sessionType !== 'R' && sessionType !== 'S')) return;
+  if (racePaceDrivers.length === 0 || sessionType !== 'R') return;
   
   if (!canMakeRequest) {
     setShowUpgradeModal(true);
@@ -287,7 +287,7 @@ const formatTooltipValue = (value: any): string => {
   try {
     // Charger les données pour chaque driver sélectionné
     const pacePromises = racePaceDrivers.map(driverCode => 
-      getRacePace(year, selectedGP, driverCode, sessionType)
+      getRacePace(year, selectedGP, driverCode)
     );
     
     const allPaceData = await Promise.all(pacePromises);

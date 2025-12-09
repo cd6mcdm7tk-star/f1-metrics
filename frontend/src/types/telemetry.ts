@@ -12,6 +12,7 @@ export interface TelemetryPoint {
   drs2: number;
   x: number;
   y: number;
+  delta: number;
 }
 
 export interface TelemetryData {
