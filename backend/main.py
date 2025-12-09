@@ -117,7 +117,7 @@ async def get_telemetry_comparison(year: int, gp_round: int, session_type: str, 
             missing_driver = driver1 if lap1 is None else driver2
             raise Exception(f"Driver {missing_driver} not found or no valid laps available")
         
-        # 🔥 RÉCUPÉRER LES SECTEURS (NOUVEAU)
+        # 🔥 RÉCUPÉRER LES SECTEURS
         import pandas as pd
         
         sectors_driver1 = {
@@ -157,7 +157,7 @@ async def get_telemetry_comparison(year: int, gp_round: int, session_type: str, 
         interp_gear1 = interp1d(tel1['Distance'], tel1['nGear'], kind='nearest', bounds_error=False, fill_value=0)
         interp_drs1 = interp1d(tel1['Distance'], tel1['DRS'], kind='nearest', bounds_error=False, fill_value=0)
         
-        # Interpoler positions GPS (linéaire) - On prend juste le premier point pour X/Y
+        # Interpoler positions GPS (linéaire)
         interp_x1 = interp1d(tel1['Distance'], tel1['X'], kind='linear', bounds_error=False, fill_value='extrapolate')
         interp_y1 = interp1d(tel1['Distance'], tel1['Y'], kind='linear', bounds_error=False, fill_value='extrapolate')
         
@@ -168,14 +168,39 @@ async def get_telemetry_comparison(year: int, gp_round: int, session_type: str, 
         interp_gear2 = interp1d(tel2['Distance'], tel2['nGear'], kind='nearest', bounds_error=False, fill_value=0)
         interp_drs2 = interp1d(tel2['Distance'], tel2['DRS'], kind='nearest', bounds_error=False, fill_value=0)
         
-        # ===== CONSTRUIRE TELEMETRY_DATA SYNCHRONISÉ =====
+        # ===== CONSTRUIRE TELEMETRY_DATA SYNCHRONISÉ AVEC DELTA =====
         telemetry_data = []
+        cumulative_time1 = 0.0
+        cumulative_time2 = 0.0
+        prev_speed1 = 0.0
+        prev_speed2 = 0.0
         
-        for dist in common_distance:
+        for i, dist in enumerate(common_distance):
+            speed1 = float(interp_speed1(dist))
+            speed2 = float(interp_speed2(dist))
+            
+            # 🔥 CALCUL DU DELTA CUMULATIF
+            if i > 0:
+                # Distance parcourue depuis le dernier point
+                segment_distance = dist - common_distance[i-1]
+                
+                # Vitesse moyenne sur le segment (en m/s)
+                avg_speed1 = (speed1 + prev_speed1) / 2 / 3.6  # km/h → m/s
+                avg_speed2 = (speed2 + prev_speed2) / 2 / 3.6
+                
+                # Temps pour parcourir ce segment
+                if avg_speed1 > 0:
+                    cumulative_time1 += segment_distance / avg_speed1
+                if avg_speed2 > 0:
+                    cumulative_time2 += segment_distance / avg_speed2
+            
+            # Delta = temps Driver2 - temps Driver1 (positif = Driver1 plus rapide)
+            delta = cumulative_time2 - cumulative_time1
+            
             telemetry_data.append({
                 'distance': float(dist),
-                'speed1': float(interp_speed1(dist)),
-                'speed2': float(interp_speed2(dist)),
+                'speed1': speed1,
+                'speed2': speed2,
                 'throttle1': float(interp_throttle1(dist)),
                 'throttle2': float(interp_throttle2(dist)),
                 'brake1': bool(interp_brake1(dist)),
@@ -185,15 +210,20 @@ async def get_telemetry_comparison(year: int, gp_round: int, session_type: str, 
                 'drs1': int(interp_drs1(dist)),
                 'drs2': int(interp_drs2(dist)),
                 'x': float(interp_x1(dist)),
-                'y': float(interp_y1(dist))
+                'y': float(interp_y1(dist)),
+                'delta': float(delta)  # 🔥 NOUVEAU - Delta cumulatif précis
             })
+            
+            # Sauvegarder vitesses pour le prochain segment
+            prev_speed1 = speed1
+            prev_speed2 = speed2
         
         result = {
             'telemetry': telemetry_data,
             'lapTime1': float(lap1['LapTime'].total_seconds()),
             'lapTime2': float(lap2['LapTime'].total_seconds()),
-            'sectors1': sectors_driver1,  # 🔥 NOUVEAU
-            'sectors2': sectors_driver2,  # 🔥 NOUVEAU
+            'sectors1': sectors_driver1,
+            'sectors2': sectors_driver2,
             'driver1': driver1,
             'driver2': driver2
         }
