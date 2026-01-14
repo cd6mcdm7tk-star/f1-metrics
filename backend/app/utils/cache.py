@@ -51,6 +51,46 @@ class FastF1Cache:
         except Exception as e:
             print(f"Erreur écriture cache: {e}")
     
+    # 🔥 NOUVELLES MÉTHODES pour supporter "in" et "[]"
+    def __contains__(self, key):
+        """Permet d'utiliser 'if key in cache'"""
+        cache_path = self._get_cache_path(key)
+        
+        if not cache_path.exists():
+            return False
+        
+        # Vérifier si le cache n'est pas expiré
+        file_time = datetime.fromtimestamp(cache_path.stat().st_mtime)
+        if datetime.now() - file_time > timedelta(hours=self.ttl_hours):
+            cache_path.unlink()
+            return False
+        
+        return True
+    
+    def __getitem__(self, key):
+        """Permet d'utiliser 'cache[key]'"""
+        cache_path = self._get_cache_path(key)
+        
+        if not cache_path.exists():
+            raise KeyError(f"Cache key not found: {key}")
+        
+        try:
+            with open(cache_path, 'rb') as f:
+                return pickle.load(f)
+        except Exception as e:
+            print(f"Erreur lecture cache: {e}")
+            raise KeyError(f"Error reading cache: {key}")
+    
+    def __setitem__(self, key, value):
+        """Permet d'utiliser 'cache[key] = value'"""
+        cache_path = self._get_cache_path(key)
+        
+        try:
+            with open(cache_path, 'wb') as f:
+                pickle.dump(value, f)
+        except Exception as e:
+            print(f"Erreur écriture cache: {e}")
+    
     def clear(self):
         """Nettoie tous les fichiers de cache"""
         for cache_file in self.cache_dir.glob("*.pkl"):

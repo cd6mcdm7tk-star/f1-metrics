@@ -3,18 +3,27 @@ from fastapi.middleware.cors import CORSMiddleware
 import fastf1
 import pandas as pd
 import requests
-from app.utils.cache import cache
+from app.utils.cache import cache as api_cache
 from app.utils.error_handler import handle_fastf1_error, log_request, log_success, log_error
 from stripe_routes import router as stripe_router
+from routes.livetiming import router as livetiming_router
 
 # Créer l'app FastAPI
 app = FastAPI()
 
-# Configuration CORS - OUVERT TEMPORAIREMENT POUR DEBUG
+# Configuration CORS - LOCAL + PRODUCTION
+ALLOWED_ORIGINS = [
+    "http://localhost:5173",  # Local dev
+    "http://localhost:3000",  # Alternative local
+    "https://metrikdelta.com",  # Production
+    "https://www.metrikdelta.com",  # Production with www
+    "*"  # Temporaire pour debug - À RETIRER EN PROD
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Accepte tous les domaines
-    allow_credentials=False,  # DOIT être False avec origins=*
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,  # True maintenant qu'on a des origins spécifiques
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -22,18 +31,42 @@ app.add_middleware(
 # Include Stripe router
 app.include_router(stripe_router, prefix="/api/stripe", tags=["stripe"])
 
+# Include Live Timing router (F1 proxy)
+app.include_router(livetiming_router)
+
 # Cache FastF1
 cache_dir = 'cache'
 fastf1.Cache.enable_cache(cache_dir)
-cache.clear_old()
+api_cache.clear_old()
+
+
+# Root endpoint
+@app.get("/")
+async def root():
+    return {
+        "name": "METRIK DELTA API",
+        "version": "1.0.0",
+        "status": "online",
+        "endpoints": {
+            "stripe": "/api/stripe",
+            "livetiming": "/api/livetiming",
+            "health": "/health"
+        }
+    }
+
+
+@app.get("/health")
+async def health():
+    return {"status": "healthy"}
+
 
 
 @app.get("/api/grands-prix/{year}")
 async def get_grands_prix(year: int):
     try:
         schedule = fastf1.get_event_schedule(year)
-        
         grands_prix = []
+        
         for idx, event in schedule.iterrows():
             event_type = event.get('EventFormat', '')
             
@@ -45,6 +78,7 @@ async def get_grands_prix(year: int):
                 "round": int(event['RoundNumber']),
                 "country": event['Country'],
                 "location": event['Location'],
+                "name": event['Location'],  # 🔥 AJOUTER CETTE LIGNE
                 "official_name": event['OfficialEventName'],
                 "date": event['EventDate'].strftime('%Y-%m-%d')
             }
@@ -64,7 +98,7 @@ async def get_drivers(year: int, gp_round: int, session_type: str):
         log_request("/api/drivers", {"year": year, "gp_round": gp_round, "session_type": session_type})
         
         # Vérifier le cache d'abord
-        cached_data = cache.get('drivers', year, gp_round, session_type)
+        cached_data = api_cache.get('drivers', year, gp_round, session_type)  # ✅ CORRIGÉ
         if cached_data:
             log_success("/api/drivers", cache_hit=True)
             return cached_data
@@ -83,7 +117,7 @@ async def get_drivers(year: int, gp_round: int, session_type: str):
             })
         
         # Sauvegarder dans le cache
-        cache.set(drivers, 'drivers', year, gp_round, session_type)
+        api_cache.set(drivers, 'drivers', year, gp_round, session_type)  # ✅ CORRIGÉ
         log_success("/api/drivers", cache_hit=False)
         return drivers
         
@@ -92,17 +126,34 @@ async def get_drivers(year: int, gp_round: int, session_type: str):
         raise handle_fastf1_error(e, f"Année: {year}, GP: {gp_round}, Session: {session_type}")
 
 @app.get("/api/telemetry/{year}/{gp_round}/{session_type}/{driver1}/{driver2}")
-async def get_telemetry_comparison(year: int, gp_round: int, session_type: str, driver1: str, driver2: str):
+async def get_telemetry_comparison(
+    year: int, 
+    gp_round: int, 
+    session_type: str, 
+    driver1: str, 
+    driver2: str,
+    lap_number1: int = Query(None),  # 🔥 Lap pour driver1
+    lap_number2: int = Query(None),  # 🔥 Lap pour driver2
+):
     try:
         log_request("/api/telemetry", {
             "year": year,
             "gp_round": gp_round,
             "session_type": session_type,
             "driver1": driver1,
-            "driver2": driver2
+            "driver2": driver2,
+            "lap_number1": lap_number1,  # 🔥 NOUVEAU
+            "lap_number2": lap_number2,  # 🔥 NOUVEAU
         })
         
-        cached_data = cache.get('telemetry', year, gp_round, session_type, driver1, driver2)
+        # ✅ Cache différencié selon lap_number1 ET lap_number2
+        cache_key_parts = ['telemetry', year, gp_round, session_type, driver1, driver2]
+        if lap_number1 is not None:
+            cache_key_parts.append(f"lap1_{lap_number1}")
+        if lap_number2 is not None:
+            cache_key_parts.append(f"lap2_{lap_number2}")
+        
+        cached_data = api_cache.get(*cache_key_parts)
         if cached_data:
             log_success("/api/telemetry", cache_hit=True)
             return cached_data
@@ -110,8 +161,39 @@ async def get_telemetry_comparison(year: int, gp_round: int, session_type: str, 
         session = fastf1.get_session(year, gp_round, session_type)
         session.load()
         
-        lap1 = session.laps.pick_drivers(driver1).pick_fastest()
-        lap2 = session.laps.pick_drivers(driver2).pick_fastest()
+        # 🔥 RÉCUPÉRER LAP1 (driver1)
+        if lap_number1 is not None:
+            # Lap spécifique pour driver1
+            laps1 = session.laps.pick_drivers(driver1)
+            lap1_filtered = laps1[laps1['LapNumber'] == lap_number1]
+            
+            if lap1_filtered.empty:
+                raise HTTPException(
+                    status_code=404, 
+                    detail=f"Lap {lap_number1} not found for {driver1}"
+                )
+            
+            lap1 = lap1_filtered.iloc[0]
+        else:
+            # Fastest lap par défaut
+            lap1 = session.laps.pick_drivers(driver1).pick_fastest()
+        
+        # 🔥 RÉCUPÉRER LAP2 (driver2)
+        if lap_number2 is not None:
+            # Lap spécifique pour driver2
+            laps2 = session.laps.pick_drivers(driver2)
+            lap2_filtered = laps2[laps2['LapNumber'] == lap_number2]
+            
+            if lap2_filtered.empty:
+                raise HTTPException(
+                    status_code=404, 
+                    detail=f"Lap {lap_number2} not found for {driver2}"
+                )
+            
+            lap2 = lap2_filtered.iloc[0]
+        else:
+            # Fastest lap par défaut
+            lap2 = session.laps.pick_drivers(driver2).pick_fastest()
         
         if lap1 is None or lap2 is None:
             missing_driver = driver1 if lap1 is None else driver2
@@ -136,6 +218,33 @@ async def get_telemetry_comparison(year: int, gp_round: int, session_type: str, 
         tel1 = lap1.get_telemetry().add_distance()
         tel2 = lap2.get_telemetry().add_distance()
         
+        # 🔍 DEBUG RPM - Vérifier les colonnes disponibles
+        print(f"\n{'='*60}")
+        print(f"🔍 DEBUG RPM - {driver1} vs {driver2}")
+        print(f"{'='*60}")
+        print(f"📋 Colonnes disponibles Driver 1: {tel1.columns.tolist()}")
+        print(f"📋 Colonnes disponibles Driver 2: {tel2.columns.tolist()}")
+        print(f"")
+        
+        # Détecter la colonne RPM (plusieurs noms possibles)
+        rpm_col = None
+        for possible_col in ['RPM', 'nRPM', 'Rpm', 'EngineRPM']:
+            if possible_col in tel1.columns:
+                rpm_col = possible_col
+                print(f"✅ Colonne RPM trouvée: '{rpm_col}'")
+                print(f"   Driver 1 RPM range: {tel1[rpm_col].min():.0f} - {tel1[rpm_col].max():.0f}")
+                print(f"   Driver 1 RPM mean: {tel1[rpm_col].mean():.0f}")
+                if rpm_col in tel2.columns:
+                    print(f"   Driver 2 RPM range: {tel2[rpm_col].min():.0f} - {tel2[rpm_col].max():.0f}")
+                    print(f"   Driver 2 RPM mean: {tel2[rpm_col].mean():.0f}")
+                break
+        
+        if not rpm_col:
+            print(f"❌ Aucune colonne RPM trouvée")
+            print(f"   Fallback à 10000 RPM sera utilisé")
+        
+        print(f"{'='*60}\n")
+        
         # ✅ INTERPOLATION SUR GRILLE COMMUNE (synchronisation parfaite)
         import numpy as np
         from scipy.interpolate import interp1d
@@ -157,6 +266,12 @@ async def get_telemetry_comparison(year: int, gp_round: int, session_type: str, 
         interp_gear1 = interp1d(tel1['Distance'], tel1['nGear'], kind='nearest', bounds_error=False, fill_value=0)
         interp_drs1 = interp1d(tel1['Distance'], tel1['DRS'], kind='nearest', bounds_error=False, fill_value=0)
         
+        # 🔥 RPM - linéaire car valeur continue
+        if rpm_col and rpm_col in tel1.columns:
+            interp_rpm1 = interp1d(tel1['Distance'], tel1[rpm_col], kind='linear', bounds_error=False, fill_value=10000)
+        else:
+            interp_rpm1 = lambda x: 10000  # Fallback si RPM pas disponible
+        
         # Interpoler positions GPS (linéaire)
         interp_x1 = interp1d(tel1['Distance'], tel1['X'], kind='linear', bounds_error=False, fill_value='extrapolate')
         interp_y1 = interp1d(tel1['Distance'], tel1['Y'], kind='linear', bounds_error=False, fill_value='extrapolate')
@@ -167,6 +282,12 @@ async def get_telemetry_comparison(year: int, gp_round: int, session_type: str, 
         interp_brake2 = interp1d(tel2['Distance'], tel2['Brake'].astype(int), kind='nearest', bounds_error=False, fill_value=0)
         interp_gear2 = interp1d(tel2['Distance'], tel2['nGear'], kind='nearest', bounds_error=False, fill_value=0)
         interp_drs2 = interp1d(tel2['Distance'], tel2['DRS'], kind='nearest', bounds_error=False, fill_value=0)
+        
+        # 🔥 RPM
+        if rpm_col and rpm_col in tel2.columns:
+            interp_rpm2 = interp1d(tel2['Distance'], tel2[rpm_col], kind='linear', bounds_error=False, fill_value=10000)
+        else:
+            interp_rpm2 = lambda x: 10000
         
         # ===== CONSTRUIRE TELEMETRY_DATA SYNCHRONISÉ AVEC DELTA =====
         telemetry_data = []
@@ -211,46 +332,217 @@ async def get_telemetry_comparison(year: int, gp_round: int, session_type: str, 
                 'drs2': int(interp_drs2(dist)),
                 'x': float(interp_x1(dist)),
                 'y': float(interp_y1(dist)),
-                'delta': float(delta)  # 🔥 NOUVEAU - Delta cumulatif précis
+                'delta': float(delta),  # 🔥 Delta cumulatif précis
+                'rpm1': float(interp_rpm1(dist)),  # 🔥 RPM
+                'rpm2': float(interp_rpm2(dist)),  # 🔥 RPM
             })
             
             # Sauvegarder vitesses pour le prochain segment
             prev_speed1 = speed1
             prev_speed2 = speed2
         
+        # 🔍 DEBUG - Vérifier les premières valeurs RPM
+        print(f"🔍 Premières valeurs RPM dans telemetry_data:")
+        for i in range(min(5, len(telemetry_data))):
+            print(f"   [{i}] rpm1={telemetry_data[i]['rpm1']:.0f}, rpm2={telemetry_data[i]['rpm2']:.0f}")
+        print(f"")
+        
         result = {
             'telemetry': telemetry_data,
-            'lapTime1': float(lap1['LapTime'].total_seconds()),
-            'lapTime2': float(lap2['LapTime'].total_seconds()),
+            'lapTime1': float(lap1['LapTime'].total_seconds()) if pd.notna(lap1['LapTime']) else None,
+            'lapTime2': float(lap2['LapTime'].total_seconds()) if pd.notna(lap2['LapTime']) else None,
             'sectors1': sectors_driver1,
             'sectors2': sectors_driver2,
             'driver1': driver1,
-            'driver2': driver2
+            'driver2': driver2,
+            'lapNumber1': int(lap1['LapNumber']) if pd.notna(lap1['LapNumber']) else lap_number1,  # 🔥 Retourner lap_number1
+            'lapNumber2': int(lap2['LapNumber']) if pd.notna(lap2['LapNumber']) else lap_number2,  # 🔥 Retourner lap_number2
         }
         
-        cache.set(result, 'telemetry', year, gp_round, session_type, driver1, driver2)
+        api_cache.set(result, *cache_key_parts)
         log_success("/api/telemetry", cache_hit=False)
         return result
         
     except Exception as e:
         log_error("/api/telemetry", e)
-        raise handle_fastf1_error(e, f"Pilotes: {driver1} vs {driver2}, {year} GP{gp_round} {session_type}")
+        error_msg = f"Pilotes: {driver1} vs {driver2}, {year} GP{gp_round} {session_type}"
+        if lap_number1:
+            error_msg += f" Lap1 {lap_number1}"
+        if lap_number2:
+            error_msg += f" Lap2 {lap_number2}"
+        raise handle_fastf1_error(e, error_msg)
 
-
-
-@app.get("/api/animation-enhanced/{year}/{gp_round}/{session_type}/{driver1}/{driver2}")
-async def get_animation_enhanced(year: int, gp_round: int, session_type: str, driver1: str, driver2: str):
+@app.get("/api/session-laps/{year}/{gp_round}/{session_type}/{driver}")
+async def get_session_laps(
+    year: int,
+    gp_round: int, 
+    session_type: str,
+    driver: str
+):
+    """
+    Retourne TOUS les lap times d'un pilote pour une session donnée
+    Format GP Tempo compatible avec HasTelemetry flag
+    """
     try:
+        log_request("/api/session-laps", {
+            "year": year,
+            "gp_round": gp_round,
+            "session_type": session_type,
+            "driver": driver
+        })
+        
+        # ✅ Cache
+        cache_key_parts = ['session_laps', year, gp_round, session_type, driver]
+        cached_data = api_cache.get(*cache_key_parts)
+        if cached_data:
+            log_success("/api/session-laps", cache_hit=True)
+            return cached_data
+        
+        # Charger la session
         session = fastf1.get_session(year, gp_round, session_type)
+        session.load()
+        
+        # 🔥 RÉCUPÉRER TOUS LES LAPS du pilote
+        all_laps = session.laps
+        driver_laps = all_laps[all_laps['Driver'] == driver]
+        
+        if driver_laps.empty:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No laps found for driver {driver}"
+            )
+        
+        # 🔥 RÉCUPÉRER INFOS PILOTE (Team)
+        driver_info = session.get_driver(driver)
+        team_name = driver_info['TeamName'] if driver_info is not None else "Unknown"
+        
+        # 🔥 FASTEST LAP pour IsPersonalBest
+        fastest_lap_time = driver_laps['LapTime'].min()
+        
+        laps_data = []
+        for idx, lap in driver_laps.iterrows():
+            lap_time = lap['LapTime']
+            lap_number = lap['LapNumber']
+            
+            # ✅ Vérifier si le lap a de la télémétrie disponible
+            has_telemetry = False
+            try:
+                # Tenter de récupérer la télémétrie
+                telemetry = lap.get_telemetry()
+                has_telemetry = not telemetry.empty
+            except:
+                has_telemetry = False
+            
+            # ✅ Inclure TOUS les laps (même ceux sans temps valide)
+            # GP Tempo montre tous les laps, même les outlaps/inlaps
+            
+            # 🔥 SECTEURS
+            sector1 = float(lap['Sector1Time'].total_seconds()) if pd.notna(lap['Sector1Time']) else None
+            sector2 = float(lap['Sector2Time'].total_seconds()) if pd.notna(lap['Sector2Time']) else None
+            sector3 = float(lap['Sector3Time'].total_seconds()) if pd.notna(lap['Sector3Time']) else None
+            
+            # 🔥 LAP TIME en secondes (float)
+            lap_time_seconds = float(lap_time.total_seconds()) if pd.notna(lap_time) else None
+            
+            # 🔥 FLAGS
+            is_personal_best = (lap_time == fastest_lap_time) if pd.notna(lap_time) and pd.notna(fastest_lap_time) else False
+            
+            # IsHotLap = lap avec temps valide et non marqué comme Out/In lap
+            # Dans FastF1, un "hot lap" a généralement un LapTime valide et n'est pas un outlap
+            is_hot_lap = pd.notna(lap_time) and not lap.get('IsAccurate', True) == False
+            
+            # 🔥 WEATHER DATA (si disponible)
+            air_temp = float(lap['AirTemp']) if pd.notna(lap.get('AirTemp')) else None
+            track_temp = float(lap['TrackTemp']) if pd.notna(lap.get('TrackTemp')) else None
+            
+            # 🔥 COMPOUND (pneu)
+            compound = lap['Compound'] if pd.notna(lap.get('Compound')) else None
+            
+            laps_data.append({
+                # GP Tempo format
+                "Position": None,  # Position in race (not relevant for practice/quali)
+                "Id": f"{year}_{gp_round}_{lap_number}_{driver}",  # Unique identifier
+                "LapNumber": int(lap_number) if pd.notna(lap_number) else None,
+                "LapTime": lap_time_seconds,  # 🔥 Float en secondes
+                "Sector1Time": sector1,
+                "Sector2Time": sector2,
+                "Sector3Time": sector3,
+                "IsPersonalBest": bool(is_personal_best),
+                "IsHotLap": bool(is_hot_lap),
+                "HasTelemetry": bool(has_telemetry),  # 🔥 FLAG CRUCIAL pour ⊕ icon
+                "Team": team_name,
+                "Driver": driver,
+                "Compound": compound,
+                "AirTemp": air_temp,
+                "TrackTemp": track_temp,
+                "WindSpeed": None  # FastF1 ne fournit pas WindSpeed dans les laps
+            })
+        
+        # Trier par numéro de tour
+        laps_data.sort(key=lambda x: x['LapNumber'] if x['LapNumber'] is not None else 0)
+        
+        result = {
+            'driver': driver,
+            'team': team_name,
+            'session': f"{year} R{gp_round} {session_type}",
+            'year': year,
+            'round': gp_round,
+            'sessionType': session_type,
+            'totalLaps': len(laps_data),
+            'laps': laps_data  # 🔥 Format GP Tempo
+        }
+        
+        api_cache.set(result, *cache_key_parts)
+        log_success("/api/session-laps", cache_hit=False)
+        return result
+        
+    except Exception as e:
+        log_error("/api/session-laps", e)
+        raise handle_fastf1_error(e, f"Driver {driver}, {year} GP{gp_round} {session_type}")
+
+
+@app.get("/api/animation-optimized/{year}/{gp_round}/{driver1}/{driver2}")
+async def get_animation_optimized(year: int, gp_round: int, driver1: str, driver2: str):
+    """
+    🎯 GPS BATTLE ANIMATION - SYNCHRONISÉ SUR LA DISTANCE DU TOUR
+    
+    CHANGEMENT MAJEUR : Les points sont synchronisés sur la DISTANCE (progress 0→1)
+    au lieu du TEMPS pour avoir une synchronisation PARFAITE.
+    
+    Quand progress = 0.5 (50% du tour) :
+    - Driver 1 à exactement 50% de SA distance
+    - Driver 2 à exactement 50% de SA distance
+    → Même position sur le circuit, télémétrie synchronisée !
+    """
+    try:
+        import pandas as pd
+        import fastf1
+        from fastapi import HTTPException
+        
+        log_request("/api/animation-optimized", {
+            "year": year,
+            "gp_round": gp_round,
+            "driver1": driver1,
+            "driver2": driver2
+        })
+        
+        cache_key_parts = ['animation_optimized_v2', year, gp_round, driver1, driver2]
+        cached_data = api_cache.get(*cache_key_parts)
+        if cached_data:
+            log_success("/api/animation-optimized", cache_hit=True)
+            return cached_data
+        
+        session = fastf1.get_session(year, gp_round, 'Q')
         session.load()
         
         lap1 = session.laps.pick_drivers(driver1).pick_fastest()
         lap2 = session.laps.pick_drivers(driver2).pick_fastest()
         
         if lap1 is None or lap2 is None:
-            raise HTTPException(status_code=404, detail="Fastest laps not found")
+            missing_driver = driver1 if lap1 is None else driver2
+            raise HTTPException(status_code=404, detail=f"No fastest lap found for {missing_driver}")
         
-        # ✅ EXTRACTION DES TEMPS DE SECTEUR
+        # Secteurs
         sector1_time1 = float(lap1['Sector1Time'].total_seconds()) if pd.notna(lap1['Sector1Time']) else None
         sector2_time1 = float(lap1['Sector2Time'].total_seconds()) if pd.notna(lap1['Sector2Time']) else None
         sector3_time1 = float(lap1['Sector3Time'].total_seconds()) if pd.notna(lap1['Sector3Time']) else None
@@ -259,105 +551,185 @@ async def get_animation_enhanced(year: int, gp_round: int, session_type: str, dr
         sector2_time2 = float(lap2['Sector2Time'].total_seconds()) if pd.notna(lap2['Sector2Time']) else None
         sector3_time2 = float(lap2['Sector3Time'].total_seconds()) if pd.notna(lap2['Sector3Time']) else None
         
-        tel1 = lap1.get_telemetry()
-        tel2 = lap2.get_telemetry()
+        # Télémétrie + Position
+        tel1 = lap1.get_telemetry().add_distance().reset_index(drop=True)
+        tel2 = lap2.get_telemetry().add_distance().reset_index(drop=True)
+        pos1 = lap1.get_pos_data().reset_index(drop=True)
+        pos2 = lap2.get_pos_data().reset_index(drop=True)
         
-        pos1 = lap1.get_pos_data()
-        pos2 = lap2.get_pos_data()
+        # SVG Path du circuit
+        track_points = []
+        min_pos_length = min(len(pos1), len(tel1))
+        track_sample_step = max(1, min_pos_length // 200)
         
-        tel1 = tel1.add_distance()
-        tel2 = tel2.add_distance()
+        for i in range(0, min_pos_length, track_sample_step):
+            if i >= len(pos1):
+                break
+            track_points.append({
+                'x': float(pos1.iloc[i]['X']),
+                'y': float(pos1.iloc[i]['Y'])
+            })
         
-        # Aligner les distances de départ
-        start_distance1 = float(tel1['Distance'].min())
-        start_distance2 = float(tel2['Distance'].min())
-        start_distance = max(start_distance1, start_distance2)
+        # Normaliser coordonnées (viewBox 1000x1000)
+        all_x = [p['x'] for p in track_points]
+        all_y = [p['y'] for p in track_points]
         
-        tel1 = tel1[tel1['Distance'] >= start_distance].reset_index(drop=True)
-        tel2 = tel2[tel2['Distance'] >= start_distance].reset_index(drop=True)
-        pos1 = pos1.reset_index(drop=True)
-        pos2 = pos2.reset_index(drop=True)
+        min_x, max_x = min(all_x), max(all_x)
+        min_y, max_y = min(all_y), max(all_y)
         
-        total_distance = float(min(tel1['Distance'].max(), tel2['Distance'].max()))
+        range_x = max_x - min_x
+        range_y = max_y - min_y
+        padding = 0.1
         
-        animation_data = []
+        min_x -= range_x * padding
+        max_x += range_x * padding
+        min_y -= range_y * padding
+        max_y += range_y * padding
         
-        # ✅ SYNCHRONISATION PAR INDEX (même distance) avec calcul du gap réel
-        min_length = min(len(tel1), len(tel2), len(pos1), len(pos2))
-        step = max(1, min_length // 500)  # ~500 points pour l'animation
+        range_x = max_x - min_x
+        range_y = max_y - min_y
         
-        for i in range(0, min_length, step):
-            try:
-                if i >= len(tel1) or i >= len(tel2) or i >= len(pos1) or i >= len(pos2):
-                    continue
-                
-                point1 = tel1.iloc[i]
-                point2 = tel2.iloc[i]
-                pos_point1 = pos1.iloc[i]
-                pos_point2 = pos2.iloc[i]
-                
-                # ✅ GAP RÉEL = différence de temps à la même distance
-                # Négatif = driver1 plus rapide (devant), Positif = driver2 plus rapide (devant)
-                time_diff = float(point1['Time'].total_seconds() - point2['Time'].total_seconds())
-                
-                animation_data.append({
-                    'distance': float(point1['Distance'] - start_distance),
-                    'driver1': {
-                        'x': float(pos_point1['X']),
-                        'y': float(pos_point1['Y']),
-                        'speed': float(point1['Speed']) if point1['Speed'] is not None else 0.0,
-                        'throttle': float(point1['Throttle']) if point1['Throttle'] is not None else 0.0,
-                        'brake': bool(point1['Brake']) if point1['Brake'] is not None else False,
-                        'gear': int(point1['nGear']) if point1['nGear'] is not None else 0,
-                        'drs': int(point1['DRS']) if point1['DRS'] is not None else 0,
-                        'time': float(point1['Time'].total_seconds())
-                    },
-                    'driver2': {
-                        'x': float(pos_point2['X']),
-                        'y': float(pos_point2['Y']),
-                        'speed': float(point2['Speed']) if point2['Speed'] is not None else 0.0,
-                        'throttle': float(point2['Throttle']) if point2['Throttle'] is not None else 0.0,
-                        'brake': bool(point2['Brake']) if point2['Brake'] is not None else False,
-                        'gear': int(point2['nGear']) if point2['nGear'] is not None else 0,
-                        'drs': int(point2['DRS']) if point2['DRS'] is not None else 0,
-                        'time': float(point2['Time'].total_seconds())
-                    },
-                    'gap': time_diff  # Ce gap fluctue naturellement !
-                })
-            except Exception:
+        for point in track_points:
+            point['x'] = ((point['x'] - min_x) / range_x) * 1000
+            point['y'] = ((point['y'] - min_y) / range_y) * 1000
+        
+        svg_path = f"M {track_points[0]['x']:.2f} {track_points[0]['y']:.2f}"
+        for i in range(1, len(track_points)):
+            svg_path += f" L {track_points[i]['x']:.2f} {track_points[i]['y']:.2f}"
+        svg_path += " Z"
+        
+        # Détecter RPM
+        rpm_col = None
+        for possible_col in ['RPM', 'nRPM', 'Rpm', 'EngineRPM']:
+            if possible_col in tel1.columns:
+                rpm_col = possible_col
+                break
+        
+        # 🔥 TÉLÉMÉTRIE DRIVER 1 - SYNCHRONISÉE SUR PROGRESS (0→1)
+        driver1_telemetry = []
+        min_length1 = min(len(tel1), len(pos1))
+        step1 = max(1, min_length1 // 500)
+        
+        for i in range(0, min_length1, step1):
+            if i >= len(tel1) or i >= len(pos1):
                 continue
+            
+            point_tel = tel1.iloc[i]
+            point_pos = pos1.iloc[i]
+            
+            normalized_x = ((float(point_pos['X']) - min_x) / range_x) * 1000
+            normalized_y = ((float(point_pos['Y']) - min_y) / range_y) * 1000
+            
+            rpm_value = float(point_tel[rpm_col]) if rpm_col and pd.notna(point_tel.get(rpm_col)) else 10000
+            
+            # 🔥 PROGRESS = Position dans le tour (0.0 à 1.0)
+            progress = i / (min_length1 - 1) if min_length1 > 1 else 0.0
+            
+            driver1_telemetry.append({
+                'x': normalized_x,
+                'y': normalized_y,
+                'speed': float(point_tel['Speed']) if pd.notna(point_tel['Speed']) else 0.0,
+                'throttle': float(point_tel['Throttle']) if pd.notna(point_tel['Throttle']) else 0.0,
+                'brake': bool(point_tel['Brake']) if pd.notna(point_tel['Brake']) else False,
+                'gear': int(point_tel['nGear']) if pd.notna(point_tel['nGear']) else 0,
+                'drs': int(point_tel['DRS']) if pd.notna(point_tel['DRS']) else 0,
+                'rpm': rpm_value,
+                'progress': progress,  # 🔥 0.0 → 1.0 (distance dans le tour)
+                'time': float(point_tel['Time'].total_seconds())  # Gardé pour info
+            })
         
-        lap1_time = float(lap1['LapTime'].total_seconds()) if lap1['LapTime'] is not None else 0.0
-        lap2_time = float(lap2['LapTime'].total_seconds()) if lap2['LapTime'] is not None else 0.0
+        # 🔥 TÉLÉMÉTRIE DRIVER 2 - SYNCHRONISÉE SUR PROGRESS (0→1)
+        driver2_telemetry = []
+        min_length2 = min(len(tel2), len(pos2))
+        step2 = max(1, min_length2 // 500)
         
-        return {
-            'animation': animation_data,
-            'lapTime1': lap1_time,
-            'lapTime2': lap2_time,
-            'totalDistance': total_distance - start_distance,
+        for i in range(0, min_length2, step2):
+            if i >= len(tel2) or i >= len(pos2):
+                continue
+            
+            point_tel = tel2.iloc[i]
+            point_pos = pos2.iloc[i]
+            
+            normalized_x = ((float(point_pos['X']) - min_x) / range_x) * 1000
+            normalized_y = ((float(point_pos['Y']) - min_y) / range_y) * 1000
+            
+            rpm_value = float(point_tel[rpm_col]) if rpm_col and pd.notna(point_tel.get(rpm_col)) else 10000
+            
+            # 🔥 PROGRESS = Position dans le tour (0.0 à 1.0)
+            progress = i / (min_length2 - 1) if min_length2 > 1 else 0.0
+            
+            driver2_telemetry.append({
+                'x': normalized_x,
+                'y': normalized_y,
+                'speed': float(point_tel['Speed']) if pd.notna(point_tel['Speed']) else 0.0,
+                'throttle': float(point_tel['Throttle']) if pd.notna(point_tel['Throttle']) else 0.0,
+                'brake': bool(point_tel['Brake']) if pd.notna(point_tel['Brake']) else False,
+                'gear': int(point_tel['nGear']) if pd.notna(point_tel['nGear']) else 0,
+                'drs': int(point_tel['DRS']) if pd.notna(point_tel['DRS']) else 0,
+                'rpm': rpm_value,
+                'progress': progress,  # 🔥 0.0 → 1.0
+                'time': float(point_tel['Time'].total_seconds())
+            })
+        
+        # Couleurs team
+        def get_team_color(driver_code: str) -> str:
+            team_colors = {
+                'VER': '#3671C6', 'TSU': '#3671C6',
+                'LEC': '#E8002D', 'HAM': '#E8002D',
+                'RUS': '#27F4D2', 'ANT': '#27F4D2',
+                'NOR': '#FF8700', 'PIA': '#FF8700',
+                'GAS': '#FF87BC', 'DOO': '#FF87BC', 'COL': '#FF87BC',
+                'ALO': '#229971', 'STR': '#229971',
+                'LAW': '#6692FF', 'HAD': '#6692FF',
+                'HUL': '#00E701', 'BOR': '#00E701', 'BOT': '#00E701', 'ZHO': '#00E701',
+                'OCO': '#B6BABD', 'BEA': '#B6BABD', 'MAG': '#B6BABD',
+                'ALB': '#00A0DE', 'SAI': '#00A0DE', 'SAR': '#00A0DE',
+            }
+            return team_colors.get(driver_code.upper(), '#00D2BE')
+        
+        lap1_time = float(lap1['LapTime'].total_seconds()) if pd.notna(lap1['LapTime']) else 0.0
+        lap2_time = float(lap2['LapTime'].total_seconds()) if pd.notna(lap2['LapTime']) else 0.0
+        
+        team1 = str(lap1['Team']) if 'Team' in lap1.index and pd.notna(lap1['Team']) else 'Unknown'
+        team2 = str(lap2['Team']) if 'Team' in lap2.index and pd.notna(lap2['Team']) else 'Unknown'
+        
+        result = {
+            'driver1Telemetry': driver1_telemetry,
+            'driver2Telemetry': driver2_telemetry,
             'driver1Info': {
-                'code': driver1,
-                'team': str(lap1['Team']) if 'Team' in lap1 else 'Unknown',
-                'compound': str(lap1['Compound']) if 'Compound' in lap1 else 'Unknown'
+                'code': driver1.upper(),
+                'team': team1,
+                'color': get_team_color(driver1)
             },
             'driver2Info': {
-                'code': driver2,
-                'team': str(lap2['Team']) if 'Team' in lap2 else 'Unknown',
-                'compound': str(lap2['Compound']) if 'Compound' in lap2 else 'Unknown'
+                'code': driver2.upper(),
+                'team': team2,
+                'color': get_team_color(driver2)
             },
+            'lapTime1': lap1_time,
+            'lapTime2': lap2_time,
             'sector1Time1': sector1_time1,
             'sector2Time1': sector2_time1,
             'sector3Time1': sector3_time1,
             'sector1Time2': sector1_time2,
             'sector2Time2': sector2_time2,
             'sector3Time2': sector3_time2,
+            'trackPath': svg_path,
+            'viewBox': {
+                'minX': 0,
+                'minY': 0,
+                'width': 1000,
+                'height': 1000
+            }
         }
+        
+        api_cache.set(result, *cache_key_parts)
+        log_success("/api/animation-optimized", cache_hit=False)
+        return result
+        
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-
-
+        log_error("/api/animation-optimized", e)
+        raise handle_fastf1_error(e, f"Animation: {driver1} vs {driver2}, {year} GP{gp_round} Qualifying")
 
 
 @app.get("/api/animation-race-full/{year}/{gp_round}/{driver1}/{driver2}")
