@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZIPMiddleware 
 import fastf1
 import pandas as pd
 import requests
@@ -10,6 +11,7 @@ from routes.livetiming import router as livetiming_router
 
 # Créer l'app FastAPI
 app = FastAPI()
+app.add_middleware(GZIPMiddleware, minimum_size=1000)
 
 # Configuration CORS - LOCAL + PRODUCTION
 ALLOWED_ORIGINS = [
