@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware 
+from app.services.redis_cache import redis_cache
 import fastf1
 import pandas as pd
 import requests
@@ -144,22 +145,23 @@ async def get_telemetry_comparison(
             "session_type": session_type,
             "driver1": driver1,
             "driver2": driver2,
-            "lap_number1": lap_number1,  # 🔥 NOUVEAU
-            "lap_number2": lap_number2,  # 🔥 NOUVEAU
+            "lap_number1": lap_number1,
+            "lap_number2": lap_number2,
         })
         
-        # ✅ Cache différencié selon lap_number1 ET lap_number2
-        cache_key_parts = ['telemetry', year, gp_round, session_type, driver1, driver2]
-        if lap_number1 is not None:
-            cache_key_parts.append(f"lap1_{lap_number1}")
-        if lap_number2 is not None:
-            cache_key_parts.append(f"lap2_{lap_number2}")
+        # 🔥 ÉTAPE 1 : Vérifier Redis cache
+        cache_key = redis_cache.get_cache_key_telemetry(
+            year, gp_round, session_type, 
+            driver1, lap_number1, 
+            driver2, lap_number2
+        )
+        cached_data = redis_cache.get(cache_key)
         
-        cached_data = api_cache.get(*cache_key_parts)
         if cached_data:
             log_success("/api/telemetry", cache_hit=True)
             return cached_data
         
+        # 🔥 ÉTAPE 2 : Cache MISS → Calculer avec FastF1
         session = fastf1.get_session(year, gp_round, session_type)
         session.load()
         
@@ -357,11 +359,13 @@ async def get_telemetry_comparison(
             'sectors2': sectors_driver2,
             'driver1': driver1,
             'driver2': driver2,
-            'lapNumber1': int(lap1['LapNumber']) if pd.notna(lap1['LapNumber']) else lap_number1,  # 🔥 Retourner lap_number1
-            'lapNumber2': int(lap2['LapNumber']) if pd.notna(lap2['LapNumber']) else lap_number2,  # 🔥 Retourner lap_number2
+            'lapNumber1': int(lap1['LapNumber']) if pd.notna(lap1['LapNumber']) else lap_number1,
+            'lapNumber2': int(lap2['LapNumber']) if pd.notna(lap2['LapNumber']) else lap_number2,
         }
         
-        api_cache.set(result, *cache_key_parts)
+        # 🔥 ÉTAPE 3 : Sauvegarder dans Redis avec TTL 1h
+        redis_cache.set(cache_key, result, ttl=3600)
+        
         log_success("/api/telemetry", cache_hit=False)
         return result
         
@@ -384,6 +388,7 @@ async def get_session_laps(
     """
     Retourne TOUS les lap times d'un pilote pour une session donnée
     Format GP Tempo compatible avec HasTelemetry flag
+    🔥 AVEC REDIS CACHE
     """
     try:
         log_request("/api/session-laps", {
@@ -393,13 +398,15 @@ async def get_session_laps(
             "driver": driver
         })
         
-        # ✅ Cache
-        cache_key_parts = ['session_laps', year, gp_round, session_type, driver]
-        cached_data = api_cache.get(*cache_key_parts)
+        # 🔥 ÉTAPE 1 : Vérifier Redis cache
+        cache_key = redis_cache.get_cache_key_laps(year, gp_round, session_type, driver)
+        cached_data = redis_cache.get(cache_key)
+        
         if cached_data:
             log_success("/api/session-laps", cache_hit=True)
             return cached_data
         
+        # 🔥 ÉTAPE 2 : Cache MISS → Calculer avec FastF1
         # Charger la session
         session = fastf1.get_session(year, gp_round, session_type)
         session.load()
@@ -494,7 +501,9 @@ async def get_session_laps(
             'laps': laps_data  # 🔥 Format GP Tempo
         }
         
-        api_cache.set(result, *cache_key_parts)
+        # 🔥 ÉTAPE 3 : Sauvegarder dans Redis avec TTL 1h
+        redis_cache.set(cache_key, result, ttl=3600)
+        
         log_success("/api/session-laps", cache_hit=False)
         return result
         
