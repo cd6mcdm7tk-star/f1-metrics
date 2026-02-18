@@ -64,15 +64,24 @@ async def health():
 
 
 
+# 🔥 ENDPOINT GRANDS-PRIX AVEC REDIS
+
 @app.get("/api/grands-prix/{year}")
 async def get_grands_prix(year: int):
     try:
+        # 🔥 ÉTAPE 1 : Vérifier Redis cache
+        cache_key = f"grands_prix:{year}"
+        cached_data = redis_cache.get(cache_key)
+        
+        if cached_data:
+            return cached_data
+        
+        # 🔥 ÉTAPE 2 : Cache MISS → Calculer
         schedule = fastf1.get_event_schedule(year)
         grands_prix = []
         
         for idx, event in schedule.iterrows():
             event_type = event.get('EventFormat', '')
-            
             # Filtrer les événements de test
             if event_type == 'testing':
                 continue
@@ -81,18 +90,25 @@ async def get_grands_prix(year: int):
                 "round": int(event['RoundNumber']),
                 "country": event['Country'],
                 "location": event['Location'],
-                "name": event['Location'],  # 🔥 AJOUTER CETTE LIGNE
+                "name": event['Location'],
                 "official_name": event['OfficialEventName'],
                 "date": event['EventDate'].strftime('%Y-%m-%d')
             }
             grands_prix.append(gp_info)
         
-        return {"grands_prix": grands_prix}
+        result = {"grands_prix": grands_prix}
+        
+        # 🔥 ÉTAPE 3 : Sauvegarder dans Redis (TTL 24h - calendrier ne change jamais)
+        redis_cache.set(cache_key, result, ttl=86400)
+        
+        return result
         
     except Exception as e:
         print(f"Error fetching GPs: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# 🔥 ENDPOINT DRIVERS AVEC REDIS
 
 @app.get("/api/drivers/{year}/{gp_round}/{session_type}")
 async def get_drivers(year: int, gp_round: int, session_type: str):
@@ -100,12 +116,15 @@ async def get_drivers(year: int, gp_round: int, session_type: str):
         # Log de la requête
         log_request("/api/drivers", {"year": year, "gp_round": gp_round, "session_type": session_type})
         
-        # Vérifier le cache d'abord
-        cached_data = api_cache.get('drivers', year, gp_round, session_type)  # ✅ CORRIGÉ
+        # 🔥 ÉTAPE 1 : Vérifier Redis cache
+        cache_key = f"drivers:{year}:{gp_round}:{session_type}"
+        cached_data = redis_cache.get(cache_key)
+        
         if cached_data:
             log_success("/api/drivers", cache_hit=True)
             return cached_data
         
+        # 🔥 ÉTAPE 2 : Cache MISS → Calculer
         session = fastf1.get_session(year, gp_round, session_type)
         session.load()
         
@@ -119,8 +138,9 @@ async def get_drivers(year: int, gp_round: int, session_type: str):
                 'fullName': str(driver_info['FullName']) if 'FullName' in driver_info else str(driver_info['Abbreviation'])
             })
         
-        # Sauvegarder dans le cache
-        api_cache.set(drivers, 'drivers', year, gp_round, session_type)  # ✅ CORRIGÉ
+        # 🔥 ÉTAPE 3 : Sauvegarder dans Redis (TTL 1h)
+        redis_cache.set(cache_key, drivers, ttl=3600)
+        
         log_success("/api/drivers", cache_hit=False)
         return drivers
         
