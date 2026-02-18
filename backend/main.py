@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware 
-from app.services.redis_cache import redis_cache
+from app.utils.services.redis_cache import redis_cache
 import fastf1
 import pandas as pd
 import requests
