@@ -43,6 +43,7 @@ export default {
       animation: {
         'glow-pulse': 'glow-pulse 2s ease-in-out infinite',
         'shimmer': 'shimmer 2s infinite',
+        'fadeIn': 'fadeIn 0.3s ease-in-out',
       },
       keyframes: {
         'glow-pulse': {
@@ -56,6 +57,10 @@ export default {
         'shimmer': {
           '0%': { transform: 'translateX(-100%)' },
           '100%': { transform: 'translateX(100%)' },
+        },
+        'fadeIn': {
+          '0%': { opacity: '0', transform: 'translateY(10px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
         },
       },
     },

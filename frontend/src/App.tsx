@@ -1,16 +1,16 @@
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { Home, Activity, Trophy, Map, Target, Film, Menu, X, Cpu, LogIn, Zap, Sparkles } from 'lucide-react';
+import { Home, Activity, Trophy, Map, Target, Radio, Menu, X, Cpu, LogIn, Zap, BarChart3 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import LanguageSelector from './components/LanguageSelector';
 import { useState } from 'react';
 import HomePage from './pages/HomePage';
 import TelemetryPage from './pages/TelemetryPage';
-import AnimationPage from './pages/AnimationPage';
+import LiveTimingPage from './pages/LiveTimingPage';
 import PitWallPage from './pages/PitWallPage';
 import ChampionshipPage from './pages/ChampionshipPage';
 import TrackDatabasePage from './pages/TrackDatabasePage';
 import F1AnatomyPage from './pages/F1AnatomyPage';
-import StudioProPage from './pages/StudioProPage';
+import StatisticsPage from './pages/StatisticsPage';
 import { useToast } from './hooks/useToast';
 import Toast from './components/Toast';
 import DonkeyLogo from './components/DonkeyLogo';
@@ -19,9 +19,10 @@ import { useKonamiCode } from './hooks/useKonamiCode';
 import Footer from './components/Footer';
 import AuthModal from './components/AuthModal';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { useRateLimit } from './hooks/useRateLimit';
+import { useRateLimit } from './hooks/useSubscription';
 import SuccessPage from './pages/SuccessPage';
 import CancelPage from './pages/CancelPage';
+import GoogleAnalytics from './components/GoogleAnalytics'; // 🔥 NOUVEAU
 
 function Navigation() {
   const location = useLocation();
@@ -36,8 +37,9 @@ function Navigation() {
   const navLinks = [
     { path: '/', label: t('nav.home'), icon: Home },
     { path: '/telemetry', label: t('nav.telemetry'), icon: Activity },
-    { path: '/animation', label: t('nav.animation'), icon: Film },
+    { path: '/live-timing', label: 'F1 Live', icon: Radio },
     { path: '/championship', label: t('nav.championship'), icon: Trophy },
+    { path: '/statistics', label: 'Statistics', icon: BarChart3 },
     { path: '/track-database', label: t('nav.trackDatabase'), icon: Map },
     { path: '/pit-wall', label: t('nav.pitWall'), icon: Target },
     { path: '/f1-anatomy', label: t('nav.anatomy'), icon: Cpu },
@@ -61,7 +63,7 @@ function Navigation() {
               <div className="hidden sm:block">
                 <span className="text-xl sm:text-2xl font-rajdhani font-bold tracking-wider">
                   <span className="text-white">METRIK</span>
-                  <span className="text-metrik-turquoise ml-1">F1</span>
+                  <span className="text-metrik-turquoise ml-1">DELTA</span>
                 </span>
               </div>
             </Link>
@@ -90,28 +92,6 @@ function Navigation() {
                   </Link>
                 );
               })}
-
-              {/* Studio Pro Link - NOUVEAU */}
-              <Link
-                to="/studio-pro"
-                className={`
-                  flex items-center gap-2 px-4 py-2 rounded-lg font-rajdhani font-semibold
-                  transition-all duration-200 relative group
-                  ${isActive('/studio-pro')
-                    ? 'text-metrik-turquoise bg-metrik-turquoise/10'
-                    : 'text-metrik-silver hover:text-white hover:bg-metrik-surface'
-                  }
-                `}
-              >
-                <Sparkles size={18} />
-                <span>Studio Pro</span>
-                <span className="ml-1 px-1.5 py-0.5 bg-metrik-turquoise text-metrik-black rounded text-[10px] font-black">
-                  NEW
-                </span>
-                {isActive('/studio-pro') && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-metrik-turquoise" />
-                )}
-              </Link>
 
               <div className="ml-4 flex items-center gap-3">
                 <LanguageSelector />
@@ -178,26 +158,6 @@ function Navigation() {
               );
             })}
 
-            {/* Studio Pro Link Mobile - NOUVEAU */}
-            <Link
-              to="/studio-pro"
-              onClick={closeMobileMenu}
-              className={`
-                flex items-center gap-3 px-6 py-4 rounded-xl font-rajdhani font-bold text-lg
-                transition-all duration-200 w-full max-w-xs
-                ${isActive('/studio-pro')
-                  ? 'text-metrik-turquoise bg-metrik-turquoise/10 border border-metrik-turquoise/30'
-                  : 'text-metrik-silver hover:text-white hover:bg-metrik-surface'
-                }
-              `}
-            >
-              <Sparkles size={24} />
-              <span>Studio Pro</span>
-              <span className="ml-2 px-2 py-0.5 bg-metrik-turquoise text-metrik-black rounded text-xs font-black">
-                NEW
-              </span>
-            </Link>
-
             <div className="flex justify-center w-full max-w-xs mb-2">
               <LanguageSelector />
             </div>
@@ -254,18 +214,21 @@ function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
+        {/* 🔥 GOOGLE ANALYTICS - Installé ici, tracke toute l'app ! */}
+        <GoogleAnalytics />
+        
         <div className="min-h-screen bg-metrik-black text-metrik-text flex flex-col">
           <Navigation />
           <main className="flex-1">
             <Routes>
               <Route path="/" element={<HomePage />} />
               <Route path="/telemetry" element={<TelemetryPage />} />
-              <Route path="/animation" element={<AnimationPage />} />
+              <Route path="/live-timing" element={<LiveTimingPage />} />
               <Route path="/pit-wall" element={<PitWallPage />} />
               <Route path="/championship" element={<ChampionshipPage />} />
               <Route path="/track-database" element={<TrackDatabasePage />} />
               <Route path="/f1-anatomy" element={<F1AnatomyPage />} />
-              <Route path="/studio-pro" element={<StudioProPage />} /> {/* NOUVEAU */}
+              <Route path="/statistics" element={<StatisticsPage />} />
               <Route path="/success" element={<SuccessPage />} />
               <Route path="/cancel" element={<CancelPage />} />
             </Routes>

@@ -1,7 +1,7 @@
 import React, { useState, useRef, Suspense, useMemo } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, Environment, Html, Line, MeshTransmissionMaterial } from '@react-three/drei';
-import { ArrowLeft, Loader2, Eye, EyeOff, Play, Pause, RotateCcw, Maximize2, Minimize2, Wind, Tag, Zap } from 'lucide-react';
+import { ArrowLeft, Loader2, Play, Pause, RotateCcw, Maximize2, Minimize2, Wind, Tag, Zap, MousePointer2, ZoomIn, Target, Waves, ArrowDown, Battery as BatteryIcon, Disc, Settings } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import * as THREE from 'three';
 import { EffectComposer, Bloom } from '@react-three/postprocessing';
@@ -1316,7 +1316,7 @@ function F1ProceduralCar({
       <Steering exploded={explodedAmount} />
       <Battery exploded={explodedAmount} />
       <Diffuser exploded={explodedAmount} />
-     <Bargeboard exploded={explodedAmount} />
+      <Bargeboard exploded={explodedAmount} />
       <Exhaust exploded={explodedAmount} />
       <TWing exploded={explodedAmount} />
       <Mirrors exploded={explodedAmount} />
@@ -1436,7 +1436,7 @@ function F1ProceduralCar({
           <Html center distanceFactor={5}>
             <button
               onClick={() => onPartClick(part)}
-              className="bg-black/80 text-white px-3 py-1 rounded border border-turquoise-500/50 hover:bg-turquoise-500/20 transition-colors text-xs font-semibold whitespace-nowrap"
+              className="bg-metrik-black/80 backdrop-blur-md text-metrik-text px-3 py-1 rounded-lg border border-metrik-turquoise/50 hover:bg-metrik-turquoise/20 transition-colors text-xs font-bold font-rajdhani whitespace-nowrap"
               style={{ pointerEvents: 'auto' }}
             >
               {part.name}
@@ -1454,7 +1454,6 @@ export default function F1AnatomyPage() {
   const [animateRotation, setAnimateRotation] = useState(true);
   const [animateWheels, setAnimateWheels] = useState(false);
   const [showLabels, setShowLabels] = useState(false);
-  const [showEnvironment, setShowEnvironment] = useState(true);
   const [drsOpen, setDrsOpen] = useState(false);
   const [explodedView, setExplodedView] = useState(false);
   const [windTunnel, setWindTunnel] = useState(false);
@@ -1462,112 +1461,101 @@ export default function F1AnatomyPage() {
   return (
     <div className="min-h-screen bg-metrik-black text-white">
       <div className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-4">
+        <div className="flex items-center justify-between mb-4 md:mb-8">
+          <div className="flex items-center gap-2 md:gap-4">
             <button
               onClick={() => navigate('/')}
               className="p-2 hover:bg-white/10 rounded transition-colors"
             >
-              <ArrowLeft className="w-6 h-6" />
+              <ArrowLeft className="w-5 h-5 md:w-6 md:h-6" />
             </button>
             <div>
-              <h1 className="text-4xl font-bold text-turquoise-500">F1 ANATOMY</h1>
-              <p className="text-gray-400 mt-1">Voiture 3D Interactive • 12 Composants • CFD Simulation</p>
+              <h1 className="text-2xl md:text-4xl font-black font-rajdhani text-metrik-turquoise">F1 ANATOMY</h1>
+              <p className="text-xs md:text-base text-metrik-text-secondary mt-1 hidden sm:block">Voiture 3D Interactive • 12 Composants • CFD Simulation</p>
             </div>
           </div>
         </div>
 
-        <div className="glass-cockpit p-6 mb-4">
-          <div className="flex flex-wrap gap-3">
+        <div className="backdrop-blur-xl bg-metrik-card/80 border border-metrik-turquoise/30 rounded-lg p-3 md:p-6 mb-4">
+          <div className="flex flex-nowrap md:flex-wrap gap-2 md:gap-3 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <button
               onClick={() => setAnimateRotation(!animateRotation)}
-              className={`px-4 py-2 rounded font-semibold flex items-center gap-2 ${
+              className={`px-2.5 md:px-4 py-1.5 md:py-2 rounded text-sm md:text-base font-bold font-rajdhani flex items-center gap-1 md:gap-2 transition-all whitespace-nowrap flex-shrink-0 ${
                 animateRotation 
-                  ? 'bg-turquoise-500 text-black shadow-lg shadow-turquoise-500/50 border border-turquoise-400' 
-                  : 'bg-white/5 text-white hover:bg-white/10 border border-white/20 hover:border-turquoise-500/50'
-              } transition-all`}
+                  ? 'bg-metrik-turquoise text-metrik-black shadow-glow-turquoise-lg border border-metrik-turquoise' 
+                  : 'bg-white/5 text-metrik-text hover:bg-white/10 border border-white/20 hover:border-metrik-turquoise/50'
+              }`}
             >
-              {animateRotation ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-              Rotation
+              {animateRotation ? <Pause className="w-3.5 h-3.5 md:w-4 md:h-4" /> : <Play className="w-3.5 h-3.5 md:w-4 md:h-4" />}
+              <span className="hidden sm:inline">Rotation</span>
             </button>
 
             <button
               onClick={() => setAnimateWheels(!animateWheels)}
-              className={`px-4 py-2 rounded font-semibold flex items-center gap-2 ${
+              className={`px-2.5 md:px-4 py-1.5 md:py-2 rounded text-sm md:text-base font-bold font-rajdhani flex items-center gap-1 md:gap-2 transition-all whitespace-nowrap flex-shrink-0 ${
                 animateWheels 
-                  ? 'bg-turquoise-500 text-black shadow-lg shadow-turquoise-500/50 border border-turquoise-400' 
-                  : 'bg-white/5 text-white hover:bg-white/10 border border-white/20 hover:border-turquoise-500/50'
-              } transition-all`}
+                  ? 'bg-metrik-turquoise text-metrik-black shadow-glow-turquoise-lg border border-metrik-turquoise' 
+                  : 'bg-white/5 text-metrik-text hover:bg-white/10 border border-white/20 hover:border-metrik-turquoise/50'
+              }`}
             >
-              <RotateCcw className="w-4 h-4" />
-              Roues
+              <RotateCcw className="w-3.5 h-3.5 md:w-4 md:h-4" />
+              <span className="hidden sm:inline">Roues</span>
             </button>
 
             <button
               onClick={() => setShowLabels(!showLabels)}
-              className={`px-4 py-2 rounded font-semibold flex items-center gap-2 ${
+              className={`px-2.5 md:px-4 py-1.5 md:py-2 rounded text-sm md:text-base font-bold font-rajdhani flex items-center gap-1 md:gap-2 transition-all whitespace-nowrap flex-shrink-0 ${
                 showLabels 
-                  ? 'bg-turquoise-500 text-black shadow-lg shadow-turquoise-500/50 border border-turquoise-400' 
-                  : 'bg-white/5 text-white hover:bg-white/10 border border-white/20 hover:border-turquoise-500/50'
-              } transition-all`}
+                  ? 'bg-metrik-turquoise text-metrik-black shadow-glow-turquoise-lg border border-metrik-turquoise' 
+                  : 'bg-white/5 text-metrik-text hover:bg-white/10 border border-white/20 hover:border-metrik-turquoise/50'
+              }`}
             >
-              <Tag className="w-4 h-4" />
-              Labels
-            </button>
-
-            <button
-              onClick={() => setShowEnvironment(!showEnvironment)}
-              className={`px-4 py-2 rounded font-semibold flex items-center gap-2 ${
-                showEnvironment 
-                  ? 'bg-turquoise-500 text-black shadow-lg shadow-turquoise-500/50 border border-turquoise-400' 
-                  : 'bg-white/5 text-white hover:bg-white/10 border border-white/20 hover:border-turquoise-500/50'
-              } transition-all`}
-            >
-              {showEnvironment ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-              Env
+              <Tag className="w-3.5 h-3.5 md:w-4 md:h-4" />
+              <span className="hidden sm:inline">Labels</span>
             </button>
 
             <button
               onClick={() => setDrsOpen(!drsOpen)}
-              className={`px-4 py-2 rounded font-semibold flex items-center gap-2 ${
+              className={`px-2.5 md:px-4 py-1.5 md:py-2 rounded text-sm md:text-base font-bold font-rajdhani flex items-center gap-1 md:gap-2 transition-all whitespace-nowrap flex-shrink-0 ${
                 drsOpen 
-                  ? 'bg-red-500 text-white shadow-lg shadow-red-500/50 border border-red-400' 
-                  : 'bg-white/5 text-white hover:bg-white/10 border border-white/20 hover:border-red-500/50'
-              } transition-all`}
+                  ? 'bg-metrik-error text-white shadow-lg shadow-metrik-error/50 border border-metrik-error' 
+                  : 'bg-white/5 text-metrik-text hover:bg-white/10 border border-white/20 hover:border-metrik-error/50'
+              }`}
             >
-              <Zap className="w-4 h-4" />
+              <Zap className="w-3.5 h-3.5 md:w-4 md:h-4" />
               DRS
             </button>
 
             <button
               onClick={() => setExplodedView(!explodedView)}
-              className={`px-4 py-2 rounded font-semibold flex items-center gap-2 ${
+              className={`px-2.5 md:px-4 py-1.5 md:py-2 rounded text-sm md:text-base font-bold font-rajdhani flex items-center gap-1 md:gap-2 transition-all whitespace-nowrap flex-shrink-0 ${
                 explodedView 
-                  ? 'bg-turquoise-500 text-black shadow-lg shadow-turquoise-500/50 border border-turquoise-400' 
-                  : 'bg-white/5 text-white hover:bg-white/10 border border-white/20 hover:border-turquoise-500/50'
-              } transition-all`}
+                  ? 'bg-metrik-turquoise text-metrik-black shadow-glow-turquoise-lg border border-metrik-turquoise' 
+                  : 'bg-white/5 text-metrik-text hover:bg-white/10 border border-white/20 hover:border-metrik-turquoise/50'
+              }`}
             >
-              {explodedView ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-              Vue éclatée
+              {explodedView ? <Minimize2 className="w-3.5 h-3.5 md:w-4 md:h-4" /> : <Maximize2 className="w-3.5 h-3.5 md:w-4 md:h-4" />}
+              <span className="hidden lg:inline">Vue éclatée</span>
+              <span className="hidden sm:inline lg:hidden">Vue</span>
             </button>
 
             <button
               onClick={() => setWindTunnel(!windTunnel)}
-              className={`px-4 py-2 rounded font-semibold flex items-center gap-2 ${
+              className={`px-2.5 md:px-4 py-1.5 md:py-2 rounded text-sm md:text-base font-bold font-rajdhani flex items-center gap-1 md:gap-2 transition-all whitespace-nowrap flex-shrink-0 ${
                 windTunnel 
-                  ? 'bg-turquoise-500 text-black shadow-lg shadow-turquoise-500/50 border border-turquoise-400' 
-                  : 'bg-white/5 text-white hover:bg-white/10 border border-white/20 hover:border-turquoise-500/50'
-              } transition-all`}
+                  ? 'bg-metrik-turquoise text-metrik-black shadow-glow-turquoise-lg border border-metrik-turquoise' 
+                  : 'bg-white/5 text-metrik-text hover:bg-white/10 border border-white/20 hover:border-metrik-turquoise/50'
+              }`}
             >
-              <Wind className="w-4 h-4" />
+              <Wind className="w-3.5 h-3.5 md:w-4 md:h-4" />
               CFD
             </button>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
           <div className="lg:col-span-2">
-            <div className="glass-cockpit p-2 h-[600px] relative">
+            <div className="backdrop-blur-xl bg-metrik-card/80 border border-metrik-turquoise/30 rounded-lg p-2 h-[400px] md:h-[600px] relative">
               <Canvas shadows camera={{ position: [6, 3, 6], fov: 50 }}>
                 <Suspense fallback={null}>
                   <OrbitControls 
@@ -1581,46 +1569,44 @@ export default function F1AnatomyPage() {
                   
                   <ambientLight intensity={0.5} />
 
-{/* Main directional lights */}
-<directionalLight 
-  position={[10, 10, 5]} 
-  intensity={2.5}
-  castShadow
-  shadow-mapSize={[2048, 2048]}
-/>
-<directionalLight position={[-10, 5, -5]} intensity={1.2} />
+                  {/* Main directional lights */}
+                  <directionalLight 
+                    position={[10, 10, 5]} 
+                    intensity={2.5}
+                    castShadow
+                    shadow-mapSize={[2048, 2048]}
+                  />
+                  <directionalLight position={[-10, 5, -5]} intensity={1.2} />
 
-{/* Spot from top */}
-<spotLight 
-  position={[0, 15, 0]} 
-  intensity={1.5}
-  angle={0.6} 
-  penumbra={1} 
-  castShadow 
-/>
+                  {/* Spot from top */}
+                  <spotLight 
+                    position={[0, 15, 0]} 
+                    intensity={1.5}
+                    angle={0.6} 
+                    penumbra={1} 
+                    castShadow 
+                  />
 
-{/* Accent lights turquoise */}
-<pointLight position={[0, 3, 3]} intensity={0.8} color="#00E5CC" />
-<pointLight position={[0, 3, -3]} intensity={0.8} color="#00E5CC" />
+                  {/* Accent lights turquoise */}
+                  <pointLight position={[0, 3, 3]} intensity={0.8} color="#00E5CC" />
+                  <pointLight position={[0, 3, -3]} intensity={0.8} color="#00E5CC" />
 
-{/* Hemisphere light pour simuler un environnement */}
-<hemisphereLight 
-  args={["#87CEEB", "#1A1A1A", 0.8]} 
-  position={[0, 50, 0]} 
-/>
+                  {/* Hemisphere light pour simuler un environnement */}
+                  <hemisphereLight 
+                    args={["#87CEEB", "#1A1A1A", 0.8]} 
+                    position={[0, 50, 0]} 
+                  />
 
-{/* Rim lights pour les contours */}
-<pointLight position={[5, 2, 0]} intensity={0.6} color="#FFFFFF" />
-<pointLight position={[-5, 2, 0]} intensity={0.6} color="#FFFFFF" />
+                  {/* Rim lights pour les contours */}
+                  <pointLight position={[5, 2, 0]} intensity={0.6} color="#FFFFFF" />
+                  <pointLight position={[-5, 2, 0]} intensity={0.6} color="#FFFFFF" />
 
-{/* Fill light devant */}
-<directionalLight 
-  position={[0, 5, 10]} 
-  intensity={1} 
-  color="#FFFFFF" 
-/>
-                  
-                
+                  {/* Fill light devant */}
+                  <directionalLight 
+                    position={[0, 5, 10]} 
+                    intensity={1} 
+                    color="#FFFFFF" 
+                  />
                   
                   <F1ProceduralCar 
                     animateRotation={animateRotation}
@@ -1648,111 +1634,134 @@ export default function F1AnatomyPage() {
                 </Suspense>
               </Canvas>
 
-              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/80 px-4 py-2 rounded border border-turquoise-500/30">
-                <p className="text-sm text-gray-400">
-                  🖱️ Rotation • 🔍 Zoom • 🎯 Hotspots • 🌊 CFD • ⚡ DRS • 💥 Vue éclatée
-                </p>
+              <div className="absolute bottom-2 md:bottom-4 left-1/2 -translate-x-1/2 bg-metrik-black/90 backdrop-blur-md px-2 md:px-4 py-1.5 md:py-2 rounded-lg border border-metrik-turquoise/30">
+                <div className="flex items-center gap-2 md:gap-3 text-xs md:text-sm text-metrik-text-secondary font-inter">
+                  <div className="flex items-center gap-1 md:gap-1.5">
+                    <MousePointer2 className="w-3 h-3 md:w-4 md:h-4" />
+                    <span className="hidden md:inline">Rotation</span>
+                  </div>
+                  <div className="flex items-center gap-1 md:gap-1.5">
+                    <ZoomIn className="w-3 h-3 md:w-4 md:h-4" />
+                    <span className="hidden md:inline">Zoom</span>
+                  </div>
+                  <div className="flex items-center gap-1 md:gap-1.5">
+                    <Target className="w-3 h-3 md:w-4 md:h-4" />
+                    <span className="hidden md:inline">Hotspots</span>
+                  </div>
+                  <div className="flex items-center gap-1 md:gap-1.5">
+                    <Waves className="w-3 h-3 md:w-4 md:h-4" />
+                    <span className="hidden md:inline">CFD</span>
+                  </div>
+                  <div className="flex items-center gap-1 md:gap-1.5">
+                    <Zap className="w-3 h-3 md:w-4 md:h-4" />
+                    <span className="hidden md:inline">DRS</span>
+                  </div>
+                  <div className="flex items-center gap-1 md:gap-1.5">
+                    <Maximize2 className="w-3 h-3 md:w-4 md:h-4" />
+                    <span className="hidden lg:inline">Vue éclatée</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
           <div className="lg:col-span-1">
-            <div className="glass-cockpit p-6 h-[600px] overflow-y-auto">
+            <div className="backdrop-blur-xl bg-metrik-card/80 border border-metrik-turquoise/30 rounded-lg p-4 md:p-6 max-h-[500px] md:h-[600px] overflow-y-auto">
               {selectedPart ? (
                 <div>
-                  <h3 className="text-2xl font-bold text-turquoise-500 mb-4">
+                  <h3 className="text-xl md:text-2xl font-black font-rajdhani text-metrik-turquoise mb-3 md:mb-4">
                     {selectedPart.name}
                   </h3>
                   
-                  <p className="text-gray-300 mb-6">
+                  <p className="text-sm md:text-base text-metrik-text-secondary font-inter mb-4 md:mb-6">
                     {selectedPart.description}
                   </p>
 
-                  <h4 className="text-lg font-semibold text-turquoise-400 mb-3">
+                  <h4 className="text-base md:text-lg font-bold font-rajdhani text-metrik-turquoise mb-2 md:mb-3">
                     Spécifications
                   </h4>
                   
-                  <ul className="space-y-2 mb-6">
+                  <ul className="space-y-2 mb-4 md:mb-6 font-inter">
                     {selectedPart.specs.map((spec, index) => (
                       <li key={index} className="flex items-start gap-2">
-                        <span className="text-turquoise-500 mt-1">•</span>
-                        <span className="text-gray-300">{spec}</span>
+                        <span className="text-metrik-turquoise mt-1">•</span>
+                        <span className="text-xs md:text-sm text-metrik-text-secondary">{spec}</span>
                       </li>
                     ))}
                   </ul>
 
                   <button
                     onClick={() => setSelectedPart(null)}
-                    className="w-full py-2 bg-turquoise-500 hover:bg-turquoise-600 text-black font-semibold rounded transition-colors"
+                    className="w-full py-2 bg-metrik-turquoise hover:bg-metrik-turquoise/80 text-metrik-black font-bold font-rajdhani rounded-lg transition-colors text-sm md:text-base"
                   >
                     Fermer
                   </button>
                 </div>
               ) : (
                 <div>
-                  <h3 className="text-xl font-bold text-turquoise-500 mb-4">
+                  <h3 className="text-lg md:text-xl font-black font-rajdhani text-metrik-turquoise mb-3 md:mb-4">
                     Fonctionnalités
                   </h3>
                   
-                  <div className="space-y-4 mb-6">
-                    <div className="p-3 bg-turquoise-500/10 rounded border border-turquoise-500/30">
-                      <h4 className="text-turquoise-400 font-semibold mb-2 flex items-center gap-2">
+                  <div className="space-y-3 md:space-y-4 mb-4 md:mb-6">
+                    <div className="p-3 bg-metrik-turquoise/10 rounded-lg border border-metrik-turquoise/30">
+                      <h4 className="text-metrik-turquoise font-bold font-rajdhani mb-2 flex items-center gap-2 text-sm md:text-base">
                         <Wind className="w-4 h-4" />
                         Soufflerie CFD
                       </h4>
-                      <p className="text-sm text-gray-300">
+                      <p className="text-xs md:text-sm text-metrik-text-secondary font-inter">
                         Lignes de flux animées montrant l'aérodynamique réelle. Effet aileron, sol, et DRS visible.
                       </p>
                     </div>
 
-                    <div className="p-3 bg-red-500/10 rounded border border-red-500/30">
-                      <h4 className="text-red-400 font-semibold mb-2 flex items-center gap-2">
+                    <div className="p-3 bg-metrik-error/10 rounded-lg border border-metrik-error/30">
+                      <h4 className="text-metrik-error font-bold font-rajdhani mb-2 flex items-center gap-2 text-sm md:text-base">
                         <Zap className="w-4 h-4" />
                         DRS Actif
                       </h4>
-                      <p className="text-sm text-gray-300">
+                      <p className="text-xs md:text-sm text-metrik-text-secondary font-inter">
                         L'aileron s'ouvre progressivement. Impact visible sur le flux d'air (moins de turbulences).
                       </p>
                     </div>
 
-                    <div className="p-3 bg-white/5 rounded border border-white/10">
-                      <h4 className="text-turquoise-400 font-semibold mb-2 flex items-center gap-2">
+                    <div className="p-3 bg-white/5 rounded-lg border border-white/10">
+                      <h4 className="text-metrik-turquoise font-bold font-rajdhani mb-2 flex items-center gap-2 text-sm md:text-base">
                         <Play className="w-4 h-4" />
                         Roues Réalistes
                       </h4>
-                      <p className="text-sm text-gray-300">
+                      <p className="text-xs md:text-sm text-metrik-text-secondary font-inter">
                         Les 4 roues tournent sur place avec jantes détaillées et rayons.
                       </p>
                     </div>
 
-                    <div className="p-3 bg-white/5 rounded border border-white/10">
-                      <h4 className="text-turquoise-400 font-semibold mb-2 flex items-center gap-2">
+                    <div className="p-3 bg-white/5 rounded-lg border border-white/10">
+                      <h4 className="text-metrik-turquoise font-bold font-rajdhani mb-2 flex items-center gap-2 text-sm md:text-base">
                         <Maximize2 className="w-4 h-4" />
                         Vue Éclatée
                       </h4>
-                      <p className="text-sm text-gray-300">
+                      <p className="text-xs md:text-sm text-metrik-text-secondary font-inter">
                         Chaque composant s'éloigne précisément de son axe pour voir l'intérieur.
                       </p>
                     </div>
                   </div>
 
-                  <div className="pt-4 border-t border-gray-700">
-                    <h4 className="text-lg font-semibold text-turquoise-400 mb-3">
+                  <div className="pt-4 border-t border-metrik-dark">
+                    <h4 className="text-base md:text-lg font-bold font-rajdhani text-metrik-turquoise mb-3">
                       Composants
                     </h4>
-                    <div className="space-y-2">
+                    <div className="space-y-2 font-inter">
                       {carParts.map((part) => (
                         <button
                           key={part.id}
                           onClick={() => setSelectedPart(part)}
-                          className="w-full text-left p-3 bg-white/5 hover:bg-white/10 rounded border border-white/10 hover:border-turquoise-500/50 transition-all"
+                          className="w-full text-left p-2.5 md:p-3 bg-white/5 hover:bg-white/10 rounded-lg border border-white/10 hover:border-metrik-turquoise/50 transition-all"
                         >
                           <div className="flex items-center gap-3">
                             <div 
-                              className="w-3 h-3 rounded-full"
+                              className="w-3 h-3 rounded-full flex-shrink-0"
                               style={{ backgroundColor: part.color }}
                             />
-                            <span className="text-gray-200 text-sm">{part.name}</span>
+                            <span className="text-metrik-text text-xs md:text-sm">{part.name}</span>
                           </div>
                         </button>
                       ))}
@@ -1764,63 +1773,79 @@ export default function F1AnatomyPage() {
           </div>
         </div>
 
-        <div className="mt-8 glass-cockpit p-6">
-          <h3 className="text-2xl font-bold text-turquoise-500 mb-6">
-            💨 Aérodynamique CFD & Technologies Expliquées
+        <div className="mt-6 md:mt-8 backdrop-blur-xl bg-metrik-card/80 border border-metrik-turquoise/30 rounded-lg p-4 md:p-6">
+          <h3 className="text-xl md:text-2xl font-black font-rajdhani text-metrik-turquoise mb-4 md:mb-6 flex items-center gap-2">
+            <Wind className="w-5 h-5 md:w-6 md:h-6" />
+            Aérodynamique CFD & Technologies Expliquées
           </h3>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <div className="p-4 bg-white/5 rounded-lg border border-white/10">
-              <h4 className="text-turquoise-400 font-semibold mb-3 flex items-center gap-2">
-                <Wind className="w-5 h-5" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+            <div className="p-3 md:p-4 bg-white/5 rounded-lg border border-white/10">
+              <h4 className="text-metrik-turquoise font-bold font-rajdhani mb-2 md:mb-3 flex items-center gap-2 text-sm md:text-base">
+                <Waves className="w-4 h-4 md:w-5 md:h-5" />
                 Flux Laminaire
               </h4>
-              <p className="text-sm text-gray-400">
+              <p className="text-xs md:text-sm text-metrik-text-secondary font-inter">
                 Les lignes bleues montrent le flux d'air. L'aileron avant divise le flux, 
                 l'air accélère sous le fond plat (effet Venturi), et l'aileron arrière crée de l'appui 
                 tout en générant des turbulences.
               </p>
             </div>
 
-            <div className="p-4 bg-white/5 rounded-lg border border-white/10">
-              <h4 className="text-turquoise-400 font-semibold mb-3">⚡ Impact DRS</h4>
-              <p className="text-sm text-gray-400">
+            <div className="p-3 md:p-4 bg-white/5 rounded-lg border border-white/10">
+              <h4 className="text-metrik-turquoise font-bold font-rajdhani mb-2 md:mb-3 flex items-center gap-2 text-sm md:text-base">
+                <Zap className="w-4 h-4 md:w-5 md:h-5" />
+                Impact DRS
+              </h4>
+              <p className="text-xs md:text-sm text-metrik-text-secondary font-inter">
                 DRS fermé: Grande turbulence arrière créant une haute traînée. 
                 DRS ouvert: Flux lisse, traînée réduite de 20-30%, gain de vitesse de 10-15 km/h 
                 en ligne droite. Utilisable uniquement en course et sous conditions.
               </p>
             </div>
 
-            <div className="p-4 bg-white/5 rounded-lg border border-white/10">
-              <h4 className="text-turquoise-400 font-semibold mb-3">⬇️ Effet de Sol</h4>
-              <p className="text-sm text-gray-400">
+            <div className="p-3 md:p-4 bg-white/5 rounded-lg border border-white/10">
+              <h4 className="text-metrik-turquoise font-bold font-rajdhani mb-2 md:mb-3 flex items-center gap-2 text-sm md:text-base">
+                <ArrowDown className="w-4 h-4 md:w-5 md:h-5" />
+                Effet de Sol
+              </h4>
+              <p className="text-xs md:text-sm text-metrik-text-secondary font-inter">
                 Les lignes de flux descendent sous la voiture et s'accélèrent (Venturi). 
                 Crée 40-45% de l'appui total. Hauteur critique de 5-10mm du sol. 
                 Le règlement 2022 a réintroduit cet effet pour améliorer les courses.
               </p>
             </div>
 
-            <div className="p-4 bg-white/5 rounded-lg border border-white/10">
-              <h4 className="text-turquoise-400 font-semibold mb-3">🔋 Système Hybride</h4>
-              <p className="text-sm text-gray-400">
+            <div className="p-3 md:p-4 bg-white/5 rounded-lg border border-white/10">
+              <h4 className="text-metrik-turquoise font-bold font-rajdhani mb-2 md:mb-3 flex items-center gap-2 text-sm md:text-base">
+                <BatteryIcon className="w-4 h-4 md:w-5 md:h-5" />
+                Système Hybride
+              </h4>
+              <p className="text-xs md:text-sm text-metrik-text-secondary font-inter">
                 Le MGU-K récupère l'énergie au freinage (jusqu'à 2 MJ par tour) et la redéploie 
                 pour 160ch supplémentaires pendant 33 secondes par tour maximum. 
                 Le MGU-H récupère l'énergie du turbo sans limite de temps.
               </p>
             </div>
 
-            <div className="p-4 bg-white/5 rounded-lg border border-white/10">
-              <h4 className="text-turquoise-400 font-semibold mb-3">🛞 Gestion Pneumatiques</h4>
-              <p className="text-sm text-gray-400">
+            <div className="p-3 md:p-4 bg-white/5 rounded-lg border border-white/10">
+              <h4 className="text-metrik-turquoise font-bold font-rajdhani mb-2 md:mb-3 flex items-center gap-2 text-sm md:text-base">
+                <Disc className="w-4 h-4 md:w-5 md:h-5" />
+                Gestion Pneumatiques
+              </h4>
+              <p className="text-xs md:text-sm text-metrik-text-secondary font-inter">
                 5 composés Pirelli (C0-C5). Fenêtre optimale: 100-110°C. Stratégie cruciale 
                 avec gestion thermique, dégradation et graining. Les équipes doivent utiliser 
                 au minimum 2 composés différents en course.
               </p>
             </div>
 
-            <div className="p-4 bg-white/5 rounded-lg border border-white/10">
-              <h4 className="text-turquoise-400 font-semibold mb-3">⚙️ Électronique Embarquée</h4>
-              <p className="text-sm text-gray-400">
+            <div className="p-3 md:p-4 bg-white/5 rounded-lg border border-white/10">
+              <h4 className="text-metrik-turquoise font-bold font-rajdhani mb-2 md:mb-3 flex items-center gap-2 text-sm md:text-base">
+                <Settings className="w-4 h-4 md:w-5 md:h-5" />
+                Électronique Embarquée
+              </h4>
+              <p className="text-xs md:text-sm text-metrik-text-secondary font-inter">
                 Plus de 300 capteurs sur la voiture. Transmission de données en temps réel 
                 vers les stands. Analyse de la température des freins, pression des pneus, 
                 usure, consommation carburant, et paramètres moteur pour optimiser la stratégie.
@@ -1831,4 +1856,4 @@ export default function F1AnatomyPage() {
       </div>
     </div>
   );
-}    
+}

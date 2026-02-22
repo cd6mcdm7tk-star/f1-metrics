@@ -1,4 +1,4 @@
-import { useRateLimit } from '../hooks/useRateLimit';
+import { useRateLimit } from '../hooks/useSubscription';
 import { X } from 'lucide-react';
 import { useState } from 'react';
 
