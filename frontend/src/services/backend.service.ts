@@ -8,7 +8,7 @@ import type { DriverStanding, ConstructorStanding, Circuit } from '../types/cham
 // Utilise l'URL Railway EU en production, localhost en dev
 const API_BASE_URL = import.meta.env.PROD 
   ? 'https://metrikdelta-backend-eu-production.up.railway.app/api'
-  : 'https://metrikdelta-backend-usa-production.up.railway.app/api';
+  : 'http://localhost:8000/api'; 
 
 class BackendService {
   async getSchedule(year: number) {
@@ -29,16 +29,32 @@ class BackendService {
     return response.json();
   }
 
+  // 🔥 MODIFIÉ - Ajout des paramètres lapNumber1 et lapNumber2 optionnels
   async getTelemetryComparison(
     year: number,
     gpRound: number,
     sessionType: string,
     driver1: string,
-    driver2: string
+    driver2: string,
+    lapNumber1?: number,  // ✅ Lap pour driver1
+    lapNumber2?: number   // ✅ Lap pour driver2
   ): Promise<TelemetryData> {
-    const response = await fetch(
-      `${API_BASE_URL}/telemetry/${year}/${gpRound}/${sessionType}/${driver1}/${driver2}`
-    );
+    // Construire l'URL avec query params si fournis
+    let url = `${API_BASE_URL}/telemetry/${year}/${gpRound}/${sessionType}/${driver1}/${driver2}`;
+    
+    const params = new URLSearchParams();
+    if (lapNumber1 !== undefined) {
+      params.append('lap_number1', lapNumber1.toString());
+    }
+    if (lapNumber2 !== undefined) {
+      params.append('lap_number2', lapNumber2.toString());
+    }
+    
+    if (params.toString()) {
+      url += `?${params.toString()}`;
+    }
+    
+    const response = await fetch(url);
     if (!response.ok) throw new Error('Failed to fetch telemetry');
     return response.json();
   }
@@ -100,18 +116,18 @@ class BackendService {
     return response.json();
   }
 
-  async getRacePace(year: number, gpRound: number, driver: string, sessionType: string = 'R'): Promise<RacePaceData> {  // 🔥 AJOUTER sessionType
-  const response = await fetch(`${API_BASE_URL}/race-pace/${year}/${gpRound}/${sessionType}/${driver}`);  // 🔥 AJOUTER dans URL
-  if (!response.ok) throw new Error('Failed to fetch race pace');
-  return response.json();
-}
+  async getRacePace(year: number, gpRound: number, driver: string, sessionType: string = 'R'): Promise<RacePaceData> {
+    const response = await fetch(`${API_BASE_URL}/race-pace/${year}/${gpRound}/${sessionType}/${driver}`);
+    if (!response.ok) throw new Error('Failed to fetch race pace');
+    return response.json();
+  }
 
   async getMultiDriverPace(year: number, gpRound: number, drivers: string[], sessionType: string) {
-  const driversParam = drivers.join(',');
-  const response = await fetch(`${API_BASE_URL}/multi-driver-pace/${year}/${gpRound}/${sessionType}?drivers=${driversParam}`);
-  if (!response.ok) throw new Error('Failed to fetch multi-driver pace');
-  return response.json();
-}
+    const driversParam = drivers.join(',');
+    const response = await fetch(`${API_BASE_URL}/multi-driver-pace/${year}/${gpRound}/${sessionType}?drivers=${driversParam}`);
+    if (!response.ok) throw new Error('Failed to fetch multi-driver pace');
+    return response.json();
+  }
 
   async getStintAnalysis(year: number, gpRound: number, driver: string): Promise<StintAnalysisData> {
     const response = await fetch(`${API_BASE_URL}/stint-analysis/${year}/${gpRound}/${driver}`);
@@ -120,10 +136,10 @@ class BackendService {
   }
 
   async getSectorEvolution(year: number, gpRound: number, driver: string): Promise<SectorEvolutionData> {
-  const response = await fetch(`${API_BASE_URL}/sector-evolution/${year}/${gpRound}/${driver}`);
-  if (!response.ok) throw new Error('Failed to fetch sector evolution');
-  return response.json();
-}
+    const response = await fetch(`${API_BASE_URL}/sector-evolution/${year}/${gpRound}/${driver}`);
+    if (!response.ok) throw new Error('Failed to fetch sector evolution');
+    return response.json();
+  }
 
   async getMultiDriverSectors(year: number, gpRound: number, sessionType: string, drivers: string[]) {
     const driversParam = drivers.join(',');
@@ -170,8 +186,18 @@ export const backendService = new BackendService();
 export const getGrandsPrix = (year: number) => backendService.getGrandsPrix(year);
 export const getDrivers = (year: number, gpRound: number, sessionType: string) => 
   backendService.getDrivers(year, gpRound, sessionType);
-export const getTelemetryComparison = (year: number, gpRound: number, sessionType: string, driver1: string, driver2: string) =>
-  backendService.getTelemetryComparison(year, gpRound, sessionType, driver1, driver2);
+
+// 🔥 MODIFIÉ - Ajout des paramètres lapNumber1 et lapNumber2 optionnels
+export const getTelemetryComparison = (
+  year: number, 
+  gpRound: number, 
+  sessionType: string, 
+  driver1: string, 
+  driver2: string,
+  lapNumber1?: number,  // ✅ Lap pour driver1
+  lapNumber2?: number   // ✅ Lap pour driver2
+) => backendService.getTelemetryComparison(year, gpRound, sessionType, driver1, driver2, lapNumber1, lapNumber2);
+
 export const getAnimationEnhanced = (year: number, gpRound: number, sessionType: string, driver1: string, driver2: string) =>
   backendService.getAnimationEnhanced(year, gpRound, sessionType, driver1, driver2);
 export const getAnimationRaceFull = (year: number, gpRound: number, driver1: string, driver2: string) =>

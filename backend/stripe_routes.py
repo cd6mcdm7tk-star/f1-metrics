@@ -11,7 +11,8 @@ router = APIRouter()
 
 # Configuration Stripe
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
-STRIPE_PRICE_ID = os.getenv("STRIPE_PRICE_ID")
+STRIPE_PRICE_ID_MONTHLY = os.getenv("STRIPE_PRICE_ID_MONTHLY")
+STRIPE_PRICE_ID_ANNUAL = os.getenv("STRIPE_PRICE_ID_ANNUAL")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
 
 # Configuration Supabase
@@ -24,29 +25,47 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 async def create_checkout_session(request: Request):
     """
     Créer une session Stripe Checkout pour un utilisateur
+    Supporte Monthly (1,99€/mois) et Annual (14,99€/an)
     """
     try:
         body = await request.json()
         user_id = body.get("user_id")
+        plan_type = body.get("plan_type", "annual")  # 'monthly' ou 'annual'
 
         if not user_id:
             raise HTTPException(status_code=400, detail="user_id required")
 
+        # Sélectionner le bon PRICE_ID selon le plan choisi
+        if plan_type == "monthly":
+            price_id = STRIPE_PRICE_ID_MONTHLY
+            plan_name = "metrik_pro_monthly"
+        elif plan_type == "annual":
+            price_id = STRIPE_PRICE_ID_ANNUAL
+            plan_name = "metrik_pro_annual"
+        else:
+            raise HTTPException(status_code=400, detail="Invalid plan_type. Use 'monthly' or 'annual'")
+
+        if not price_id:
+            raise HTTPException(status_code=500, detail=f"STRIPE_PRICE_ID_{plan_type.upper()} not configured")
+
         print(f"📦 Creating checkout session for user: {user_id}")
+        print(f"   Plan: {plan_type} ({plan_name})")
+        print(f"   Price ID: {price_id}")
 
         # Créer la session Stripe Checkout
         checkout_session = stripe.checkout.Session.create(
             payment_method_types=['card'],
             line_items=[{
-                'price': STRIPE_PRICE_ID,
+                'price': price_id,
                 'quantity': 1,
             }],
             mode='subscription',
             success_url='https://metrikdelta.com/success?session_id={CHECKOUT_SESSION_ID}',
             cancel_url='https://metrikdelta.com/cancel',
-            client_reference_id=user_id,  # ← CRUCIAL : permet de lier le paiement à l'utilisateur
+            client_reference_id=user_id,
             metadata={
-                'user_id': user_id
+                'user_id': user_id,
+                'plan_type': plan_type
             }
         )
 
@@ -90,24 +109,35 @@ async def stripe_webhook(request: Request):
         user_id = session.get('client_reference_id')
         customer_id = session.get('customer')
         subscription_id = session.get('subscription')
+        plan_type = session.get('metadata', {}).get('plan_type', 'unknown')
 
         print(f"💳 Payment completed:")
         print(f"   User ID: {user_id}")
         print(f"   Customer: {customer_id}")
         print(f"   Subscription: {subscription_id}")
+        print(f"   Plan Type: {plan_type}")
 
         if user_id:
             try:
+                # Déterminer le plan name
+                if plan_type == "monthly":
+                    plan_name = "metrik_pro_monthly"
+                elif plan_type == "annual":
+                    plan_name = "metrik_pro_annual"
+                else:
+                    plan_name = "metrik_pro"
+
                 # Créer ou mettre à jour l'abonnement dans Supabase
                 result = supabase.table('subscriptions').upsert({
                     'user_id': user_id,
                     'stripe_customer_id': customer_id,
                     'stripe_subscription_id': subscription_id,
                     'status': 'active',
-                    'plan': 'metrik_plus'
+                    'plan': plan_name
                 }).execute()
 
                 print(f"✅ Subscription activated in Supabase for user {user_id}")
+                print(f"   Plan: {plan_name}")
                 
             except Exception as e:
                 print(f"❌ Error updating Supabase: {e}")
@@ -157,24 +187,63 @@ async def stripe_webhook(request: Request):
 @router.get("/check-subscription/{user_id}")
 async def check_subscription(user_id: str):
     """
-    Endpoint de debug : vérifier si un utilisateur a un abonnement actif
-    À retirer en production plus tard
+    Vérifier si un utilisateur a un abonnement PRO actif
     """
     try:
         result = supabase.table('subscriptions').select('*').eq('user_id', user_id).execute()
         
-        if result.data:
+        if result.data and len(result.data) > 0:
+            subscription = result.data[0]
+            is_active = subscription.get('status') == 'active'
+            
             return {
-                "has_subscription": True,
-                "subscription": result.data[0]
+                "has_subscription": is_active,
+                "subscription": subscription,
+                "plan": subscription.get('plan'),
+                "status": subscription.get('status')
             }
         else:
             return {
                 "has_subscription": False,
-                "subscription": None
+                "subscription": None,
+                "plan": None,
+                "status": None
             }
     except Exception as e:
         print(f"❌ Error checking subscription: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/customer-portal/{user_id}")
+async def create_customer_portal_session(user_id: str):
+    """
+    Créer une session Customer Portal pour gérer l'abonnement
+    (annuler, changer de carte, télécharger factures)
+    """
+    try:
+        # Récupérer le customer_id depuis Supabase
+        result = supabase.table('subscriptions').select('stripe_customer_id').eq('user_id', user_id).execute()
+        
+        if not result.data or len(result.data) == 0:
+            raise HTTPException(status_code=404, detail="No subscription found")
+        
+        customer_id = result.data[0].get('stripe_customer_id')
+        
+        if not customer_id:
+            raise HTTPException(status_code=404, detail="No Stripe customer ID found")
+
+        # Créer la session Customer Portal
+        portal_session = stripe.billing_portal.Session.create(
+            customer=customer_id,
+            return_url='https://metrikdelta.com/account',
+        )
+
+        return JSONResponse(content={
+            "portal_url": portal_session.url
+        })
+
+    except Exception as e:
+        print(f"❌ Error creating customer portal session: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -189,6 +258,7 @@ async def manual_activate(request: Request):
         user_id = body.get("user_id")
         stripe_customer_id = body.get("stripe_customer_id")
         stripe_subscription_id = body.get("stripe_subscription_id")
+        plan = body.get("plan", "metrik_pro_annual")
 
         if not all([user_id, stripe_customer_id, stripe_subscription_id]):
             raise HTTPException(status_code=400, detail="Missing required fields")
@@ -198,7 +268,7 @@ async def manual_activate(request: Request):
             'stripe_customer_id': stripe_customer_id,
             'stripe_subscription_id': stripe_subscription_id,
             'status': 'active',
-            'plan': 'metrik_plus'
+            'plan': plan
         }).execute()
 
         print(f"✅ Manual activation successful for user {user_id}")
