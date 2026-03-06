@@ -1,17 +1,34 @@
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.gzip import GZipMiddleware 
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import JSONResponse
 from app.utils.services.redis_cache import redis_cache
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+import asyncio
+import logging
+import math
+import traceback
+
+logger = logging.getLogger(__name__)
 import fastf1
 import pandas as pd
+import numpy as np
+from scipy.interpolate import interp1d
 import requests
 from app.utils.cache import cache as api_cache
 from app.utils.error_handler import handle_fastf1_error, log_request, log_success, log_error
 from stripe_routes import router as stripe_router
 from routes.livetiming import router as livetiming_router
 
+# Rate limiter
+limiter = Limiter(key_func=get_remote_address)
+
 # Créer l'app FastAPI
 app = FastAPI()
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # Configuration CORS - LOCAL + PRODUCTION
@@ -20,7 +37,6 @@ ALLOWED_ORIGINS = [
     "http://localhost:3000",  # Alternative local
     "https://metrikdelta.com",  # Production
     "https://www.metrikdelta.com",  # Production with www
-    "*"  # Temporaire pour debug - À RETIRER EN PROD
 ]
 
 app.add_middleware(
@@ -67,7 +83,8 @@ async def health():
 # 🔥 ENDPOINT GRANDS-PRIX AVEC REDIS
 
 @app.get("/api/grands-prix/{year}")
-async def get_grands_prix(year: int):
+@limiter.limit("30/minute")
+async def get_grands_prix(request: Request, year: int):
     try:
         # 🔥 ÉTAPE 1 : Vérifier Redis cache
         cache_key = f"grands_prix:{year}"
@@ -77,7 +94,7 @@ async def get_grands_prix(year: int):
             return cached_data
         
         # 🔥 ÉTAPE 2 : Cache MISS → Calculer
-        schedule = fastf1.get_event_schedule(year)
+        schedule = await asyncio.to_thread(fastf1.get_event_schedule, year)
         grands_prix = []
         
         for idx, event in schedule.iterrows():
@@ -104,14 +121,15 @@ async def get_grands_prix(year: int):
         return result
         
     except Exception as e:
-        print(f"Error fetching GPs: {str(e)}")
+        logger.error(f"Error fetching GPs: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 # 🔥 ENDPOINT DRIVERS AVEC REDIS
 
 @app.get("/api/drivers/{year}/{gp_round}/{session_type}")
-async def get_drivers(year: int, gp_round: int, session_type: str):
+@limiter.limit("20/minute")
+async def get_drivers(request: Request, year: int, gp_round: int, session_type: str):
     try:
         # Log de la requête
         log_request("/api/drivers", {"year": year, "gp_round": gp_round, "session_type": session_type})
@@ -126,8 +144,8 @@ async def get_drivers(year: int, gp_round: int, session_type: str):
         
         # 🔥 ÉTAPE 2 : Cache MISS → Calculer
         session = fastf1.get_session(year, gp_round, session_type)
-        session.load()
-        
+        await asyncio.to_thread(session.load)
+
         drivers = []
         for driver_code in session.drivers:
             driver_info = session.get_driver(driver_code)
@@ -149,7 +167,9 @@ async def get_drivers(year: int, gp_round: int, session_type: str):
         raise handle_fastf1_error(e, f"Année: {year}, GP: {gp_round}, Session: {session_type}")
 
 @app.get("/api/telemetry/{year}/{gp_round}/{session_type}/{driver1}/{driver2}")
+@limiter.limit("10/minute")
 async def get_telemetry_comparison(
+    request: Request,
     year: int, 
     gp_round: int, 
     session_type: str, 
@@ -183,8 +203,8 @@ async def get_telemetry_comparison(
         
         # 🔥 ÉTAPE 2 : Cache MISS → Calculer avec FastF1
         session = fastf1.get_session(year, gp_round, session_type)
-        session.load()
-        
+        await asyncio.to_thread(session.load)
+
         # 🔥 RÉCUPÉRER LAP1 (driver1)
         if lap_number1 is not None:
             # Lap spécifique pour driver1
@@ -224,8 +244,6 @@ async def get_telemetry_comparison(
             raise Exception(f"Driver {missing_driver} not found or no valid laps available")
         
         # 🔥 RÉCUPÉRER LES SECTEURS
-        import pandas as pd
-        
         sectors_driver1 = {
             "sector1": float(lap1['Sector1Time'].total_seconds()) if pd.notna(lap1['Sector1Time']) else None,
             "sector2": float(lap1['Sector2Time'].total_seconds()) if pd.notna(lap1['Sector2Time']) else None,
@@ -242,37 +260,14 @@ async def get_telemetry_comparison(
         tel1 = lap1.get_telemetry().add_distance()
         tel2 = lap2.get_telemetry().add_distance()
         
-        # 🔍 DEBUG RPM - Vérifier les colonnes disponibles
-        print(f"\n{'='*60}")
-        print(f"🔍 DEBUG RPM - {driver1} vs {driver2}")
-        print(f"{'='*60}")
-        print(f"📋 Colonnes disponibles Driver 1: {tel1.columns.tolist()}")
-        print(f"📋 Colonnes disponibles Driver 2: {tel2.columns.tolist()}")
-        print(f"")
-        
         # Détecter la colonne RPM (plusieurs noms possibles)
         rpm_col = None
         for possible_col in ['RPM', 'nRPM', 'Rpm', 'EngineRPM']:
             if possible_col in tel1.columns:
                 rpm_col = possible_col
-                print(f"✅ Colonne RPM trouvée: '{rpm_col}'")
-                print(f"   Driver 1 RPM range: {tel1[rpm_col].min():.0f} - {tel1[rpm_col].max():.0f}")
-                print(f"   Driver 1 RPM mean: {tel1[rpm_col].mean():.0f}")
-                if rpm_col in tel2.columns:
-                    print(f"   Driver 2 RPM range: {tel2[rpm_col].min():.0f} - {tel2[rpm_col].max():.0f}")
-                    print(f"   Driver 2 RPM mean: {tel2[rpm_col].mean():.0f}")
                 break
         
-        if not rpm_col:
-            print(f"❌ Aucune colonne RPM trouvée")
-            print(f"   Fallback à 10000 RPM sera utilisé")
-        
-        print(f"{'='*60}\n")
-        
         # ✅ INTERPOLATION SUR GRILLE COMMUNE (synchronisation parfaite)
-        import numpy as np
-        from scipy.interpolate import interp1d
-        
         # Déterminer la plage de distance commune
         min_distance = max(tel1['Distance'].min(), tel2['Distance'].min())
         max_distance = min(tel1['Distance'].max(), tel2['Distance'].max())
@@ -365,12 +360,6 @@ async def get_telemetry_comparison(
             prev_speed1 = speed1
             prev_speed2 = speed2
         
-        # 🔍 DEBUG - Vérifier les premières valeurs RPM
-        print(f"🔍 Premières valeurs RPM dans telemetry_data:")
-        for i in range(min(5, len(telemetry_data))):
-            print(f"   [{i}] rpm1={telemetry_data[i]['rpm1']:.0f}, rpm2={telemetry_data[i]['rpm2']:.0f}")
-        print(f"")
-        
         result = {
             'telemetry': telemetry_data,
             'lapTime1': float(lap1['LapTime'].total_seconds()) if pd.notna(lap1['LapTime']) else None,
@@ -399,7 +388,9 @@ async def get_telemetry_comparison(
         raise handle_fastf1_error(e, error_msg)
 
 @app.get("/api/session-laps/{year}/{gp_round}/{session_type}/{driver}")
+@limiter.limit("10/minute")
 async def get_session_laps(
+    request: Request,
     year: int,
     gp_round: int, 
     session_type: str,
@@ -429,8 +420,8 @@ async def get_session_laps(
         # 🔥 ÉTAPE 2 : Cache MISS → Calculer avec FastF1
         # Charger la session
         session = fastf1.get_session(year, gp_round, session_type)
-        session.load()
-        
+        await asyncio.to_thread(session.load)
+
         # 🔥 RÉCUPÉRER TOUS LES LAPS du pilote
         all_laps = session.laps
         driver_laps = all_laps[all_laps['Driver'] == driver]
@@ -533,7 +524,8 @@ async def get_session_laps(
 
 
 @app.get("/api/animation-optimized/{year}/{gp_round}/{driver1}/{driver2}")
-async def get_animation_optimized(year: int, gp_round: int, driver1: str, driver2: str):
+@limiter.limit("10/minute")
+async def get_animation_optimized(request: Request, year: int, gp_round: int, driver1: str, driver2: str):
     """
     🎯 GPS BATTLE ANIMATION - SYNCHRONISÉ SUR LA DISTANCE DU TOUR
     
@@ -546,10 +538,6 @@ async def get_animation_optimized(year: int, gp_round: int, driver1: str, driver
     → Même position sur le circuit, télémétrie synchronisée !
     """
     try:
-        import pandas as pd
-        import fastf1
-        from fastapi import HTTPException
-        
         log_request("/api/animation-optimized", {
             "year": year,
             "gp_round": gp_round,
@@ -564,7 +552,7 @@ async def get_animation_optimized(year: int, gp_round: int, driver1: str, driver
             return cached_data
         
         session = fastf1.get_session(year, gp_round, 'Q')
-        session.load()
+        await asyncio.to_thread(session.load)
         
         lap1 = session.laps.pick_drivers(driver1).pick_fastest()
         lap2 = session.laps.pick_drivers(driver2).pick_fastest()
@@ -764,10 +752,11 @@ async def get_animation_optimized(year: int, gp_round: int, driver1: str, driver
 
 
 @app.get("/api/animation-race-full/{year}/{gp_round}/{driver1}/{driver2}")
-async def get_animation_race_full(year: int, gp_round: int, driver1: str, driver2: str):
+@limiter.limit("10/minute")
+async def get_animation_race_full(request: Request, year: int, gp_round: int, driver1: str, driver2: str):
     try:
         session = fastf1.get_session(year, gp_round, 'R')
-        session.load()
+        await asyncio.to_thread(session.load)
         
         laps1 = session.laps.pick_drivers(driver1)
         laps2 = session.laps.pick_drivers(driver2)
@@ -865,7 +854,7 @@ async def get_animation_race_full(year: int, gp_round: int, driver1: str, driver
                 cumulative_time2 += float(lap2['LapTime'].total_seconds() if lap2['LapTime'] is not None else 90)
                 
             except Exception as e:
-                print(f"Error processing lap {lap_number}: {str(e)}")
+                logger.error(f"Error processing lap {lap_number}: {str(e)}")
                 continue
         
         max_time = max(
@@ -930,7 +919,7 @@ async def get_animation_race_full(year: int, gp_round: int, driver1: str, driver
             'sector3Time2': sector3_time2,
         }
     except Exception as e:
-        import traceback
+
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -938,10 +927,10 @@ async def get_animation_race_full(year: int, gp_round: int, driver1: str, driver
 @app.get("/api/race-data/{year}/{gp_round}")
 async def get_race_data(year: int, gp_round: int):
     try:
-        import math
+
         
         session = fastf1.get_session(year, gp_round, 'R')
-        session.load()
+        await asyncio.to_thread(session.load)
         
         laps = session.laps
         
@@ -988,7 +977,7 @@ async def get_race_data(year: int, gp_round: int):
             'country': session.event['Country']
         }
     except Exception as e:
-        import traceback
+
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -996,10 +985,10 @@ async def get_race_data(year: int, gp_round: int):
 @app.get("/api/pit-stops/{year}/{gp_round}")
 async def get_pit_stops(year: int, gp_round: int):
     try:
-        import math
+
         
         session = fastf1.get_session(year, gp_round, 'R')
-        session.load()
+        await asyncio.to_thread(session.load)
         
         laps = session.laps
         
@@ -1033,7 +1022,7 @@ async def get_pit_stops(year: int, gp_round: int):
         
         return {'pitStops': pit_stops}
     except Exception as e:
-        import traceback
+
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1041,10 +1030,10 @@ async def get_pit_stops(year: int, gp_round: int):
 @app.get("/api/race-events/{year}/{gp_round}")
 async def get_race_events(year: int, gp_round: int):
     try:
-        import math
+
         
         session = fastf1.get_session(year, gp_round, 'R')
-        session.load()
+        await asyncio.to_thread(session.load)
         
         events = []
         
@@ -1137,7 +1126,7 @@ async def get_race_events(year: int, gp_round: int):
         
         return {'events': events}
     except Exception as e:
-        import traceback
+
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1145,11 +1134,11 @@ async def get_race_events(year: int, gp_round: int):
 @app.get("/api/position-evolution/{year}/{gp_round}")
 async def get_position_evolution(year: int, gp_round: int):
     try:
-        import math
+
         
         # Load race session
         session = fastf1.get_session(year, gp_round, 'R')
-        session.load()
+        await asyncio.to_thread(session.load)
         
         laps = session.laps
         max_lap = int(laps['LapNumber'].max())
@@ -1186,7 +1175,7 @@ async def get_position_evolution(year: int, gp_round: int):
             'teams': driver_teams
         }
     except Exception as e:
-        import traceback
+
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1195,7 +1184,7 @@ async def get_position_evolution(year: int, gp_round: int):
 async def get_strategy_comparison(year: int, gp_round: int):
     try:
         session = fastf1.get_session(year, gp_round, 'R')
-        session.load()
+        await asyncio.to_thread(session.load)
         
         laps = session.laps
         strategies = []
@@ -1234,347 +1223,7 @@ async def get_strategy_comparison(year: int, gp_round: int):
         
         return {'strategies': strategies}
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
 
-
-@app.get("/api/race-pace/{year}/{gp_round}/{driver}")
-async def get_race_pace(year: int, gp_round: int, driver: str, show_outliers: bool = False):
-    try:
-        import math
-        
-        session = fastf1.get_session(year, gp_round, 'R')
-        session.load()
-        
-        driver_laps = session.laps.pick_drivers(driver)
-        
-        lap_times = []
-        pace_data_full = []
-        
-        for _, lap in driver_laps.iterrows():
-            lap_time = None
-            if lap['LapTime'] is not None:
-                lap_time_seconds = float(lap['LapTime'].total_seconds())
-                if not math.isnan(lap_time_seconds) and not math.isinf(lap_time_seconds):
-                    lap_time = lap_time_seconds
-            
-            lap_times.append(lap_time)
-            pace_data_full.append({
-                'lapNumber': int(lap['LapNumber']),
-                'lapTime': lap_time,
-                'compound': str(lap['Compound']) if 'Compound' in lap else 'UNKNOWN',
-                'tyreLife': int(lap['TyreLife']) if lap['TyreLife'] is not None and not math.isnan(lap['TyreLife']) else 0,
-                'stint': int(lap['Stint']) if 'Stint' in lap and not math.isnan(lap['Stint']) else 1,
-                'position': int(lap['Position']) if lap['Position'] is not None and not math.isnan(lap['Position']) else 99,
-                'pitOutTime': bool(lap['PitOutTime']) if 'PitOutTime' in lap and lap['PitOutTime'] is not None else False,
-                'pitInTime': bool(lap['PitInTime']) if 'PitInTime' in lap and lap['PitInTime'] is not None else False,
-            })
-        
-        # Filtrer les pit stops
-        filtered_times, original_times = filter_pit_stops(lap_times)
-        
-        # Appliquer le filtre selon show_outliers
-        pace_data = []
-        for i, lap_data in enumerate(pace_data_full):
-            pace_data.append({
-                **lap_data,
-                'lapTime': filtered_times[i] if not show_outliers else original_times[i]
-            })
-        
-        return {
-            'driver': driver,
-            'paceData': pace_data
-        }
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-import numpy as np
-
-def filter_pit_stops(lap_times, threshold_seconds=20):
-    """
-    Filtre les outliers (pit stops) des temps au tour.
-    """
-    if not lap_times or len(lap_times) == 0:
-        return lap_times, lap_times
-    
-    valid_times = [t for t in lap_times if t is not None]
-    
-    if len(valid_times) == 0:
-        return lap_times, lap_times
-    
-    median_time = np.median(valid_times)
-    threshold = median_time + threshold_seconds
-    
-    filtered = []
-    for t in lap_times:
-        if t is None:
-            filtered.append(None)
-        elif t > threshold:
-            filtered.append(None)  # Outlier (pit stop)
-        else:
-            filtered.append(t)
-    
-    return filtered, lap_times  # Retourne (filtré, original)
-
-
-@app.get("/api/multi-driver-pace/{year}/{gp_round}/{session_type}")
-async def get_multi_driver_pace(year: int, gp_round: int, session_type: str, drivers: str, show_outliers: bool = False):
-    try:
-        import math
-        
-        driver_list = drivers.split(',')
-        session = fastf1.get_session(year, gp_round, session_type)
-        session.load()
-        
-        all_drivers_data = {}
-        
-        for driver in driver_list:
-            driver = driver.strip()
-            driver_laps = session.laps.pick_drivers(driver)
-            
-            lap_times = []
-            pace_data_full = []
-            
-            for _, lap in driver_laps.iterrows():
-                lap_time = None
-                if lap['LapTime'] is not None:
-                    lap_time_seconds = float(lap['LapTime'].total_seconds())
-                    if not math.isnan(lap_time_seconds) and not math.isinf(lap_time_seconds):
-                        lap_time = lap_time_seconds
-                
-                lap_times.append(lap_time)
-                pace_data_full.append({
-                    'lapNumber': int(lap['LapNumber']),
-                    'lapTime': lap_time,
-                    'compound': str(lap['Compound']) if 'Compound' in lap else 'UNKNOWN',
-                    'tyreLife': int(lap['TyreLife']) if lap['TyreLife'] is not None and not math.isnan(lap['TyreLife']) else 0,
-                    'stint': int(lap['Stint']) if 'Stint' in lap and not math.isnan(lap['Stint']) else 1,
-                })
-            
-            # Filtrer les pit stops
-            filtered_times, original_times = filter_pit_stops(lap_times)
-            
-            # Créer les données avec et sans outliers
-            pace_data_filtered = []
-            for i, lap_data in enumerate(pace_data_full):
-                pace_data_filtered.append({
-                    **lap_data,
-                    'lapTime': filtered_times[i] if not show_outliers else original_times[i]
-                })
-            
-            all_drivers_data[driver] = pace_data_filtered
-        
-        return {
-            'drivers': driver_list,
-            'data': all_drivers_data
-        }
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/api/stint-analysis/{year}/{gp_round}/{driver}")
-async def get_stint_analysis(year: int, gp_round: int, driver: str):
-    try:
-        import math
-        
-        session = fastf1.get_session(year, gp_round, 'R')
-        session.load()
-        
-        driver_laps = session.laps.pick_drivers(driver)
-        
-        stints = {}
-        
-        for _, lap in driver_laps.iterrows():
-            stint_num = int(lap['Stint']) if 'Stint' in lap and not math.isnan(lap['Stint']) else 1
-            
-            if stint_num not in stints:
-                stints[stint_num] = {
-                    'stint': stint_num,
-                    'compound': str(lap['Compound']) if 'Compound' in lap else 'UNKNOWN',
-                    'laps': []
-                }
-            
-            lap_time = None
-            if lap['LapTime'] is not None:
-                lap_time_seconds = float(lap['LapTime'].total_seconds())
-                if not math.isnan(lap_time_seconds) and not math.isinf(lap_time_seconds):
-                    lap_time = lap_time_seconds
-            
-            stints[stint_num]['laps'].append({
-                'lapNumber': int(lap['LapNumber']),
-                'lapTime': lap_time,
-                'tyreLife': int(lap['TyreLife']) if lap['TyreLife'] is not None and not math.isnan(lap['TyreLife']) else 0,
-            })
-        
-        stint_analysis = []
-        for stint_num, stint_data in stints.items():
-            valid_laps = [lap for lap in stint_data['laps'] if lap['lapTime'] is not None]
-            
-            if len(valid_laps) > 0:
-                avg_lap_time = sum(lap['lapTime'] for lap in valid_laps) / len(valid_laps)
-                best_lap_time = min(lap['lapTime'] for lap in valid_laps)
-                worst_lap_time = max(lap['lapTime'] for lap in valid_laps)
-                
-                third = len(valid_laps) // 3
-                if third > 0:
-                    early_avg = sum(lap['lapTime'] for lap in valid_laps[:third]) / third
-                    late_avg = sum(lap['lapTime'] for lap in valid_laps[-third:]) / third
-                    degradation = late_avg - early_avg
-                else:
-                    degradation = 0
-                
-                stint_analysis.append({
-                    'stint': stint_num,
-                    'compound': stint_data['compound'],
-                    'laps': stint_data['laps'],
-                    'totalLaps': len(stint_data['laps']),
-                    'avgLapTime': avg_lap_time,
-                    'bestLapTime': best_lap_time,
-                    'worstLapTime': worst_lap_time,
-                    'degradation': degradation
-                })
-        
-        return {
-            'driver': driver,
-            'stints': stint_analysis
-        }
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/api/sector-evolution/{year}/{gp_round}/{driver}")
-async def get_sector_evolution(year: int, gp_round: int, driver: str, show_outliers: bool = False):
-    try:
-        import math
-        
-        session = fastf1.get_session(year, gp_round, 'R')
-        session.load()
-        
-        driver_laps = session.laps.pick_drivers(driver)
-        
-        sector1_times = []
-        sector2_times = []
-        sector3_times = []
-        sector_data_full = []
-        
-        for _, lap in driver_laps.iterrows():
-            sector1 = None
-            sector2 = None
-            sector3 = None
-            
-            if lap['Sector1Time'] is not None:
-                s1 = float(lap['Sector1Time'].total_seconds())
-                if not math.isnan(s1) and not math.isinf(s1):
-                    sector1 = s1
-            
-            if lap['Sector2Time'] is not None:
-                s2 = float(lap['Sector2Time'].total_seconds())
-                if not math.isnan(s2) and not math.isinf(s2):
-                    sector2 = s2
-            
-            if lap['Sector3Time'] is not None:
-                s3 = float(lap['Sector3Time'].total_seconds())
-                if not math.isnan(s3) and not math.isinf(s3):
-                    sector3 = s3
-            
-            sector1_times.append(sector1)
-            sector2_times.append(sector2)
-            sector3_times.append(sector3)
-            
-            sector_data_full.append({
-                'lapNumber': int(lap['LapNumber']),
-                'sector1': sector1,
-                'sector2': sector2,
-                'sector3': sector3,
-                'compound': str(lap['Compound']) if 'Compound' in lap else 'UNKNOWN',
-                'tyreLife': int(lap['TyreLife']) if lap['TyreLife'] is not None and not math.isnan(lap['TyreLife']) else 0,
-            })
-        
-        # Filtrer les outliers pour chaque secteur
-        filtered_s1, original_s1 = filter_pit_stops(sector1_times, threshold_seconds=10)
-        filtered_s2, original_s2 = filter_pit_stops(sector2_times, threshold_seconds=10)
-        filtered_s3, original_s3 = filter_pit_stops(sector3_times, threshold_seconds=10)
-        
-        # Appliquer le filtre selon show_outliers
-        sector_data = []
-        for i, lap_data in enumerate(sector_data_full):
-            sector_data.append({
-                'lapNumber': lap_data['lapNumber'],
-                'sector1': filtered_s1[i] if not show_outliers else original_s1[i],
-                'sector2': filtered_s2[i] if not show_outliers else original_s2[i],
-                'sector3': filtered_s3[i] if not show_outliers else original_s3[i],
-                'compound': lap_data['compound'],
-                'tyreLife': lap_data['tyreLife'],
-            })
-        
-        return {
-            'driver': driver,
-            'sectorData': sector_data
-        }
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/multi-driver-sectors/{year}/{gp_round}/{session_type}")
-async def get_multi_driver_sectors(year: int, gp_round: int, session_type: str, drivers: str):
-    try:
-        import math
-        
-        driver_list = drivers.split(',')
-        session = fastf1.get_session(year, gp_round, session_type)
-        session.load()
-        
-        all_drivers_sectors = {}
-        
-        for driver in driver_list:
-            driver = driver.strip()
-            driver_laps = session.laps.pick_drivers(driver)
-            
-            # Récupérer le meilleur tour
-            fastest_lap = driver_laps.pick_fastest()
-            
-            sector1 = None
-            sector2 = None
-            sector3 = None
-            
-            if fastest_lap['Sector1Time'] is not None:
-                s1 = float(fastest_lap['Sector1Time'].total_seconds())
-                if not math.isnan(s1) and not math.isinf(s1):
-                    sector1 = s1
-            
-            if fastest_lap['Sector2Time'] is not None:
-                s2 = float(fastest_lap['Sector2Time'].total_seconds())
-                if not math.isnan(s2) and not math.isinf(s2):
-                    sector2 = s2
-            
-            if fastest_lap['Sector3Time'] is not None:
-                s3 = float(fastest_lap['Sector3Time'].total_seconds())
-                if not math.isnan(s3) and not math.isinf(s3):
-                    sector3 = s3
-            
-            all_drivers_sectors[driver] = {
-                'sector1': sector1,
-                'sector2': sector2,
-                'sector3': sector3,
-                'lapTime': float(fastest_lap['LapTime'].total_seconds()) if fastest_lap['LapTime'] is not None else None,
-                'lapNumber': int(fastest_lap['LapNumber']) if 'LapNumber' in fastest_lap else None
-            }
-        
-        return {
-            'drivers': driver_list,
-            'data': all_drivers_sectors
-        }
-    except Exception as e:
-        import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1606,7 +1255,7 @@ async def get_driver_standings(year: int):
         
         return {'standings': standings}
     except Exception as e:
-        import traceback
+
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1636,7 +1285,7 @@ async def get_constructor_standings(year: int):
         
         return {'standings': standings}
     except Exception as e:
-        import traceback
+
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1679,7 +1328,7 @@ async def get_race_results(year: int, gp_round: int):
             'date': races[0]['date']
         }
     except Exception as e:
-        import traceback
+
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1727,7 +1376,7 @@ async def get_standings_after_race(year: int, gp_round: int):
             'constructors': constructors
         }
     except Exception as e:
-        import traceback
+
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1749,153 +1398,16 @@ async def get_circuits(year: int):
         
         return {'circuits': circuits}
     except Exception as e:
-        import traceback
+
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/racing-line")
-async def get_racing_line(year: int, round: int, session: str, driver1: str, driver2: str = None):
-    try:
-        event = fastf1.get_event(year, round)
-        session_obj = event.get_session(session)
-        session_obj.load()
-        
-        # Driver 1
-        driver1_lap = session_obj.laps.pick_drivers(driver1).pick_fastest()
-        driver1_telemetry = driver1_lap.get_telemetry().add_distance()
-        
-        result = {
-            "driver1": {
-                "abbreviation": driver1,
-                "lap_time": str(driver1_lap['LapTime']),
-                "positions": driver1_telemetry[['X', 'Y', 'Speed']].to_dict('records')
-            }
-        }
-        
-        # Driver 2
-        if driver2:
-            driver2_lap = session_obj.laps.pick_drivers(driver2).pick_fastest()
-            driver2_telemetry = driver2_lap.get_telemetry().add_distance()
-            result["driver2"] = {
-                "abbreviation": driver2,
-                "lap_time": str(driver2_lap['LapTime']),
-                "positions": driver2_telemetry[['X', 'Y', 'Speed']].to_dict('records')
-            }
-        
-        return result
-        
-    except Exception as e:
-        import traceback
-        print(f"\n!!! ERROR in racing-line endpoint !!!")
-        print(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/calendar")
-async def get_calendar(year: int):
-    try:
-        schedule = fastf1.get_event_schedule(year)
-        calendar = []
-        
-        for idx, event in schedule.iterrows():
-            calendar.append({
-                "round": event['RoundNumber'],
-                "name": event['EventName'],
-                "country": event['Country'],
-                "date": str(event['EventDate']) if pd.notna(event['EventDate']) else None
-            })
-        
-        return {"grands_prix": calendar}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error loading calendar: {str(e)}")
-
-
-@app.get("/drivers")
-async def get_drivers(year: int, round: int):
-    try:
-        event = fastf1.get_event(year, round)
-        session = event.get_session('R')
-        session.load()
-        
-        drivers_list = []
-        for driver_abbr in session.drivers:
-            driver_info = session.get_driver(driver_abbr)
-            drivers_list.append({
-                "abbreviation": driver_abbr,
-                "name": f"{driver_info['FirstName']} {driver_info['LastName']}"
-            })
-        
-        return {"drivers": drivers_list}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error loading drivers: {str(e)}")
-
-@app.get("/battles")
-async def get_battles(year: int, round: int):
-    try:
-        event = fastf1.get_event(year, round)
-        session = event.get_session('R')
-        session.load()
-        
-        battles = []
-        drivers = session.drivers
-        
-        for i, driver1 in enumerate(drivers):
-            for driver2 in drivers[i+1:]:
-                driver1_laps = session.laps.pick_driver(driver1)
-                driver2_laps = session.laps.pick_driver(driver2)
-                
-                if driver1_laps.empty or driver2_laps.empty:
-                    continue
-                
-                overtakes = 0
-                min_gap = float('inf')
-                
-                for lap_num in range(1, min(len(driver1_laps), len(driver2_laps))):
-                    try:
-                        pos1 = driver1_laps.iloc[lap_num]['Position']
-                        pos2 = driver2_laps.iloc[lap_num]['Position']
-                        prev_pos1 = driver1_laps.iloc[lap_num-1]['Position']
-                        prev_pos2 = driver2_laps.iloc[lap_num-1]['Position']
-                        
-                        if pd.notna(pos1) and pd.notna(pos2) and pd.notna(prev_pos1) and pd.notna(prev_pos2):
-                            gap = abs(pos1 - pos2)
-                            min_gap = min(min_gap, gap)
-                            
-                            if (prev_pos1 > prev_pos2 and pos1 < pos2) or (prev_pos1 < prev_pos2 and pos1 > pos2):
-                                overtakes += 1
-                    except:
-                        continue
-                
-                if overtakes > 0 or min_gap <= 2:
-                    driver1_info = session.get_driver(driver1)
-                    driver2_info = session.get_driver(driver2)
-                    
-                    battles.append({
-                        "driver1": {
-                            "abbreviation": driver1,
-                            "name": f"{driver1_info['FirstName']} {driver1_info['LastName']}"
-                        },
-                        "driver2": {
-                            "abbreviation": driver2,
-                            "name": f"{driver2_info['FirstName']} {driver2_info['LastName']}"
-                        },
-                        "overtakes": overtakes,
-                        "min_gap": float(min_gap) if min_gap != float('inf') else 0,
-                        "intensity": min(overtakes * 2 + (3 - min_gap if min_gap < 3 else 0), 10)
-                    })
-        
-        battles.sort(key=lambda x: x['intensity'], reverse=True)
-        
-        return {"battles": battles[:10]}
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error loading battles: {str(e)}")
 
 @app.get("/api/racing-line/{year}/{gp_round}/{session_type}/{driver}")
 async def get_racing_line(year: int, gp_round: int, session_type: str, driver: str):
     try:
         # Charger la session
         session = fastf1.get_session(year, gp_round, session_type)
-        session.load()
+        await asyncio.to_thread(session.load)
         
         # Récupérer le pilote
         driver_laps = session.laps.pick_driver(driver)
@@ -1937,669 +1449,5 @@ async def get_racing_line(year: int, gp_round: int, session_type: str, driver: s
         }
         
     except Exception as e:
-        print(f"Error in racing line: {str(e)}")
+        logger.error(f"Error in racing line: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
-
-# ============================================
-# COPIER CE CODE À LA FIN DE backend/main.py
-# ============================================
-
-@app.get("/racing-line-analyzer")
-async def get_racing_line_analyzer(year: int, round: int, session: str, driver: str):
-    """
-    Endpoint dédié pour Racing Line Analyzer
-    """
-    try:
-        log_request("/racing-line-analyzer", {"year": year, "round": round, "session": session, "driver": driver})
-        
-        session_obj = fastf1.get_session(year, round, session)
-        session_obj.load()
-        
-        driver_laps = session_obj.laps.pick_drivers(driver)
-        if driver_laps.empty:
-            raise HTTPException(status_code=404, detail=f"No laps found for driver {driver}")
-        
-        fastest_lap = driver_laps.pick_fastest()
-        telemetry = fastest_lap.get_telemetry().add_distance()
-        
-        if telemetry.empty:
-            raise HTTPException(status_code=404, detail="No telemetry data available")
-        
-        gps_data = []
-        for idx, row in telemetry.iterrows():
-            if pd.notna(row['X']) and pd.notna(row['Y']) and pd.notna(row['Speed']):
-                gps_data.append({
-                    "x": float(row['X']),
-                    "y": float(row['Y']),
-                    "speed": float(row['Speed']),
-                    "distance": float(row['Distance']) if pd.notna(row['Distance']) else 0.0
-                })
-        
-        corners = []
-        threshold = 15
-        corner_id = 1
-        i = 20
-        
-        while i < len(gps_data) - 20:
-            prev_speed = gps_data[i - 10]['speed']
-            current_speed = gps_data[i]['speed']
-            next_speed = gps_data[i + 10]['speed']
-            
-            if prev_speed - current_speed > threshold and current_speed < prev_speed and current_speed < next_speed:
-                min_speed = current_speed
-                apex_idx = i
-                end_idx = i
-                
-                for j in range(i, min(i + 30, len(gps_data))):
-                    if gps_data[j]['speed'] < min_speed:
-                        min_speed = gps_data[j]['speed']
-                        apex_idx = j
-                    if gps_data[j]['speed'] > current_speed + threshold:
-                        end_idx = j
-                        break
-                
-                start_idx = max(0, i - 20)
-                end_idx = min(len(gps_data) - 1, end_idx + 20)
-                corner_data = gps_data[start_idx:end_idx]
-                avg_speed = sum(p['speed'] for p in corner_data) / len(corner_data) if corner_data else 0
-                
-                corners.append({
-                    "id": corner_id,
-                    "name": f"T{corner_id}",
-                    "startIdx": start_idx,
-                    "endIdx": end_idx,
-                    "apexIdx": apex_idx,
-                    "avgSpeed": avg_speed,
-                    "minSpeed": min_speed
-                })
-                
-                corner_id += 1
-                i = end_idx
-            else:
-                i += 1
-        
-        result = {
-            "driver": driver,
-            "lap_time": str(fastest_lap['LapTime']),
-            "lap_number": int(fastest_lap['LapNumber']),
-            "compound": str(fastest_lap['Compound']) if pd.notna(fastest_lap['Compound']) else "UNKNOWN",
-            "gps_data": gps_data,
-            "corners": corners
-        }
-        
-        log_success("/racing-line-analyzer")
-        return result
-        
-    except Exception as e:
-        log_error("/racing-line-analyzer", e)
-        import traceback
-        print(f"\n!!! ERROR in racing-line-analyzer endpoint !!!")
-        print(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=str(e))# Updated CORS config
-
-# Force Railway redeploy with CORS fix
-
-@app.get("/api/studio/race-pace")
-async def get_race_pace_data(
-    year: int = Query(...),
-    round: int = Query(...),
-    driver: str = Query(...),
-    driver2: str = Query(None)  # ✅ Optionnel
-):
-    try:
-        session = fastf1.get_session(year, round, 'R')
-        session.load()
-        
-        # Driver 1
-        driver_obj = session.laps.pick_driver(driver)
-        if driver_obj.empty:
-            raise HTTPException(status_code=404, detail=f"Driver {driver} not found")
-        
-        driver_info = session.get_driver(driver)
-        driver_full_name = f"{driver_info['FirstName']} {driver_info['LastName']}"
-        
-        pace_data = []
-        for idx, lap in driver_obj.iterrows():
-            lap_time_seconds = None
-            if lap['LapTime'] and not pd.isna(lap['LapTime']):
-                lap_time_seconds = lap['LapTime'].total_seconds()
-            
-            pace_data.append({
-                "lapNumber": int(lap['LapNumber']),
-                "lapTime": lap_time_seconds,
-                "compound": lap['Compound'] if lap['Compound'] else None,
-                "tyreLife": int(lap['TyreLife']) if lap['TyreLife'] and not pd.isna(lap['TyreLife']) else 0,
-                "stint": int(lap['Stint']) if lap['Stint'] and not pd.isna(lap['Stint']) else 1,
-                "pitOutTime": bool(lap['PitOutTime']) if 'PitOutTime' in lap and not pd.isna(lap['PitOutTime']) else False,
-                "pitInTime": bool(lap['PitInTime']) if 'PitInTime' in lap and not pd.isna(lap['PitInTime']) else False,
-            })
-        
-        result = {
-            "driver": driver_full_name,
-            "driverCode": driver,
-            "year": year,
-            "round": round,
-            "raceName": session.event['EventName'],
-            "paceData": pace_data
-        }
-        
-        # ✅ Driver 2 (si présent)
-        if driver2:
-            driver2_obj = session.laps.pick_driver(driver2)
-            if not driver2_obj.empty:
-                driver2_info = session.get_driver(driver2)
-                driver2_full_name = f"{driver2_info['FirstName']} {driver2_info['LastName']}"
-                
-                pace_data2 = []
-                for idx, lap in driver2_obj.iterrows():
-                    lap_time_seconds = None
-                    if lap['LapTime'] and not pd.isna(lap['LapTime']):
-                        lap_time_seconds = lap['LapTime'].total_seconds()
-                    
-                    pace_data2.append({
-                        "lapNumber": int(lap['LapNumber']),
-                        "lapTime": lap_time_seconds,
-                        "compound": lap['Compound'] if lap['Compound'] else None,
-                        "tyreLife": int(lap['TyreLife']) if lap['TyreLife'] and not pd.isna(lap['TyreLife']) else 0,
-                        "stint": int(lap['Stint']) if lap['Stint'] and not pd.isna(lap['Stint']) else 1,
-                        "pitOutTime": bool(lap['PitOutTime']) if 'PitOutTime' in lap and not pd.isna(lap['PitOutTime']) else False,
-                        "pitInTime": bool(lap['PitInTime']) if 'PitInTime' in lap and not pd.isna(lap['PitInTime']) else False,
-                    })
-                
-                result["driver2"] = driver2_full_name
-                result["driver2Code"] = driver2
-                result["paceData2"] = pace_data2
-        
-        return result
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/studio/qualifying")
-async def get_qualifying_data(
-    year: int = Query(...),
-    round: int = Query(...)
-):
-    try:
-        log_request("/api/studio/qualifying", {"year": year, "round": round})
-        
-        # Charger la session de qualifications
-        session = fastf1.get_session(year, round, 'Q')
-        session.load()
-        
-        results = []
-        
-        # Pour chaque pilote, récupérer son meilleur temps
-        for driver_code in session.drivers:
-            try:
-                driver_info = session.get_driver(driver_code)
-                driver_laps = session.laps.pick_driver(driver_code)
-                
-                if driver_laps.empty:
-                    continue
-                
-                # Meilleur tour
-                fastest_lap = driver_laps.pick_fastest()
-                
-                if fastest_lap is None or fastest_lap.empty or pd.isna(fastest_lap['LapTime']):
-                    continue
-                
-                best_time = float(fastest_lap['LapTime'].total_seconds())
-                
-                # ✅ CORRECTION : Utiliser Abbreviation au lieu de driver_code
-                driver_abbreviation = str(driver_info['Abbreviation']) if 'Abbreviation' in driver_info else str(driver_code)
-                
-                results.append({
-                    "driver": f"{driver_info['FirstName']} {driver_info['LastName']}",
-                    "driverCode": driver_abbreviation,  # ✅ NOR, VER, etc.
-                    "team": str(driver_info['TeamName']),
-                    "time": best_time
-                })
-                
-            except Exception as e:
-                print(f"⚠️ Error processing driver {driver_code}: {str(e)}")
-                continue
-        
-        # Trier par temps (du plus rapide au plus lent)
-        results.sort(key=lambda x: x['time'])
-        
-        # Attribuer les positions
-        for i, result in enumerate(results):
-            result['position'] = i + 1
-            
-            # Gap par rapport au pole
-            if i > 0:
-                result['gap'] = result['time'] - results[0]['time']
-            else:
-                result['gap'] = None
-        
-        log_success("/api/studio/qualifying")
-        
-        return {
-            "year": year,
-            "round": round,
-            "raceName": session.event['EventName'],
-            "circuitName": session.event['Location'],
-            "results": results
-        }
-        
-    except Exception as e:
-        log_error("/api/studio/qualifying", e)
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/studio/race-results")
-async def get_race_results(
-    year: int = Query(...),
-    round: int = Query(...)
-):
-    try:
-        log_request("/api/studio/race-results", {"year": year, "round": round})
-        
-        # Charger la session de course
-        session = fastf1.get_session(year, round, 'R')
-        session.load()
-        
-        results = []
-        
-        # Pour chaque pilote
-        for driver_code in session.drivers:
-            try:
-                driver_info = session.get_driver(driver_code)
-                driver_laps = session.laps.pick_driver(driver_code)
-                
-                if driver_laps.empty:
-                    continue
-                
-                # Position finale
-                last_lap = driver_laps.iloc[-1]
-                position = int(last_lap['Position']) if pd.notna(last_lap['Position']) else 99
-                
-                # Meilleur tour
-                fastest_lap = driver_laps.pick_fastest()
-                best_lap_time = None
-                if fastest_lap is not None and not fastest_lap.empty and pd.notna(fastest_lap['LapTime']):
-                    best_lap_time = float(fastest_lap['LapTime'].total_seconds())
-                
-                # Nombre de pit stops
-                pit_stops = len(driver_laps[driver_laps['PitInTime'].notna()])
-                
-                # Stratégie pneus (stints)
-                compounds = driver_laps['Compound'].dropna().unique().tolist()
-                tire_strategy = [str(c) for c in compounds if str(c) not in ['nan', 'None']]
-                
-                # Total des temps de tour (pour calculer le gap)
-                race_time = None
-                if len(driver_laps) > 0:
-                    # Somme de tous les temps de tour
-                    valid_times = driver_laps['LapTime'].dropna()
-                    if not valid_times.empty:
-                        race_time = float(valid_times.sum().total_seconds())
-                
-                # Nombre de tours complétés
-                total_laps = len(driver_laps)
-                
-                # Code pilote
-                driver_abbreviation = str(driver_info['Abbreviation']) if 'Abbreviation' in driver_info else str(driver_code)
-                
-                results.append({
-                    "position": position,
-                    "driver": f"{driver_info['FirstName']} {driver_info['LastName']}",
-                    "driverCode": driver_abbreviation,
-                    "team": str(driver_info['TeamName']),
-                    "bestLapTime": best_lap_time,
-                    "pitStops": pit_stops,
-                    "tireStrategy": tire_strategy,
-                    "totalLaps": total_laps,
-                    "raceTime": race_time,  # ✅ Temps total de course
-                })
-                
-            except Exception as e:
-                print(f"⚠️ Error processing driver {driver_code}: {str(e)}")
-                continue
-        
-        # Trier par position
-        results.sort(key=lambda x: x['position'])
-        
-        # ✅ CALCULER LES GAPS PAR RAPPORT AU VAINQUEUR
-        if results:
-            winner_laps = results[0]['totalLaps']
-            winner_time = results[0]['raceTime']
-            
-            for i, result in enumerate(results):
-                if i == 0:
-                    # Le vainqueur n'a pas de gap
-                    result['gap'] = None
-                    result['gapType'] = 'winner'
-                    result['status'] = 'Finished'
-                else:
-                    laps_diff = winner_laps - result['totalLaps']
-                    
-                    if laps_diff > 0:
-                        # Pilote en retard de X tours
-                        result['gap'] = laps_diff
-                        result['gapType'] = 'laps'
-                        result['status'] = f"+{laps_diff} lap{'s' if laps_diff > 1 else ''}"
-                    else:
-                        # Même nombre de tours → calculer le gap en temps
-                        if result['raceTime'] and winner_time:
-                            time_gap = result['raceTime'] - winner_time
-                            result['gap'] = time_gap
-                            result['gapType'] = 'time'
-                            result['status'] = 'Finished'
-                        else:
-                            result['gap'] = None
-                            result['gapType'] = 'unknown'
-                            result['status'] = 'Finished'
-        
-        log_success("/api/studio/race-results")
-        
-        return {
-            "year": year,
-            "round": round,
-            "raceName": session.event['EventName'],
-            "circuitName": session.event['Location'],
-            "results": results
-        }
-        
-    except Exception as e:
-        log_error("/api/studio/race-results", e)
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/studio/head-to-head")
-async def get_head_to_head(
-    year: int = Query(...),
-    driver1: str = Query(...),
-    driver2: str = Query(...)
-):
-    try:
-        log_request("/api/studio/head-to-head", {"year": year, "driver1": driver1, "driver2": driver2})
-        
-        jolpica_base = "https://api.jolpi.ca/ergast/f1"
-        
-        print(f"\n🔍 Fetching data for {year} - {driver1} vs {driver2}")
-        
-        # ✅ ÉTAPE 1 : RÉCUPÉRER LE DRIVER ID DEPUIS LE CODE
-        drivers_response = requests.get(f"{jolpica_base}/{year}/drivers.json")
-        drivers_info = drivers_response.json()
-        drivers_list = drivers_info['MRData']['DriverTable']['Drivers']
-        
-        driver1_info = next((d for d in drivers_list if d['code'] == driver1), None)
-        driver2_info = next((d for d in drivers_list if d['code'] == driver2), None)
-        
-        if not driver1_info or not driver2_info:
-            raise HTTPException(status_code=404, detail=f"Drivers {driver1} or {driver2} not found in {year}")
-        
-        driver1_id = driver1_info['driverId']
-        driver2_id = driver2_info['driverId']
-        
-        print(f"✅ Driver IDs: {driver1} = {driver1_id}, {driver2} = {driver2_id}")
-        
-        # ✅ ÉTAPE 2 : UTILISER LES DRIVER IDs POUR LES REQUÊTES
-        
-        # Résultats de course pour driver1
-        driver1_races_url = f"{jolpica_base}/{year}/drivers/{driver1_id}/results.json?limit=100"
-        print(f"📡 Fetching {driver1} races: {driver1_races_url}")
-        driver1_races_response = requests.get(driver1_races_url)
-        driver1_races_data = driver1_races_response.json()
-        driver1_races = driver1_races_data['MRData']['RaceTable']['Races']
-        print(f"✅ Found {len(driver1_races)} races for {driver1}")
-        
-        # Résultats de course pour driver2
-        driver2_races_url = f"{jolpica_base}/{year}/drivers/{driver2_id}/results.json?limit=100"
-        print(f"📡 Fetching {driver2} races: {driver2_races_url}")
-        driver2_races_response = requests.get(driver2_races_url)
-        driver2_races_data = driver2_races_response.json()
-        driver2_races = driver2_races_data['MRData']['RaceTable']['Races']
-        print(f"✅ Found {len(driver2_races)} races for {driver2}")
-        
-        # Qualifications pour driver1
-        driver1_quali_url = f"{jolpica_base}/{year}/drivers/{driver1_id}/qualifying.json?limit=100"
-        print(f"📡 Fetching {driver1} qualifying: {driver1_quali_url}")
-        driver1_quali_response = requests.get(driver1_quali_url)
-        driver1_quali_data = driver1_quali_response.json()
-        driver1_quali_races = driver1_quali_data['MRData']['RaceTable']['Races']
-        print(f"✅ Found {len(driver1_quali_races)} qualifying sessions for {driver1}")
-        
-        # Qualifications pour driver2
-        driver2_quali_url = f"{jolpica_base}/{year}/drivers/{driver2_id}/qualifying.json?limit=100"
-        print(f"📡 Fetching {driver2} qualifying: {driver2_quali_url}")
-        driver2_quali_response = requests.get(driver2_quali_url)
-        driver2_quali_data = driver2_quali_response.json()
-        driver2_quali_races = driver2_quali_data['MRData']['RaceTable']['Races']
-        print(f"✅ Found {len(driver2_quali_races)} qualifying sessions for {driver2}")
-        
-        # Initialiser les stats
-        driver1_stats = {
-            'wins': 0,
-            'podiums': 0,
-            'poles': 0,
-            'points': 0,
-            'dnfs': 0,
-            'raceFinishes': [],
-            'qualiPositions': [],
-            'qualiWins': 0,
-            'raceWins': 0,
-            'fastestLaps': 0,
-        }
-        
-        driver2_stats = {
-            'wins': 0,
-            'podiums': 0,
-            'poles': 0,
-            'points': 0,
-            'dnfs': 0,
-            'raceFinishes': [],
-            'qualiPositions': [],
-            'qualiWins': 0,
-            'raceWins': 0,
-            'fastestLaps': 0,
-        }
-        
-        # Créer un dict pour mapper les rounds
-        driver2_results_by_round = {}
-        for race in driver2_races:
-            round_num = race['round']
-            if race['Results']:
-                driver2_results_by_round[round_num] = race['Results'][0]
-        
-        driver2_quali_by_round = {}
-        for quali_race in driver2_quali_races:
-            round_num = quali_race['round']
-            if quali_race['QualifyingResults']:
-                driver2_quali_by_round[round_num] = quali_race['QualifyingResults'][0]
-        
-        # Traiter les résultats de driver1
-        for race in driver1_races:
-            round_num = race['round']
-            race_name = race['raceName']
-            
-            if not race['Results']:
-                continue
-                
-            driver1_result = race['Results'][0]
-            position = int(driver1_result['position'])
-            points = float(driver1_result['points'])
-            status = driver1_result['status']
-            
-            print(f"\n🏁 Round {round_num}: {race_name}")
-            print(f"  {driver1}: P{position} - {points} pts - Status: {status}")
-            
-            driver1_stats['points'] += points
-            
-            if position == 1:
-                driver1_stats['wins'] += 1
-                print(f"    ✅ {driver1} WIN!")
-                
-            if position <= 3:
-                driver1_stats['podiums'] += 1
-                print(f"    🏆 {driver1} PODIUM!")
-            
-            # Fastest lap
-            if 'FastestLap' in driver1_result:
-                if 'rank' in driver1_result['FastestLap'] and driver1_result['FastestLap']['rank'] == '1':
-                    driver1_stats['fastestLaps'] += 1
-                    print(f"    ⚡ {driver1} FASTEST LAP!")
-            
-            # Vérifier si le pilote a fini
-            if any(keyword in status for keyword in ['Finished', 'Lap', '+']):
-                driver1_stats['raceFinishes'].append(position)
-            else:
-                driver1_stats['dnfs'] += 1
-                print(f"    ❌ {driver1} DNF: {status}")
-            
-            # Comparer avec driver2 pour ce round
-            if round_num in driver2_results_by_round:
-                driver2_result = driver2_results_by_round[round_num]
-                pos2 = int(driver2_result['position'])
-                status2 = driver2_result['status']
-                
-                print(f"  {driver2}: P{pos2} - {driver2_result['points']} pts - Status: {status2}")
-                
-                # H2H en course
-                if any(keyword in status for keyword in ['Finished', 'Lap', '+']) and \
-                   any(keyword in status2 for keyword in ['Finished', 'Lap', '+']):
-                    if position < pos2:
-                        driver1_stats['raceWins'] += 1
-                        print(f"    ⚔️ {driver1} beats {driver2} in race ({position} vs {pos2})")
-                    elif pos2 < position:
-                        driver2_stats['raceWins'] += 1
-                        print(f"    ⚔️ {driver2} beats {driver1} in race ({pos2} vs {position})")
-        
-        # Traiter les résultats de driver2
-        for race in driver2_races:
-            if not race['Results']:
-                continue
-                
-            driver2_result = race['Results'][0]
-            position = int(driver2_result['position'])
-            points = float(driver2_result['points'])
-            status = driver2_result['status']
-            
-            driver2_stats['points'] += points
-            
-            if position == 1:
-                driver2_stats['wins'] += 1
-                
-            if position <= 3:
-                driver2_stats['podiums'] += 1
-            
-            if 'FastestLap' in driver2_result:
-                if 'rank' in driver2_result['FastestLap'] and driver2_result['FastestLap']['rank'] == '1':
-                    driver2_stats['fastestLaps'] += 1
-            
-            if any(keyword in status for keyword in ['Finished', 'Lap', '+']):
-                driver2_stats['raceFinishes'].append(position)
-            else:
-                driver2_stats['dnfs'] += 1
-        
-        # Traiter les qualifications
-        print(f"\n🏎️ Processing qualifying sessions...")
-        
-        for quali_race in driver1_quali_races:
-            round_num = quali_race['round']
-            
-            if not quali_race['QualifyingResults']:
-                continue
-                
-            driver1_quali_result = quali_race['QualifyingResults'][0]
-            position = int(driver1_quali_result['position'])
-            
-            driver1_stats['qualiPositions'].append(position)
-            
-            if position == 1:
-                driver1_stats['poles'] += 1
-                print(f"  Round {round_num}: {driver1} POLE!")
-            
-            # Comparer avec driver2
-            if round_num in driver2_quali_by_round:
-                driver2_quali_result = driver2_quali_by_round[round_num]
-                pos2 = int(driver2_quali_result['position'])
-                
-                if position < pos2:
-                    driver1_stats['qualiWins'] += 1
-                else:
-                    driver2_stats['qualiWins'] += 1
-        
-        # Traiter les qualifs de driver2
-        for quali_race in driver2_quali_races:
-            if not quali_race['QualifyingResults']:
-                continue
-                
-            driver2_quali_result = quali_race['QualifyingResults'][0]
-            position = int(driver2_quali_result['position'])
-            
-            driver2_stats['qualiPositions'].append(position)
-            
-            if position == 1:
-                driver2_stats['poles'] += 1
-                print(f"  Round {quali_race['round']}: {driver2} POLE!")
-        
-        # Calculer moyennes
-        if driver1_stats['raceFinishes']:
-            driver1_stats['avgRacePosition'] = round(sum(driver1_stats['raceFinishes']) / len(driver1_stats['raceFinishes']), 1)
-        else:
-            driver1_stats['avgRacePosition'] = 20.0
-        
-        if driver2_stats['raceFinishes']:
-            driver2_stats['avgRacePosition'] = round(sum(driver2_stats['raceFinishes']) / len(driver2_stats['raceFinishes']), 1)
-        else:
-            driver2_stats['avgRacePosition'] = 20.0
-        
-        if driver1_stats['qualiPositions']:
-            driver1_stats['avgQualiPosition'] = round(sum(driver1_stats['qualiPositions']) / len(driver1_stats['qualiPositions']), 1)
-        else:
-            driver1_stats['avgQualiPosition'] = 20.0
-        
-        if driver2_stats['qualiPositions']:
-            driver2_stats['avgQualiPosition'] = round(sum(driver2_stats['qualiPositions']) / len(driver2_stats['qualiPositions']), 1)
-        else:
-            driver2_stats['avgQualiPosition'] = 20.0
-        
-        # Équipes
-        driver1_team = "Unknown"
-        driver2_team = "Unknown"
-        
-        if driver1_races and len(driver1_races) > 0:
-            last_race = driver1_races[-1]
-            if last_race['Results']:
-                driver1_team = last_race['Results'][0]['Constructor']['name']
-        
-        if driver2_races and len(driver2_races) > 0:
-            last_race = driver2_races[-1]
-            if last_race['Results']:
-                driver2_team = last_race['Results'][0]['Constructor']['name']
-        
-        # Log final
-        print(f"\n📊 FINAL STATS:")
-        print(f"{driver1}: {driver1_stats}")
-        print(f"{driver2}: {driver2_stats}")
-        
-        log_success("/api/studio/head-to-head")
-        
-        return {
-            "year": year,
-            "totalRaces": len(driver1_races),
-            "driver1": {
-                "code": driver1,
-                "name": f"{driver1_info['givenName']} {driver1_info['familyName']}",
-                "team": driver1_team,
-                "stats": driver1_stats,
-            },
-            "driver2": {
-                "code": driver2,
-                "name": f"{driver2_info['givenName']} {driver2_info['familyName']}",
-                "team": driver2_team,
-                "stats": driver2_stats,
-            },
-        }
-        
-    except Exception as e:
-        log_error("/api/studio/head-to-head", e)
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-        

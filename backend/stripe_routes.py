@@ -1,13 +1,32 @@
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Depends
 from fastapi.responses import JSONResponse
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+import logging
 import stripe
 import os
+import jwt
 from supabase import create_client
 from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
 router = APIRouter()
+security = HTTPBearer()
+
+SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")
+
+def get_authenticated_user_id(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
+    """Valide le JWT Supabase et retourne le user_id."""
+    token = credentials.credentials
+    try:
+        payload = jwt.decode(token, SUPABASE_JWT_SECRET, algorithms=["HS256"], audience="authenticated")
+        return payload["sub"]
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid token")
 
 # Configuration Stripe
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
@@ -48,9 +67,9 @@ async def create_checkout_session(request: Request):
         if not price_id:
             raise HTTPException(status_code=500, detail=f"STRIPE_PRICE_ID_{plan_type.upper()} not configured")
 
-        print(f"📦 Creating checkout session for user: {user_id}")
-        print(f"   Plan: {plan_type} ({plan_name})")
-        print(f"   Price ID: {price_id}")
+        logger.info(f"📦 Creating checkout session for user: {user_id}")
+        logger.info(f"   Plan: {plan_type} ({plan_name})")
+        logger.info(f"   Price ID: {price_id}")
 
         # Créer la session Stripe Checkout
         checkout_session = stripe.checkout.Session.create(
@@ -69,7 +88,7 @@ async def create_checkout_session(request: Request):
             }
         )
 
-        print(f"✅ Checkout session created: {checkout_session.id}")
+        logger.info(f"✅ Checkout session created: {checkout_session.id}")
 
         return JSONResponse(content={
             "checkout_url": checkout_session.url,
@@ -77,7 +96,7 @@ async def create_checkout_session(request: Request):
         })
 
     except Exception as e:
-        print(f"❌ Error creating checkout session: {e}")
+        logger.error(f"❌ Error creating checkout session: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -95,13 +114,13 @@ async def stripe_webhook(request: Request):
             payload, sig_header, STRIPE_WEBHOOK_SECRET
         )
     except ValueError as e:
-        print(f"❌ Invalid payload: {e}")
+        logger.error(f"❌ Invalid payload: {e}")
         raise HTTPException(status_code=400, detail="Invalid payload")
     except stripe.error.SignatureVerificationError as e:
-        print(f"❌ Invalid signature: {e}")
+        logger.error(f"❌ Invalid signature: {e}")
         raise HTTPException(status_code=400, detail="Invalid signature")
 
-    print(f"🔔 Webhook received: {event['type']}")
+    logger.info(f"🔔 Webhook received: {event['type']}")
 
     # ✅ ÉVÉNEMENT : Paiement réussi (nouveau abonnement)
     if event['type'] == 'checkout.session.completed':
@@ -111,11 +130,11 @@ async def stripe_webhook(request: Request):
         subscription_id = session.get('subscription')
         plan_type = session.get('metadata', {}).get('plan_type', 'unknown')
 
-        print(f"💳 Payment completed:")
-        print(f"   User ID: {user_id}")
-        print(f"   Customer: {customer_id}")
-        print(f"   Subscription: {subscription_id}")
-        print(f"   Plan Type: {plan_type}")
+        logger.info(f"💳 Payment completed:")
+        logger.info(f"   User ID: {user_id}")
+        logger.info(f"   Customer: {customer_id}")
+        logger.info(f"   Subscription: {subscription_id}")
+        logger.info(f"   Plan Type: {plan_type}")
 
         if user_id:
             try:
@@ -136,13 +155,13 @@ async def stripe_webhook(request: Request):
                     'plan': plan_name
                 }).execute()
 
-                print(f"✅ Subscription activated in Supabase for user {user_id}")
-                print(f"   Plan: {plan_name}")
+                logger.info(f"✅ Subscription activated in Supabase for user {user_id}")
+                logger.info(f"   Plan: {plan_name}")
                 
             except Exception as e:
-                print(f"❌ Error updating Supabase: {e}")
+                logger.error(f"❌ Error updating Supabase: {e}")
         else:
-            print(f"⚠️ No user_id found in checkout session")
+            logger.info(f"⚠️ No user_id found in checkout session")
 
     # ✅ ÉVÉNEMENT : Abonnement mis à jour (renouvellement, changement de carte)
     elif event['type'] == 'customer.subscription.updated':
@@ -150,7 +169,7 @@ async def stripe_webhook(request: Request):
         subscription_id = subscription['id']
         status = subscription['status']  # active, past_due, canceled, etc.
 
-        print(f"🔄 Subscription updated: {subscription_id} → {status}")
+        logger.info(f"🔄 Subscription updated: {subscription_id} → {status}")
 
         try:
             # Mettre à jour le statut dans Supabase
@@ -158,17 +177,17 @@ async def stripe_webhook(request: Request):
                 'status': status
             }).eq('stripe_subscription_id', subscription_id).execute()
 
-            print(f"✅ Status updated in Supabase")
+            logger.info(f"✅ Status updated in Supabase")
             
         except Exception as e:
-            print(f"❌ Error updating Supabase: {e}")
+            logger.error(f"❌ Error updating Supabase: {e}")
 
     # ❌ ÉVÉNEMENT : Abonnement annulé
     elif event['type'] == 'customer.subscription.deleted':
         subscription = event['data']['object']
         subscription_id = subscription['id']
 
-        print(f"❌ Subscription cancelled: {subscription_id}")
+        logger.error(f"❌ Subscription cancelled: {subscription_id}")
 
         try:
             # Désactiver l'abonnement dans Supabase
@@ -176,19 +195,21 @@ async def stripe_webhook(request: Request):
                 'status': 'cancelled'
             }).eq('stripe_subscription_id', subscription_id).execute()
 
-            print(f"✅ Subscription cancelled in Supabase")
+            logger.info(f"✅ Subscription cancelled in Supabase")
             
         except Exception as e:
-            print(f"❌ Error updating Supabase: {e}")
+            logger.error(f"❌ Error updating Supabase: {e}")
 
     return JSONResponse(content={"status": "success"})
 
 
 @router.get("/check-subscription/{user_id}")
-async def check_subscription(user_id: str):
+async def check_subscription(user_id: str, token_user_id: str = Depends(get_authenticated_user_id)):
     """
     Vérifier si un utilisateur a un abonnement PRO actif
     """
+    if token_user_id != user_id:
+        raise HTTPException(status_code=403, detail="Access forbidden")
     try:
         result = supabase.table('subscriptions').select('*').eq('user_id', user_id).execute()
         
@@ -210,16 +231,18 @@ async def check_subscription(user_id: str):
                 "status": None
             }
     except Exception as e:
-        print(f"❌ Error checking subscription: {e}")
+        logger.error(f"❌ Error checking subscription: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/customer-portal/{user_id}")
-async def create_customer_portal_session(user_id: str):
+async def create_customer_portal_session(user_id: str, token_user_id: str = Depends(get_authenticated_user_id)):
     """
     Créer une session Customer Portal pour gérer l'abonnement
     (annuler, changer de carte, télécharger factures)
     """
+    if token_user_id != user_id:
+        raise HTTPException(status_code=403, detail="Access forbidden")
     try:
         # Récupérer le customer_id depuis Supabase
         result = supabase.table('subscriptions').select('stripe_customer_id').eq('user_id', user_id).execute()
@@ -243,41 +266,7 @@ async def create_customer_portal_session(user_id: str):
         })
 
     except Exception as e:
-        print(f"❌ Error creating customer portal session: {e}")
+        logger.error(f"❌ Error creating customer portal session: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/manual-activate")
-async def manual_activate(request: Request):
-    """
-    Endpoint d'urgence : activer manuellement un abonnement
-    À utiliser UNIQUEMENT pour débugger
-    """
-    try:
-        body = await request.json()
-        user_id = body.get("user_id")
-        stripe_customer_id = body.get("stripe_customer_id")
-        stripe_subscription_id = body.get("stripe_subscription_id")
-        plan = body.get("plan", "metrik_pro_annual")
-
-        if not all([user_id, stripe_customer_id, stripe_subscription_id]):
-            raise HTTPException(status_code=400, detail="Missing required fields")
-
-        result = supabase.table('subscriptions').insert({
-            'user_id': user_id,
-            'stripe_customer_id': stripe_customer_id,
-            'stripe_subscription_id': stripe_subscription_id,
-            'status': 'active',
-            'plan': plan
-        }).execute()
-
-        print(f"✅ Manual activation successful for user {user_id}")
-
-        return JSONResponse(content={
-            "success": True,
-            "subscription": result.data[0] if result.data else None
-        })
-
-    except Exception as e:
-        print(f"❌ Error in manual activation: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
