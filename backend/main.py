@@ -445,13 +445,12 @@ async def get_session_laps(
             lap_number = lap['LapNumber']
             
             # ✅ Vérifier si le lap a de la télémétrie disponible
-            has_telemetry = False
-            try:
-                # Tenter de récupérer la télémétrie
-                telemetry = lap.get_telemetry()
-                has_telemetry = not telemetry.empty
-            except:
-                has_telemetry = False
+            # Utilise IsAccurate (déjà en mémoire) au lieu de charger toute la télémétrie
+            # pour chaque lap — évite O(n) appels get_telemetry()
+            has_telemetry = bool(
+                pd.notna(lap.get('IsAccurate')) and lap.get('IsAccurate') == True
+                and pd.notna(lap_time)
+            )
             
             # ✅ Inclure TOUS les laps (même ceux sans temps valide)
             # GP Tempo montre tous les laps, même les outlaps/inlaps
