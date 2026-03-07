@@ -347,14 +347,33 @@ OPENF1_SESSION_TYPE_MAP = {
 
 
 async def _openf1_request(path: str, params: dict) -> list:
+    """GET OpenF1 avec retry exponentiel sur 429."""
+    delays = [1, 3, 7]
     async with httpx.AsyncClient(timeout=20.0) as client:
-        resp = await client.get(f"{OPENF1_BASE}/{path}", params=params)
-        resp.raise_for_status()
-        return resp.json()
+        for attempt in range(len(delays) + 1):
+            if attempt > 0:
+                await asyncio.sleep(delays[attempt - 1])
+            resp = await client.get(f"{OPENF1_BASE}/{path}", params=params)
+            if resp.status_code == 429:
+                if attempt < len(delays):
+                    logger.warning(f"OpenF1 429 on /{path}, retry in {delays[attempt]}s")
+                    continue
+                raise HTTPException(
+                    status_code=503,
+                    detail="OpenF1 API rate limit atteint. Réessayez dans quelques secondes."
+                )
+            resp.raise_for_status()
+            return resp.json()
 
 
 async def _openf1_get_session_key(year: int, gp_round: int, session_type: str) -> int:
     session_name = OPENF1_SESSION_TYPE_MAP.get(session_type.upper(), session_type)
+
+    # Cache Redis : session_key est stable toute la saison, TTL 24h
+    redis_key = f"openf1:session_key:{year}:{gp_round}:{session_type}"
+    cached = redis_cache.get(redis_key)
+    if cached:
+        return cached["session_key"]
 
     meetings = await _openf1_request("meetings", {"year": year})
     race_meetings = sorted(
@@ -377,7 +396,9 @@ async def _openf1_get_session_key(year: int, gp_round: int, session_type: str) -
             status_code=404,
             detail=f"Session '{session_name}' not found for round {gp_round} ({year})"
         )
-    return sessions[0]["session_key"]
+    session_key = sessions[0]["session_key"]
+    redis_cache.set(redis_key, {"session_key": session_key}, ttl=86400)
+    return session_key
 
 
 async def _openf1_get_driver_number(session_key: int, driver_code: str) -> int:
@@ -523,20 +544,18 @@ async def get_telemetry_comparison(
             # --- OpenF1 direct (~2-4s vs 15-30s avec FastF1) ---
             session_key = await _openf1_get_session_key(year, gp_round, session_type)
 
-            d1_num, d2_num = await asyncio.gather(
-                _openf1_get_driver_number(session_key, driver1),
-                _openf1_get_driver_number(session_key, driver2),
-            )
-
-            lap1_info, lap2_info = await asyncio.gather(
-                _openf1_get_lap_info(session_key, d1_num, lap_number1),
-                _openf1_get_lap_info(session_key, d2_num, lap_number2),
-            )
-
-            tel1, tel2 = await asyncio.gather(
-                _openf1_fetch_tel_df(session_key, d1_num, lap1_info["date_start"], lap1_info["lap_duration"]),
-                _openf1_fetch_tel_df(session_key, d2_num, lap2_info["date_start"], lap2_info["lap_duration"]),
-            )
+            # Sérialisé pour éviter le rate-limit OpenF1 (max ~10 req/min)
+            d1_num = await _openf1_get_driver_number(session_key, driver1)
+            await asyncio.sleep(0.3)
+            d2_num = await _openf1_get_driver_number(session_key, driver2)
+            await asyncio.sleep(0.3)
+            lap1_info = await _openf1_get_lap_info(session_key, d1_num, lap_number1)
+            await asyncio.sleep(0.3)
+            lap2_info = await _openf1_get_lap_info(session_key, d2_num, lap_number2)
+            await asyncio.sleep(0.3)
+            tel1 = await _openf1_fetch_tel_df(session_key, d1_num, lap1_info["date_start"], lap1_info["lap_duration"])
+            await asyncio.sleep(0.3)
+            tel2 = await _openf1_fetch_tel_df(session_key, d2_num, lap2_info["date_start"], lap2_info["lap_duration"])
 
             sectors_driver1 = {
                 "sector1": lap1_info.get("duration_sector_1"),
