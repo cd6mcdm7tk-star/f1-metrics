@@ -154,26 +154,40 @@ async def get_drivers(request: Request, year: int, gp_round: int, session_type: 
             log_success("/api/drivers", cache_hit=True)
             return cached_data
         
-        # 🔥 ÉTAPE 2 : Cache MISS → Calculer
-        session = fastf1.get_session(year, gp_round, session_type)
-        await asyncio.to_thread(session.load)
+        # 🔥 ÉTAPE 2 : Cache MISS → OpenF1 (2026+) ou FastF1 (< 2026)
+        if year >= 2026:
+            session_key = await _openf1_get_session_key(year, gp_round, session_type)
+            raw = await _openf1_request("drivers", {"session_key": session_key})
+            drivers = [
+                {
+                    "abbreviation": d.get("name_acronym", ""),
+                    "number": str(d.get("driver_number", "")),
+                    "team": d.get("team_name") or "Unknown",
+                    "fullName": d.get("full_name") or d.get("broadcast_name") or d.get("name_acronym", ""),
+                }
+                for d in raw if d.get("name_acronym")
+            ]
+        else:
+            session = fastf1.get_session(year, gp_round, session_type)
+            await asyncio.to_thread(session.load)
+            drivers = []
+            for driver_code in session.drivers:
+                driver_info = session.get_driver(driver_code)
+                drivers.append({
+                    'abbreviation': str(driver_info['Abbreviation']),
+                    'number': str(driver_info['DriverNumber']),
+                    'team': str(driver_info['TeamName']),
+                    'fullName': str(driver_info['FullName']) if 'FullName' in driver_info else str(driver_info['Abbreviation'])
+                })
 
-        drivers = []
-        for driver_code in session.drivers:
-            driver_info = session.get_driver(driver_code)
-            drivers.append({
-                'abbreviation': str(driver_info['Abbreviation']),
-                'number': str(driver_info['DriverNumber']),
-                'team': str(driver_info['TeamName']),
-                'fullName': str(driver_info['FullName']) if 'FullName' in driver_info else str(driver_info['Abbreviation'])
-            })
-        
-        # 🔥 ÉTAPE 3 : Sauvegarder dans Redis (TTL 1h)
-        redis_cache.set(cache_key, drivers, ttl=3600)
-        
+        # 🔥 ÉTAPE 3 : Sauvegarder dans Redis (TTL 24h — grille stable)
+        redis_cache.set(cache_key, drivers, ttl=86400)
+
         log_success("/api/drivers", cache_hit=False)
         return drivers
-        
+
+    except HTTPException:
+        raise
     except Exception as e:
         log_error("/api/drivers", e)
         raise handle_fastf1_error(e, f"Année: {year}, GP: {gp_round}, Session: {session_type}")
@@ -826,8 +840,61 @@ async def get_session_laps(
                 log_success("/api/session-laps", cache_hit=False)
                 return result
 
-        # ÉTAPE 2b : Cache MISS → Calculer avec FastF1 (slow path, fallback)
-        # Charger la session
+        # ÉTAPE 2b : Cache MISS → OpenF1 (2026+) ou FastF1 (< 2026)
+        if year >= 2026:
+            session_key = await _openf1_get_session_key(year, gp_round, session_type)
+            driver_num = await _openf1_get_driver_number(session_key, driver)
+            raw_laps = await _openf1_request("laps", {
+                "session_key": session_key,
+                "driver_number": driver_num,
+            })
+            if not raw_laps:
+                raise HTTPException(status_code=404, detail=f"No laps found for {driver}")
+
+            valid_times = [l["lap_duration"] for l in raw_laps if l.get("lap_duration") is not None]
+            fastest_time = min(valid_times) if valid_times else None
+
+            laps_data = []
+            for lap in raw_laps:
+                lap_num = lap.get("lap_number")
+                lap_time = lap.get("lap_duration")
+                is_pb = fastest_time is not None and lap_time is not None and abs(lap_time - fastest_time) < 0.001
+                laps_data.append({
+                    "Position":       None,
+                    "Id":             f"{year}_{gp_round}_{lap_num}_{driver}",
+                    "LapNumber":      lap_num,
+                    "LapTime":        lap_time,
+                    "Sector1Time":    lap.get("duration_sector_1"),
+                    "Sector2Time":    lap.get("duration_sector_2"),
+                    "Sector3Time":    lap.get("duration_sector_3"),
+                    "IsPersonalBest": bool(is_pb),
+                    "IsHotLap":       lap_time is not None,
+                    "HasTelemetry":   lap_time is not None and lap.get("date_start") is not None,
+                    "Team":           None,
+                    "Driver":         driver,
+                    "Compound":       lap.get("compound"),
+                    "AirTemp":        None,
+                    "TrackTemp":      None,
+                    "WindSpeed":      None,
+                })
+            laps_data.sort(key=lambda x: x["LapNumber"] if x["LapNumber"] is not None else 0)
+
+            result = {
+                "driver":      driver,
+                "team":        None,
+                "session":     f"{year} R{gp_round} {session_type}",
+                "year":        year,
+                "round":       gp_round,
+                "sessionType": session_type,
+                "totalLaps":   len(laps_data),
+                "laps":        laps_data,
+                "source":      "openf1",
+            }
+            redis_cache.set(cache_key, result, ttl=3600)
+            log_success("/api/session-laps", cache_hit=False)
+            return result
+
+        # FastF1 slow path (< 2026)
         session = fastf1.get_session(year, gp_round, session_type)
         await asyncio.to_thread(session.load)
 
