@@ -177,6 +177,48 @@ async def get_drivers(request: Request, year: int, gp_round: int, session_type: 
         log_error("/api/drivers", e)
         raise handle_fastf1_error(e, f"Année: {year}, GP: {gp_round}, Session: {session_type}")
 
+def _prepare_tel(tel: pd.DataFrame) -> pd.DataFrame:
+    """
+    Nettoyage défensif d'un DataFrame de télémétrie FastF1/OpenF1 avant interpolation.
+
+    Problèmes rencontrés avec les données 2026 via OpenF1 :
+    - Distance contient des NaN → interp1d plante
+    - Distance non-monotone (doublons de timestamps) → "x is not increasing"
+    - Colonnes nGear / DRS / X / Y absentes → KeyError
+    - Colonnes numériques avec NaN résiduels → int(NaN) = ValueError
+    """
+    if tel is None or tel.empty:
+        return tel
+
+    # 1. Supprimer les lignes sans Distance valide
+    if 'Distance' in tel.columns:
+        tel = tel.dropna(subset=['Distance'])
+
+    # 2. Garantir que Distance est strictement croissante
+    if 'Distance' in tel.columns and len(tel) > 1:
+        tel = tel.sort_values('Distance', ascending=True)
+        tel = tel.drop_duplicates(subset=['Distance'], keep='first')
+        tel = tel.reset_index(drop=True)
+
+    # 3. Colonnes obligatoires : créer si absentes, fillna si présentes
+    required = {
+        'Speed': 0.0,
+        'Throttle': 0.0,
+        'Brake': 0,
+        'nGear': 0,
+        'DRS': 0,
+        'X': 0.0,
+        'Y': 0.0,
+    }
+    for col, default in required.items():
+        if col not in tel.columns:
+            tel[col] = default
+        else:
+            tel[col] = pd.to_numeric(tel[col], errors='coerce').fillna(default)
+
+    return tel
+
+
 def _try_telemetry_from_db(
     year: int, gp_round: int, session_type: str,
     driver1: str, lap_number1,
@@ -413,12 +455,14 @@ async def get_telemetry_comparison(
         if tel2 is None or tel2.empty:
             raise HTTPException(status_code=404, detail=f"No telemetry data for {driver2}")
 
-        # Nettoyer les NaN dans les colonnes entières/booléennes avant interpolation
-        # (fréquent avec OpenF1/2026 où certains canaux arrivent partiellement remplis)
-        for tel in (tel1, tel2):
-            for col, default in [('nGear', 0), ('DRS', 0), ('Brake', False), ('Speed', 0), ('Throttle', 0)]:
-                if col in tel.columns:
-                    tel[col] = tel[col].fillna(default)
+        # Nettoyage défensif : NaN, colonnes manquantes, distance monotone
+        tel1 = _prepare_tel(tel1)
+        tel2 = _prepare_tel(tel2)
+
+        if tel1.empty or len(tel1) < 2:
+            raise HTTPException(status_code=404, detail=f"Insufficient telemetry data for {driver1}")
+        if tel2.empty or len(tel2) < 2:
+            raise HTTPException(status_code=404, detail=f"Insufficient telemetry data for {driver2}")
 
         # Détecter la colonne RPM (plusieurs noms possibles)
         rpm_col = None
@@ -428,43 +472,35 @@ async def get_telemetry_comparison(
                 break
 
         # ✅ INTERPOLATION SUR GRILLE COMMUNE (synchronisation parfaite)
-        # Déterminer la plage de distance commune
         min_distance = max(tel1['Distance'].min(), tel2['Distance'].min())
         max_distance = min(tel1['Distance'].max(), tel2['Distance'].max())
-
-        # Créer grille uniforme de 1000 points
         common_distance = np.linspace(min_distance, max_distance, 1000)
 
         # ===== DRIVER 1 =====
-        # Interpolation linéaire pour valeurs continues
-        interp_speed1 = interp1d(tel1['Distance'], tel1['Speed'], kind='linear', bounds_error=False, fill_value=0)
-        interp_throttle1 = interp1d(tel1['Distance'], tel1['Throttle'], kind='linear', bounds_error=False, fill_value=0)
+        interp_speed1    = interp1d(tel1['Distance'], tel1['Speed'],           kind='linear',  bounds_error=False, fill_value=0)
+        interp_throttle1 = interp1d(tel1['Distance'], tel1['Throttle'],        kind='linear',  bounds_error=False, fill_value=0)
+        interp_brake1    = interp1d(tel1['Distance'], tel1['Brake'].astype(int), kind='nearest', bounds_error=False, fill_value=0)
+        interp_gear1     = interp1d(tel1['Distance'], tel1['nGear'],           kind='nearest', bounds_error=False, fill_value=0)
+        interp_drs1      = interp1d(tel1['Distance'], tel1['DRS'],             kind='nearest', bounds_error=False, fill_value=0)
+        interp_x1        = interp1d(tel1['Distance'], tel1['X'],               kind='linear',  bounds_error=False, fill_value='extrapolate')
+        interp_y1        = interp1d(tel1['Distance'], tel1['Y'],               kind='linear',  bounds_error=False, fill_value='extrapolate')
 
-        # Interpolation nearest pour valeurs discrètes
-        interp_brake1 = interp1d(tel1['Distance'], tel1['Brake'].astype(int), kind='nearest', bounds_error=False, fill_value=0)
-        interp_gear1 = interp1d(tel1['Distance'], tel1['nGear'], kind='nearest', bounds_error=False, fill_value=0)
-        interp_drs1 = interp1d(tel1['Distance'], tel1['DRS'], kind='nearest', bounds_error=False, fill_value=0)
-
-        # 🔥 RPM - linéaire car valeur continue
         if rpm_col and rpm_col in tel1.columns:
-            interp_rpm1 = interp1d(tel1['Distance'], tel1[rpm_col].fillna(10000), kind='linear', bounds_error=False, fill_value=10000)
+            rpm1_series = pd.to_numeric(tel1[rpm_col], errors='coerce').fillna(10000)
+            interp_rpm1 = interp1d(tel1['Distance'], rpm1_series, kind='linear', bounds_error=False, fill_value=10000)
         else:
-            interp_rpm1 = lambda x: 10000  # Fallback si RPM pas disponible
-
-        # Interpoler positions GPS (linéaire)
-        interp_x1 = interp1d(tel1['Distance'], tel1['X'].fillna(0), kind='linear', bounds_error=False, fill_value='extrapolate')
-        interp_y1 = interp1d(tel1['Distance'], tel1['Y'].fillna(0), kind='linear', bounds_error=False, fill_value='extrapolate')
+            interp_rpm1 = lambda x: 10000
 
         # ===== DRIVER 2 =====
-        interp_speed2 = interp1d(tel2['Distance'], tel2['Speed'], kind='linear', bounds_error=False, fill_value=0)
-        interp_throttle2 = interp1d(tel2['Distance'], tel2['Throttle'], kind='linear', bounds_error=False, fill_value=0)
-        interp_brake2 = interp1d(tel2['Distance'], tel2['Brake'].astype(int), kind='nearest', bounds_error=False, fill_value=0)
-        interp_gear2 = interp1d(tel2['Distance'], tel2['nGear'], kind='nearest', bounds_error=False, fill_value=0)
-        interp_drs2 = interp1d(tel2['Distance'], tel2['DRS'], kind='nearest', bounds_error=False, fill_value=0)
+        interp_speed2    = interp1d(tel2['Distance'], tel2['Speed'],           kind='linear',  bounds_error=False, fill_value=0)
+        interp_throttle2 = interp1d(tel2['Distance'], tel2['Throttle'],        kind='linear',  bounds_error=False, fill_value=0)
+        interp_brake2    = interp1d(tel2['Distance'], tel2['Brake'].astype(int), kind='nearest', bounds_error=False, fill_value=0)
+        interp_gear2     = interp1d(tel2['Distance'], tel2['nGear'],           kind='nearest', bounds_error=False, fill_value=0)
+        interp_drs2      = interp1d(tel2['Distance'], tel2['DRS'],             kind='nearest', bounds_error=False, fill_value=0)
 
-        # 🔥 RPM
         if rpm_col and rpm_col in tel2.columns:
-            interp_rpm2 = interp1d(tel2['Distance'], tel2[rpm_col].fillna(10000), kind='linear', bounds_error=False, fill_value=10000)
+            rpm2_series = pd.to_numeric(tel2[rpm_col], errors='coerce').fillna(10000)
+            interp_rpm2 = interp1d(tel2['Distance'], rpm2_series, kind='linear', bounds_error=False, fill_value=10000)
         else:
             interp_rpm2 = lambda x: 10000
         
