@@ -16,6 +16,7 @@ import fastf1
 import pandas as pd
 import numpy as np
 from scipy.interpolate import interp1d
+import httpx
 import requests
 from app.utils.cache import cache as api_cache
 from app.utils.error_handler import handle_fastf1_error, log_request, log_success, log_error
@@ -190,9 +191,12 @@ def _prepare_tel(tel: pd.DataFrame) -> pd.DataFrame:
     if tel is None or tel.empty:
         return tel
 
+    # 0. Si Distance absente, télémétrie inutilisable → retourner vide
+    if 'Distance' not in tel.columns:
+        return pd.DataFrame()
+
     # 1. Supprimer les lignes sans Distance valide
-    if 'Distance' in tel.columns:
-        tel = tel.dropna(subset=['Distance'])
+    tel = tel.dropna(subset=['Distance'])
 
     # 2. Garantir que Distance est strictement croissante
     if 'Distance' in tel.columns and len(tel) > 1:
@@ -326,6 +330,146 @@ def _try_telemetry_from_db(
         return None
 
 
+# ---------------------------------------------------------------------------
+# OpenF1 direct helpers (used for year >= 2024 as fast path)
+# ---------------------------------------------------------------------------
+OPENF1_BASE = "https://api.openf1.org/v1"
+OPENF1_SESSION_TYPE_MAP = {
+    "Q":  "Qualifying",
+    "R":  "Race",
+    "FP1": "Practice 1",
+    "FP2": "Practice 2",
+    "FP3": "Practice 3",
+    "S":  "Sprint",
+    "SQ": "Sprint Qualifying",
+    "SS": "Sprint Shootout",
+}
+
+
+async def _openf1_request(path: str, params: dict) -> list:
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        resp = await client.get(f"{OPENF1_BASE}/{path}", params=params)
+        resp.raise_for_status()
+        return resp.json()
+
+
+async def _openf1_get_session_key(year: int, gp_round: int, session_type: str) -> int:
+    session_name = OPENF1_SESSION_TYPE_MAP.get(session_type.upper(), session_type)
+
+    meetings = await _openf1_request("meetings", {"year": year})
+    race_meetings = sorted(
+        [m for m in meetings if "test" not in m.get("meeting_name", "").lower()],
+        key=lambda m: m["date_start"],
+    )
+    if gp_round < 1 or gp_round > len(race_meetings):
+        raise HTTPException(
+            status_code=404,
+            detail=f"Round {gp_round} not found for {year} ({len(race_meetings)} meetings found)"
+        )
+    meeting_key = race_meetings[gp_round - 1]["meeting_key"]
+
+    sessions = await _openf1_request("sessions", {
+        "meeting_key": meeting_key,
+        "session_name": session_name,
+    })
+    if not sessions:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Session '{session_name}' not found for round {gp_round} ({year})"
+        )
+    return sessions[0]["session_key"]
+
+
+async def _openf1_get_driver_number(session_key: int, driver_code: str) -> int:
+    drivers = await _openf1_request("drivers", {
+        "session_key": session_key,
+        "name_acronym": driver_code,
+    })
+    if not drivers:
+        raise HTTPException(status_code=404, detail=f"Driver {driver_code} not found in session")
+    return drivers[0]["driver_number"]
+
+
+async def _openf1_get_lap_info(session_key: int, driver_number: int, lap_number: int | None) -> dict:
+    laps = await _openf1_request("laps", {
+        "session_key": session_key,
+        "driver_number": driver_number,
+    })
+    valid_laps = [l for l in laps if l.get("lap_duration") is not None and l.get("date_start") is not None]
+    if not valid_laps:
+        raise HTTPException(status_code=404, detail=f"No completed laps for driver number {driver_number}")
+
+    if lap_number is not None:
+        matching = [l for l in valid_laps if l["lap_number"] == lap_number]
+        if not matching:
+            raise HTTPException(status_code=404, detail=f"Lap {lap_number} not found for driver {driver_number}")
+        return matching[0]
+
+    return min(valid_laps, key=lambda l: l["lap_duration"])
+
+
+async def _openf1_fetch_tel_df(
+    session_key: int,
+    driver_number: int,
+    date_start: str,
+    lap_duration: float,
+) -> pd.DataFrame:
+    """
+    Fetch car_data + location from OpenF1 for a lap window, merge them,
+    compute cumulative Distance, and return a DataFrame in FastF1 column convention.
+    """
+    lap_start_dt = pd.to_datetime(date_start, utc=True)
+    lap_end_dt = lap_start_dt + pd.Timedelta(seconds=lap_duration + 2.0)
+
+    base_params = {"session_key": session_key, "driver_number": driver_number}
+    car_raw, loc_raw = await asyncio.gather(
+        _openf1_request("car_data", base_params),
+        _openf1_request("location", base_params),
+    )
+
+    if not car_raw:
+        return pd.DataFrame()
+
+    df_car = pd.DataFrame(car_raw)
+    df_car["date"] = pd.to_datetime(df_car["date"], utc=True)
+    df_car = df_car[(df_car["date"] >= lap_start_dt) & (df_car["date"] <= lap_end_dt)]
+    df_car = df_car.sort_values("date").reset_index(drop=True)
+
+    if df_car.empty:
+        return pd.DataFrame()
+
+    if loc_raw:
+        df_loc = pd.DataFrame(loc_raw)
+        df_loc["date"] = pd.to_datetime(df_loc["date"], utc=True)
+        df_loc = df_loc[(df_loc["date"] >= lap_start_dt) & (df_loc["date"] <= lap_end_dt)]
+        df_loc = df_loc.sort_values("date").reset_index(drop=True)
+        df = pd.merge_asof(df_car, df_loc[["date", "x", "y"]], on="date", direction="nearest")
+    else:
+        df = df_car.copy()
+        df["x"] = 0.0
+        df["y"] = 0.0
+
+    df = df.rename(columns={
+        "speed": "Speed",
+        "throttle": "Throttle",
+        "brake": "Brake",
+        "n_gear": "nGear",
+        "drs": "DRS",
+        "rpm": "RPM",
+        "x": "X",
+        "y": "Y",
+    })
+
+    # Compute cumulative Distance from GPS coordinates (OpenF1 coords are in metres)
+    x = pd.to_numeric(df.get("X", 0), errors="coerce").fillna(0).values
+    y = pd.to_numeric(df.get("Y", 0), errors="coerce").fillna(0).values
+    dx = np.diff(x, prepend=x[0])
+    dy = np.diff(y, prepend=y[0])
+    df["Distance"] = np.cumsum(np.sqrt(dx**2 + dy**2))
+
+    return df
+
+
 @app.get("/api/telemetry/{year}/{gp_round}/{session_type}/{driver1}/{driver2}")
 @limiter.limit("10/minute")
 async def get_telemetry_comparison(
@@ -374,81 +518,84 @@ async def get_telemetry_comparison(
                 log_success("/api/telemetry", cache_hit=False)
                 return db_result
 
-        # ÉTAPE 2b : Cache MISS → Calculer avec FastF1 (slow path, fallback)
-        session = fastf1.get_session(year, gp_round, session_type)
-        await asyncio.to_thread(session.load)
+        # ÉTAPE 2b : Cache MISS → OpenF1 direct (year >= 2024) ou FastF1 (year < 2024)
+        if year >= 2024:
+            # --- OpenF1 direct (~2-4s vs 15-30s avec FastF1) ---
+            session_key = await _openf1_get_session_key(year, gp_round, session_type)
 
-        # 🔥 RÉCUPÉRER LAP1 (driver1)
-        if lap_number1 is not None:
-            # Lap spécifique pour driver1
-            laps1 = session.laps.pick_drivers(driver1)
-            lap1_filtered = laps1[laps1['LapNumber'] == lap_number1]
-            
-            if lap1_filtered.empty:
-                raise HTTPException(
-                    status_code=404, 
-                    detail=f"Lap {lap_number1} not found for {driver1}"
-                )
-            
-            lap1 = lap1_filtered.iloc[0]
+            d1_num, d2_num = await asyncio.gather(
+                _openf1_get_driver_number(session_key, driver1),
+                _openf1_get_driver_number(session_key, driver2),
+            )
+
+            lap1_info, lap2_info = await asyncio.gather(
+                _openf1_get_lap_info(session_key, d1_num, lap_number1),
+                _openf1_get_lap_info(session_key, d2_num, lap_number2),
+            )
+
+            tel1, tel2 = await asyncio.gather(
+                _openf1_fetch_tel_df(session_key, d1_num, lap1_info["date_start"], lap1_info["lap_duration"]),
+                _openf1_fetch_tel_df(session_key, d2_num, lap2_info["date_start"], lap2_info["lap_duration"]),
+            )
+
+            sectors_driver1 = {
+                "sector1": lap1_info.get("duration_sector_1"),
+                "sector2": lap1_info.get("duration_sector_2"),
+                "sector3": lap1_info.get("duration_sector_3"),
+            }
+            sectors_driver2 = {
+                "sector1": lap2_info.get("duration_sector_1"),
+                "sector2": lap2_info.get("duration_sector_2"),
+                "sector3": lap2_info.get("duration_sector_3"),
+            }
+            lap_time1 = lap1_info.get("lap_duration")
+            lap_time2 = lap2_info.get("lap_duration")
+            actual_lap_number1 = lap1_info["lap_number"]
+            actual_lap_number2 = lap2_info["lap_number"]
+
         else:
-            # Fastest lap par défaut
-            lap1 = session.laps.pick_drivers(driver1).pick_fastest()
-        
-        # 🔥 RÉCUPÉRER LAP2 (driver2)
-        if lap_number2 is not None:
-            # Lap spécifique pour driver2
-            laps2 = session.laps.pick_drivers(driver2)
-            lap2_filtered = laps2[laps2['LapNumber'] == lap_number2]
-            
-            if lap2_filtered.empty:
-                raise HTTPException(
-                    status_code=404, 
-                    detail=f"Lap {lap_number2} not found for {driver2}"
-                )
-            
-            lap2 = lap2_filtered.iloc[0]
-        else:
-            # Fastest lap par défaut
-            lap2 = session.laps.pick_drivers(driver2).pick_fastest()
-        
-        if lap1 is None or lap2 is None:
-            missing_driver = driver1 if lap1 is None else driver2
-            raise Exception(f"Driver {missing_driver} not found or no valid laps available")
-        
-        # 🔥 RÉCUPÉRER LES SECTEURS
-        sectors_driver1 = {
-            "sector1": float(lap1['Sector1Time'].total_seconds()) if pd.notna(lap1['Sector1Time']) else None,
-            "sector2": float(lap1['Sector2Time'].total_seconds()) if pd.notna(lap1['Sector2Time']) else None,
-            "sector3": float(lap1['Sector3Time'].total_seconds()) if pd.notna(lap1['Sector3Time']) else None,
-        }
-        
-        sectors_driver2 = {
-            "sector1": float(lap2['Sector1Time'].total_seconds()) if pd.notna(lap2['Sector1Time']) else None,
-            "sector2": float(lap2['Sector2Time'].total_seconds()) if pd.notna(lap2['Sector2Time']) else None,
-            "sector3": float(lap2['Sector3Time'].total_seconds()) if pd.notna(lap2['Sector3Time']) else None,
-        }
-        
-        # ✅ RÉCUPÉRATION TÉLÉMÉTRIE BRUTE
-        try:
+            # --- FastF1 fallback (sessions pré-2024 non présentes en DB) ---
+            session = fastf1.get_session(year, gp_round, session_type)
+            await asyncio.to_thread(session.load)
+
+            if lap_number1 is not None:
+                laps1 = session.laps.pick_drivers(driver1)
+                lap1_filtered = laps1[laps1['LapNumber'] == lap_number1]
+                if lap1_filtered.empty:
+                    raise HTTPException(status_code=404, detail=f"Lap {lap_number1} not found for {driver1}")
+                lap1 = lap1_filtered.iloc[0]
+            else:
+                lap1 = session.laps.pick_drivers(driver1).pick_fastest()
+
+            if lap_number2 is not None:
+                laps2 = session.laps.pick_drivers(driver2)
+                lap2_filtered = laps2[laps2['LapNumber'] == lap_number2]
+                if lap2_filtered.empty:
+                    raise HTTPException(status_code=404, detail=f"Lap {lap_number2} not found for {driver2}")
+                lap2 = lap2_filtered.iloc[0]
+            else:
+                lap2 = session.laps.pick_drivers(driver2).pick_fastest()
+
+            if lap1 is None or lap2 is None:
+                missing = driver1 if lap1 is None else driver2
+                raise HTTPException(status_code=404, detail=f"Driver {missing} not found or no valid laps")
+
+            sectors_driver1 = {
+                "sector1": float(lap1['Sector1Time'].total_seconds()) if pd.notna(lap1['Sector1Time']) else None,
+                "sector2": float(lap1['Sector2Time'].total_seconds()) if pd.notna(lap1['Sector2Time']) else None,
+                "sector3": float(lap1['Sector3Time'].total_seconds()) if pd.notna(lap1['Sector3Time']) else None,
+            }
+            sectors_driver2 = {
+                "sector1": float(lap2['Sector1Time'].total_seconds()) if pd.notna(lap2['Sector1Time']) else None,
+                "sector2": float(lap2['Sector2Time'].total_seconds()) if pd.notna(lap2['Sector2Time']) else None,
+                "sector3": float(lap2['Sector3Time'].total_seconds()) if pd.notna(lap2['Sector3Time']) else None,
+            }
             tel1 = lap1.get_telemetry().add_distance()
             tel2 = lap2.get_telemetry().add_distance()
-        except Exception as tel_err:
-            logger.warning(f"get_telemetry() failed: {tel_err}")
-            if year >= 2026:
-                raise HTTPException(
-                    status_code=503,
-                    detail={
-                        "error": "Télémétrie 2026 non disponible",
-                        "message": (
-                            f"Les données de télémétrie {year} ne sont pas encore disponibles via FastF1. "
-                            f"Lancez l'ingestion : python jobs/ingest_session.py "
-                            f"--year {year} --round {gp_round} --session {session_type}"
-                        ),
-                        "suggestion": "Les données seront disponibles après ingestion depuis OpenF1."
-                    }
-                )
-            raise
+            lap_time1 = float(lap1['LapTime'].total_seconds()) if pd.notna(lap1['LapTime']) else None
+            lap_time2 = float(lap2['LapTime'].total_seconds()) if pd.notna(lap2['LapTime']) else None
+            actual_lap_number1 = int(lap1['LapNumber']) if pd.notna(lap1['LapNumber']) else lap_number1
+            actual_lap_number2 = int(lap2['LapNumber']) if pd.notna(lap2['LapNumber']) else lap_number2
 
         if tel1 is None or tel1.empty:
             raise HTTPException(status_code=404, detail=f"No telemetry data for {driver1}")
@@ -558,14 +705,14 @@ async def get_telemetry_comparison(
         
         result = {
             'telemetry': telemetry_data,
-            'lapTime1': float(lap1['LapTime'].total_seconds()) if pd.notna(lap1['LapTime']) else None,
-            'lapTime2': float(lap2['LapTime'].total_seconds()) if pd.notna(lap2['LapTime']) else None,
+            'lapTime1': lap_time1,
+            'lapTime2': lap_time2,
             'sectors1': sectors_driver1,
             'sectors2': sectors_driver2,
             'driver1': driver1,
             'driver2': driver2,
-            'lapNumber1': int(lap1['LapNumber']) if pd.notna(lap1['LapNumber']) else lap_number1,
-            'lapNumber2': int(lap2['LapNumber']) if pd.notna(lap2['LapNumber']) else lap_number2,
+            'lapNumber1': actual_lap_number1,
+            'lapNumber2': actual_lap_number2,
         }
         
         # 🔥 ÉTAPE 3 : Sauvegarder dans Redis avec TTL 1h
@@ -574,8 +721,11 @@ async def get_telemetry_comparison(
         log_success("/api/telemetry", cache_hit=False)
         return result
         
+    except HTTPException:
+        raise
     except Exception as e:
         log_error("/api/telemetry", e)
+        import traceback; traceback.print_exc()
         error_msg = f"Pilotes: {driver1} vs {driver2}, {year} GP{gp_round} {session_type}"
         if lap_number1:
             error_msg += f" Lap1 {lap_number1}"
