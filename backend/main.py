@@ -539,8 +539,8 @@ async def get_telemetry_comparison(
                 log_success("/api/telemetry", cache_hit=False)
                 return db_result
 
-        # ÉTAPE 2b : Cache MISS → OpenF1 direct (year >= 2024) ou FastF1 (year < 2024)
-        if year >= 2024:
+        # ÉTAPE 2b : Cache MISS → OpenF1 direct (2026+) ou FastF1 (< 2026)
+        if year >= 2026:
             # --- OpenF1 direct (~2-4s vs 15-30s avec FastF1) ---
             session_key = await _openf1_get_session_key(year, gp_round, session_type)
 
@@ -573,7 +573,7 @@ async def get_telemetry_comparison(
             actual_lap_number2 = lap2_info["lap_number"]
 
         else:
-            # --- FastF1 fallback (sessions pré-2024 non présentes en DB) ---
+            # --- FastF1 fallback (sessions pré-2026 non présentes en DB) ---
             session = fastf1.get_session(year, gp_round, session_type)
             await asyncio.to_thread(session.load)
 
