@@ -21,6 +21,7 @@ from app.utils.cache import cache as api_cache
 from app.utils.error_handler import handle_fastf1_error, log_request, log_success, log_error
 from stripe_routes import router as stripe_router
 from routes.livetiming import router as livetiming_router
+from database import db
 
 # Rate limiter
 limiter = Limiter(key_func=get_remote_address)
@@ -57,6 +58,16 @@ app.include_router(livetiming_router)
 cache_dir = 'cache'
 fastf1.Cache.enable_cache(cache_dir)
 api_cache.clear_old()
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Create PostgreSQL tables on startup if DB is available."""
+    if db.available:
+        await asyncio.to_thread(db.create_tables)
+        logger.info("PostgreSQL tables ready")
+    else:
+        logger.warning("PostgreSQL not available - running in FastF1-only mode")
 
 
 # Root endpoint
@@ -166,6 +177,113 @@ async def get_drivers(request: Request, year: int, gp_round: int, session_type: 
         log_error("/api/drivers", e)
         raise handle_fastf1_error(e, f"Année: {year}, GP: {gp_round}, Session: {session_type}")
 
+def _try_telemetry_from_db(
+    year: int, gp_round: int, session_type: str,
+    driver1: str, lap_number1,
+    driver2: str, lap_number2,
+) -> dict | None:
+    """
+    Attempt to serve a telemetry comparison from PostgreSQL.
+    Returns the result dict (same shape as the FastF1 path) or None if data is missing.
+    This runs in a thread (psycopg2 is synchronous).
+    """
+    try:
+        lap_type1 = "fastest" if lap_number1 is None else f"lap_{lap_number1}"
+        lap_type2 = "fastest" if lap_number2 is None else f"lap_{lap_number2}"
+
+        t1 = db.get_telemetry(year, gp_round, session_type, driver1, lap_type1)
+        t2 = db.get_telemetry(year, gp_round, session_type, driver2, lap_type2)
+        if t1 is None or t2 is None:
+            return None
+
+        actual_lap1 = t1["lap_number"]
+        actual_lap2 = t2["lap_number"]
+
+        lap1_meta = db.get_lap_metadata(year, gp_round, session_type, driver1, actual_lap1) or {}
+        lap2_meta = db.get_lap_metadata(year, gp_round, session_type, driver2, actual_lap2) or {}
+
+        d1 = t1["telemetry_data"]
+        d2 = t2["telemetry_data"]
+
+        dist1 = np.array(d1["distance"], dtype=float)
+        dist2 = np.array(d2["distance"], dtype=float)
+
+        min_distance = max(dist1.min(), dist2.min())
+        max_distance = min(dist1.max(), dist2.max())
+        common_distance = np.linspace(min_distance, max_distance, 1000)
+
+        interp_speed1    = interp1d(dist1, d1["speed"],                   kind="linear",  bounds_error=False, fill_value=0)
+        interp_throttle1 = interp1d(dist1, d1["throttle"],                kind="linear",  bounds_error=False, fill_value=0)
+        interp_brake1    = interp1d(dist1, np.array(d1["brake"]).astype(int), kind="nearest", bounds_error=False, fill_value=0)
+        interp_gear1     = interp1d(dist1, d1["gear"],                    kind="nearest", bounds_error=False, fill_value=0)
+        interp_drs1      = interp1d(dist1, d1["drs"],                     kind="nearest", bounds_error=False, fill_value=0)
+        interp_rpm1      = interp1d(dist1, d1["rpm"],                     kind="linear",  bounds_error=False, fill_value=10000)
+        interp_x1        = interp1d(dist1, d1["x"],                       kind="linear",  bounds_error=False, fill_value="extrapolate")
+        interp_y1        = interp1d(dist1, d1["y"],                       kind="linear",  bounds_error=False, fill_value="extrapolate")
+
+        interp_speed2    = interp1d(dist2, d2["speed"],                   kind="linear",  bounds_error=False, fill_value=0)
+        interp_throttle2 = interp1d(dist2, d2["throttle"],                kind="linear",  bounds_error=False, fill_value=0)
+        interp_brake2    = interp1d(dist2, np.array(d2["brake"]).astype(int), kind="nearest", bounds_error=False, fill_value=0)
+        interp_gear2     = interp1d(dist2, d2["gear"],                    kind="nearest", bounds_error=False, fill_value=0)
+        interp_drs2      = interp1d(dist2, d2["drs"],                     kind="nearest", bounds_error=False, fill_value=0)
+        interp_rpm2      = interp1d(dist2, d2["rpm"],                     kind="linear",  bounds_error=False, fill_value=10000)
+
+        telemetry_data = []
+        cumulative_time1 = cumulative_time2 = 0.0
+        prev_speed1 = prev_speed2 = 0.0
+
+        for i, dist in enumerate(common_distance):
+            speed1 = float(interp_speed1(dist))
+            speed2 = float(interp_speed2(dist))
+
+            if i > 0:
+                seg = dist - common_distance[i - 1]
+                avg1 = (speed1 + prev_speed1) / 2 / 3.6
+                avg2 = (speed2 + prev_speed2) / 2 / 3.6
+                if avg1 > 0:
+                    cumulative_time1 += seg / avg1
+                if avg2 > 0:
+                    cumulative_time2 += seg / avg2
+
+            telemetry_data.append({
+                "distance":  float(dist),
+                "speed1":    speed1,
+                "speed2":    speed2,
+                "throttle1": float(interp_throttle1(dist)),
+                "throttle2": float(interp_throttle2(dist)),
+                "brake1":    bool(interp_brake1(dist)),
+                "brake2":    bool(interp_brake2(dist)),
+                "gear1":     int(interp_gear1(dist)),
+                "gear2":     int(interp_gear2(dist)),
+                "drs1":      int(interp_drs1(dist)),
+                "drs2":      int(interp_drs2(dist)),
+                "x":         float(interp_x1(dist)),
+                "y":         float(interp_y1(dist)),
+                "delta":     float(cumulative_time2 - cumulative_time1),
+                "rpm1":      float(interp_rpm1(dist)),
+                "rpm2":      float(interp_rpm2(dist)),
+            })
+
+            prev_speed1 = speed1
+            prev_speed2 = speed2
+
+        return {
+            "telemetry":  telemetry_data,
+            "lapTime1":   lap1_meta.get("lap_time"),
+            "lapTime2":   lap2_meta.get("lap_time"),
+            "sectors1":   {"sector1": lap1_meta.get("sector1_time"), "sector2": lap1_meta.get("sector2_time"), "sector3": lap1_meta.get("sector3_time")},
+            "sectors2":   {"sector1": lap2_meta.get("sector1_time"), "sector2": lap2_meta.get("sector2_time"), "sector3": lap2_meta.get("sector3_time")},
+            "driver1":    driver1,
+            "driver2":    driver2,
+            "lapNumber1": actual_lap1,
+            "lapNumber2": actual_lap2,
+            "source":     "postgresql",
+        }
+    except Exception as e:
+        logger.warning(f"PostgreSQL telemetry lookup failed: {e}")
+        return None
+
+
 @app.get("/api/telemetry/{year}/{gp_round}/{session_type}/{driver1}/{driver2}")
 @limiter.limit("10/minute")
 async def get_telemetry_comparison(
@@ -200,8 +318,21 @@ async def get_telemetry_comparison(
         if cached_data:
             log_success("/api/telemetry", cache_hit=True)
             return cached_data
-        
-        # 🔥 ÉTAPE 2 : Cache MISS → Calculer avec FastF1
+
+        # ÉTAPE 2a : PostgreSQL fast path (pre-computed data)
+        if db.available:
+            db_result = await asyncio.to_thread(
+                _try_telemetry_from_db,
+                year, gp_round, session_type,
+                driver1, lap_number1,
+                driver2, lap_number2,
+            )
+            if db_result:
+                redis_cache.set(cache_key, db_result, ttl=3600)
+                log_success("/api/telemetry", cache_hit=False)
+                return db_result
+
+        # ÉTAPE 2b : Cache MISS → Calculer avec FastF1 (slow path, fallback)
         session = fastf1.get_session(year, gp_round, session_type)
         await asyncio.to_thread(session.load)
 
@@ -416,8 +547,52 @@ async def get_session_laps(
         if cached_data:
             log_success("/api/session-laps", cache_hit=True)
             return cached_data
-        
-        # 🔥 ÉTAPE 2 : Cache MISS → Calculer avec FastF1
+
+        # ÉTAPE 2a : PostgreSQL fast path
+        if db.available:
+            db_laps = await asyncio.to_thread(
+                db.get_laps, year, gp_round, session_type, driver
+            )
+            if db_laps:
+                fastest_time = min((l["lap_time"] for l in db_laps if l["lap_time"] is not None), default=None)
+                laps_data = []
+                for l in db_laps:
+                    lt = l["lap_time"]
+                    is_pb = fastest_time is not None and lt is not None and abs(lt - fastest_time) < 0.001
+                    laps_data.append({
+                        "Position":       None,
+                        "Id":             f"{year}_{gp_round}_{l['lap_number']}_{driver}",
+                        "LapNumber":      l["lap_number"],
+                        "LapTime":        lt,
+                        "Sector1Time":    l["sector1_time"],
+                        "Sector2Time":    l["sector2_time"],
+                        "Sector3Time":    l["sector3_time"],
+                        "IsPersonalBest": bool(is_pb),
+                        "IsHotLap":       lt is not None,
+                        "HasTelemetry":   bool(l["telemetry_available"]),
+                        "Team":           None,
+                        "Driver":         driver,
+                        "Compound":       l["compound"],
+                        "AirTemp":        None,
+                        "TrackTemp":      None,
+                        "WindSpeed":      None,
+                    })
+                result = {
+                    "driver":      driver,
+                    "team":        None,
+                    "session":     f"{year} R{gp_round} {session_type}",
+                    "year":        year,
+                    "round":       gp_round,
+                    "sessionType": session_type,
+                    "totalLaps":   len(laps_data),
+                    "laps":        laps_data,
+                    "source":      "postgresql",
+                }
+                redis_cache.set(cache_key, result, ttl=3600)
+                log_success("/api/session-laps", cache_hit=False)
+                return result
+
+        # ÉTAPE 2b : Cache MISS → Calculer avec FastF1 (slow path, fallback)
         # Charger la session
         session = fastf1.get_session(year, gp_round, session_type)
         await asyncio.to_thread(session.load)
