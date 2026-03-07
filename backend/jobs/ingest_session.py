@@ -52,6 +52,25 @@ def _to_float(val) -> Optional[float]:
         return None
 
 
+def _sanitize_tel_data(data: dict) -> dict:
+    """
+    Replace NaN/inf values in column-based telemetry arrays with safe defaults.
+    Prevents json.dumps failures and 'cannot convert float NaN to integer' errors.
+    """
+    defaults = {"gear": 0, "drs": 0, "brake": False, "rpm": 10000}
+    cleaned = {}
+    for key, values in data.items():
+        default = defaults.get(key, 0.0)
+        cleaned_vals = []
+        for v in values:
+            if isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
+                cleaned_vals.append(default)
+            else:
+                cleaned_vals.append(v)
+        cleaned[key] = cleaned_vals
+    return cleaned
+
+
 def _distance_from_xy(x: list, y: list) -> list:
     """Cumulative Euclidean distance in metres from GPS arrays."""
     dist = [0.0]
@@ -277,7 +296,7 @@ def _fetch_openf1_telemetry(
     # Calculate distance
     dist = _distance_from_xy(x_vals, y_vals)
 
-    return {
+    return _sanitize_tel_data({
         "distance": dist,
         "speed":    speed,
         "throttle": throttle,
@@ -287,7 +306,7 @@ def _fetch_openf1_telemetry(
         "rpm":      rpm,
         "x":        x_vals,
         "y":        y_vals,
-    }
+    })
 
 
 # ---------------------------------------------------------------------------
@@ -351,17 +370,17 @@ def ingest_fastf1(year: int, gp_round: int, session_type: str):
                 # Detect RPM column
                 rpm_col = next((c for c in ["RPM", "nRPM", "Rpm", "EngineRPM"] if c in tel.columns), None)
 
-                tel_data = {
-                    "distance": tel["Distance"].tolist(),
-                    "speed":    tel["Speed"].tolist(),
-                    "throttle": tel["Throttle"].tolist(),
-                    "brake":    tel["Brake"].astype(bool).tolist(),
-                    "gear":     tel["nGear"].astype(int).tolist(),
-                    "drs":      tel["DRS"].astype(int).tolist(),
-                    "rpm":      tel[rpm_col].tolist() if rpm_col else [10000] * len(tel),
-                    "x":        tel["X"].tolist(),
-                    "y":        tel["Y"].tolist(),
-                }
+                tel_data = _sanitize_tel_data({
+                    "distance": tel["Distance"].fillna(0).tolist(),
+                    "speed":    tel["Speed"].fillna(0).tolist(),
+                    "throttle": tel["Throttle"].fillna(0).tolist(),
+                    "brake":    tel["Brake"].fillna(False).astype(bool).tolist(),
+                    "gear":     tel["nGear"].fillna(0).astype(int).tolist(),
+                    "drs":      tel["DRS"].fillna(0).astype(int).tolist(),
+                    "rpm":      tel[rpm_col].fillna(10000).tolist() if rpm_col else [10000] * len(tel),
+                    "x":        tel["X"].fillna(0).tolist(),
+                    "y":        tel["Y"].fillna(0).tolist(),
+                })
 
                 lap_num = int(fastest["LapNumber"])
                 db.save_telemetry(
