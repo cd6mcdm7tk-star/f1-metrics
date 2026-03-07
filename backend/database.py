@@ -4,6 +4,7 @@ Connection pool + query helpers for pre-computed F1 data.
 """
 import json
 import logging
+import math
 import os
 from typing import Any, Optional
 
@@ -141,6 +142,16 @@ class PostgresDB:
         # psycopg2 returns JSONB as dict already
         if isinstance(telemetry_data, str):
             telemetry_data = json.loads(telemetry_data)
+        # Nettoyer les NaN/Inf dans les données récupérées (listes ou scalaires)
+        if telemetry_data:
+            for key, value in telemetry_data.items():
+                if isinstance(value, list):
+                    telemetry_data[key] = [
+                        0.0 if isinstance(v, float) and (math.isnan(v) or math.isinf(v)) else v
+                        for v in value
+                    ]
+                elif isinstance(value, float) and (math.isnan(value) or math.isinf(value)):
+                    telemetry_data[key] = 0.0
         return {"telemetry_data": telemetry_data, "lap_number": lap_number}
 
     def save_telemetry(
