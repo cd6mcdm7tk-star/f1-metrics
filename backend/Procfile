@@ -1,0 +1,1 @@
+worker: python jobs/schedule_ingest.py
