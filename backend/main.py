@@ -66,9 +66,27 @@ async def startup_event():
     """Create PostgreSQL tables on startup if DB is available."""
     if db.available:
         await asyncio.to_thread(db.create_tables)
-        logger.info("PostgreSQL tables ready")
+        print("PostgreSQL tables ready", flush=True)
     else:
-        logger.warning("PostgreSQL not available - running in FastF1-only mode")
+        print("PostgreSQL not available - running in FastF1-only mode", flush=True)
+
+    # Lancer le scheduler d'ingestion automatique (toutes les heures)
+    try:
+        from apscheduler.schedulers.asyncio import AsyncIOScheduler
+        from jobs.schedule_ingest import run as ingest_run
+
+        def _run_ingest():
+            try:
+                ingest_run()
+            except Exception as e:
+                logger.error(f"[Scheduler] Ingestion error: {e}")
+
+        scheduler = AsyncIOScheduler()
+        scheduler.add_job(_run_ingest, "cron", minute=0)  # toutes les heures pile
+        scheduler.start()
+        print("[Scheduler] Auto-ingestion scheduled (every hour)", flush=True)
+    except Exception as e:
+        print(f"[Scheduler] Could not start scheduler: {e}", flush=True)
 
 
 # Root endpoint
@@ -265,6 +283,15 @@ def _try_telemetry_from_db(
         d1 = t1["telemetry_data"]
         d2 = t2["telemetry_data"]
 
+        def _dedup(data: dict, dist_key: str = "distance") -> dict:
+            """Remove duplicate/non-monotone distance entries from raw DB telemetry."""
+            dist = np.array(data[dist_key], dtype=float)
+            _, idx = np.unique(dist, return_index=True)
+            return {k: [v[i] for i in idx] for k, v in data.items()}
+
+        d1 = _dedup(d1)
+        d2 = _dedup(d2)
+
         dist1 = np.array(d1["distance"], dtype=float)
         dist2 = np.array(d2["distance"], dtype=float)
 
@@ -340,7 +367,7 @@ def _try_telemetry_from_db(
             "source":     "postgresql",
         }
     except Exception as e:
-        logger.warning(f"PostgreSQL telemetry lookup failed: {e}")
+        logger.warning(f"PostgreSQL telemetry lookup failed: {e}", exc_info=True)
         return None
 
 
