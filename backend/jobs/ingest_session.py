@@ -325,11 +325,13 @@ def ingest_fastf1(year: int, gp_round: int, session_type: str):
     session = fastf1.get_session(year, gp_round, session_type)
     session.load()
 
-    for driver_code in session.drivers:
+    for driver_num in session.drivers:
         try:
-            driver_laps = session.laps.pick_drivers(driver_code)
+            driver_laps = session.laps.pick_drivers(driver_num)
             if driver_laps.empty:
                 continue
+            # session.drivers returns numbers ('1', '44') — get the actual 3-letter code
+            driver_code = str(driver_laps["Driver"].iloc[0])
 
             fastest_lap_time = driver_laps["LapTime"].min()
 
