@@ -172,8 +172,8 @@ async def get_drivers(request: Request, year: int, gp_round: int, session_type: 
             log_success("/api/drivers", cache_hit=True)
             return cached_data
         
-        # 🔥 ÉTAPE 2 : Cache MISS → OpenF1 (2026+) ou FastF1 (< 2026)
-        if year >= 2026:
+        # 🔥 ÉTAPE 2 : Cache MISS → OpenF1 (2023+) ou FastF1 (< 2023)
+        if year >= 2023:
             session_key = await _openf1_get_session_key(year, gp_round, session_type)
             raw = await _openf1_request("drivers", {"session_key": session_key})
             drivers = [
