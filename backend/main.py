@@ -50,7 +50,7 @@ app.add_middleware(
 )
 
 # Include Stripe router
-app.include_router(stripe_router, prefix="/api/stripe", tags=["stripe"])
+app.include_router(stripe_router, prefix="/api", tags=["stripe"])
 
 # Include Live Timing router (F1 proxy)
 app.include_router(livetiming_router)
