@@ -215,7 +215,7 @@ async def check_subscription(user_id: str, token_user_id: str = Depends(get_auth
         
         if result.data and len(result.data) > 0:
             subscription = result.data[0]
-            is_active = subscription.get('status') == 'active'
+            is_active = subscription.get('status') in ('active', 'trialing')
             
             return {
                 "has_subscription": is_active,
