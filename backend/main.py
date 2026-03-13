@@ -1953,3 +1953,26 @@ async def get_racing_line(year: int, gp_round: int, session_type: str, driver: s
     except Exception as e:
         logger.error(f"Error in racing line: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
+# Admin: force re-ingest a session (bypasses scheduler's is_ingested check)
+# ---------------------------------------------------------------------------
+@app.post("/api/admin/reingest")
+async def admin_reingest(request: Request):
+    import os
+    secret = request.headers.get("X-Admin-Secret", "")
+    if secret != os.getenv("ADMIN_SECRET", ""):
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    body = await request.json()
+    year = int(body["year"])
+    gp_round = int(body["round"])
+    session_type = str(body["session"])
+
+    from jobs.ingest_session import ingest
+    try:
+        ingest(year, gp_round, session_type)
+        return {"status": "ok", "message": f"Ingested {year} R{gp_round} {session_type}"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
