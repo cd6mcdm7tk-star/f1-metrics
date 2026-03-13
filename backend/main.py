@@ -315,27 +315,35 @@ def _try_telemetry_from_db(
         interp_drs2      = interp1d(dist2, d2["drs"],                     kind="nearest", bounds_error=False, fill_value=0)
         interp_rpm2      = interp1d(dist2, d2["rpm"],                     kind="linear",  bounds_error=False, fill_value=10000)
 
+        # First pass: compute raw cumulative times from speed/distance
+        cum_times1 = [0.0] * len(common_distance)
+        cum_times2 = [0.0] * len(common_distance)
+        speeds1 = [float(interp_speed1(d)) for d in common_distance]
+        speeds2 = [float(interp_speed2(d)) for d in common_distance]
+
+        for i in range(1, len(common_distance)):
+            seg = common_distance[i] - common_distance[i - 1]
+            avg1 = (speeds1[i] + speeds1[i - 1]) / 2 / 3.6
+            avg2 = (speeds2[i] + speeds2[i - 1]) / 2 / 3.6
+            cum_times1[i] = cum_times1[i - 1] + (seg / avg1 if avg1 > 0 else 0)
+            cum_times2[i] = cum_times2[i - 1] + (seg / avg2 if avg2 > 0 else 0)
+
+        # Normalize to actual lap times so the delta is anchored to real timing
+        actual_lap_time1 = lap1_meta.get("lap_time")
+        actual_lap_time2 = lap2_meta.get("lap_time")
+        if actual_lap_time1 and cum_times1[-1] > 0:
+            scale1 = actual_lap_time1 / cum_times1[-1]
+            cum_times1 = [t * scale1 for t in cum_times1]
+        if actual_lap_time2 and cum_times2[-1] > 0:
+            scale2 = actual_lap_time2 / cum_times2[-1]
+            cum_times2 = [t * scale2 for t in cum_times2]
+
         telemetry_data = []
-        cumulative_time1 = cumulative_time2 = 0.0
-        prev_speed1 = prev_speed2 = 0.0
-
         for i, dist in enumerate(common_distance):
-            speed1 = float(interp_speed1(dist))
-            speed2 = float(interp_speed2(dist))
-
-            if i > 0:
-                seg = dist - common_distance[i - 1]
-                avg1 = (speed1 + prev_speed1) / 2 / 3.6
-                avg2 = (speed2 + prev_speed2) / 2 / 3.6
-                if avg1 > 0:
-                    cumulative_time1 += seg / avg1
-                if avg2 > 0:
-                    cumulative_time2 += seg / avg2
-
             telemetry_data.append({
                 "distance":  float(dist),
-                "speed1":    speed1,
-                "speed2":    speed2,
+                "speed1":    speeds1[i],
+                "speed2":    speeds2[i],
                 "throttle1": float(interp_throttle1(dist)),
                 "throttle2": float(interp_throttle2(dist)),
                 "brake1":    bool(interp_brake1(dist)),
@@ -346,13 +354,10 @@ def _try_telemetry_from_db(
                 "drs2":      int(v) if not math.isnan(v := float(interp_drs2(dist))) else 0,
                 "x":         float(interp_x1(dist)),
                 "y":         float(interp_y1(dist)),
-                "delta":     float(cumulative_time2 - cumulative_time1),
+                "delta":     float(cum_times2[i] - cum_times1[i]),
                 "rpm1":      float(interp_rpm1(dist)),
                 "rpm2":      float(interp_rpm2(dist)),
             })
-
-            prev_speed1 = speed1
-            prev_speed2 = speed2
 
         return {
             "telemetry":  telemetry_data,
