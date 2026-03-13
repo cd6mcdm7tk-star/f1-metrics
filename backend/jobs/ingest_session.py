@@ -85,15 +85,20 @@ def _distance_from_xy(x: list, y: list) -> list:
 # OpenF1 helpers (2026+)
 # ---------------------------------------------------------------------------
 
-def _openf1_get(endpoint: str, params: dict, retries: int = 3) -> list:
+def _openf1_get(endpoint: str, params: dict, retries: int = 5) -> list:
     url = f"{OPENF1_BASE}/{endpoint}"
     for attempt in range(retries):
         try:
-            r = requests.get(url, params=params, timeout=30)
+            r = requests.get(url, params=params, timeout=60)
+            if r.status_code == 429:
+                wait = 30 * (attempt + 1)
+                logger.warning(f"OpenF1 /{endpoint} attempt {attempt+1} failed: 429, retry in {wait}s")
+                time.sleep(wait)
+                continue
             r.raise_for_status()
             return r.json()
         except requests.RequestException as e:
-            logger.warning(f"OpenF1 {endpoint} attempt {attempt+1} failed: {e}")
+            logger.warning(f"OpenF1 /{endpoint} attempt {attempt+1} failed: {e}")
             time.sleep(2 ** attempt)
     raise RuntimeError(f"OpenF1 {endpoint} failed after {retries} retries")
 
@@ -163,6 +168,16 @@ def ingest_openf1(year: int, gp_round: int, session_type: str):
         if num is not None:
             laps_by_driver.setdefault(int(num), []).append(lap)
 
+    # --- Fetch bulk session telemetry per driver (2 requests per driver total) ---
+    logger.info(f"  Fetching bulk car_data + location per driver...")
+    session_car_data: dict[int, list] = {}
+    session_pos_data: dict[int, list] = {}
+    for driver_num, code in num_to_code.items():
+        car_data, pos_data = _fetch_driver_session_data(session_key, driver_num)
+        session_car_data[driver_num] = car_data
+        session_pos_data[driver_num] = pos_data
+        logger.info(f"  {code}: {len(car_data)} car_data points, {len(pos_data)} location points")
+
     # --- Process each driver ---
     for driver_num, code in num_to_code.items():
         driver_laps = laps_by_driver.get(driver_num, [])
@@ -173,6 +188,9 @@ def ingest_openf1(year: int, gp_round: int, session_type: str):
         # Find personal best (minimum lap_duration)
         valid_laps = [l for l in driver_laps if l.get("lap_duration") is not None]
         fastest_lap_time = min((l["lap_duration"] for l in valid_laps), default=None)
+
+        car_data = session_car_data.get(driver_num, [])
+        pos_data = session_pos_data.get(driver_num, [])
 
         for lap in driver_laps:
             lap_num = lap.get("lap_number")
@@ -187,32 +205,27 @@ def ingest_openf1(year: int, gp_round: int, session_type: str):
             is_pb = (lap_time is not None and fastest_lap_time is not None
                      and abs(lap_time - fastest_lap_time) < 0.001)
 
-            # Fetch car telemetry for this lap
             date_start = lap.get("date_start")
             lap_duration = lap.get("lap_duration")
             has_telemetry = False
 
-            if date_start and lap_duration:
+            if date_start and lap_duration and car_data:
                 try:
-                    tel_data = _fetch_openf1_telemetry(
-                        session_key, driver_num, date_start, lap_duration
-                    )
+                    tel_data = _extract_lap_telemetry(car_data, pos_data, date_start, lap_duration)
                     if tel_data:
                         has_telemetry = True
-                        # Save telemetry
                         lap_type = "fastest" if is_pb else f"lap_{lap_num}"
                         db.save_telemetry(
                             year, gp_round, session_type, code,
                             lap_num, lap_type, tel_data
                         )
-                        # Also store fastest with key 'fastest' for quick lookup
                         if is_pb:
                             db.save_telemetry(
                                 year, gp_round, session_type, code,
                                 lap_num, "fastest", tel_data
                             )
                 except Exception as e:
-                    logger.warning(f"  Telemetry fetch failed {code} lap {lap_num}: {e}")
+                    logger.warning(f"  Telemetry slice failed {code} lap {lap_num}: {e}")
 
             db.save_lap(
                 year, gp_round, session_type, code,
@@ -223,59 +236,37 @@ def ingest_openf1(year: int, gp_round: int, session_type: str):
         logger.info(f"  Saved {code}: {len(driver_laps)} laps")
 
 
-def _fetch_openf1_telemetry(
-    session_key: int,
-    driver_number: int,
-    date_start: str,
-    lap_duration: float,
-) -> Optional[dict]:
+def _fetch_driver_session_data(session_key: int, driver_number: int) -> tuple:
     """
-    Fetch car_data + position for a single lap and merge into column-based dict.
-    Returns None if not enough data.
+    Fetch ALL car_data + location for a driver in 2 requests (entire session).
+    Returns (car_data, pos_data) lists.
     """
-    from datetime import datetime, timedelta, timezone
-
-    # Compute lap end timestamp
     try:
-        dt_start = datetime.fromisoformat(date_start.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-
-    dt_end = dt_start + timedelta(seconds=lap_duration + 1)
-    date_end_str = dt_end.strftime("%Y-%m-%dT%H:%M:%S")
-    date_start_str = dt_start.strftime("%Y-%m-%dT%H:%M:%S")
-
-    # Car data (speed, rpm, gear, throttle, brake, drs)
-    car_params = {
-        "session_key": session_key,
-        "driver_number": driver_number,
-        "date>": date_start_str,
-        "date<": date_end_str,
-    }
-    try:
-        car_data = _openf1_get("car_data", car_params)
+        car_data = _openf1_get("car_data", {"session_key": session_key, "driver_number": driver_number})
     except Exception:
-        return None
+        car_data = []
 
-    if len(car_data) < 10:
-        return None
-
-    # Position (x, y, z)
     try:
-        pos_data = _openf1_get("location", car_params)
+        pos_data = _openf1_get("location", {"session_key": session_key, "driver_number": driver_number})
     except Exception:
         pos_data = []
 
-    # Build timeline from car_data
-    dates_car = [d["date"] for d in car_data]
-    speed = [d.get("speed", 0) for d in car_data]
-    rpm = [d.get("rpm", 0) for d in car_data]
-    gear = [d.get("n_gear", 0) for d in car_data]
-    throttle = [d.get("throttle", 0) for d in car_data]
-    brake = [bool(d.get("brake", 0)) for d in car_data]
-    drs = [d.get("drs", 0) for d in car_data]
+    return car_data, pos_data
 
-    # Merge position by nearest timestamp
+
+def _build_telemetry_from_raw(car_data: list, pos_data: list) -> Optional[dict]:
+    """Build column-based telemetry dict from raw OpenF1 car_data and pos_data."""
+    if len(car_data) < 10:
+        return None
+
+    dates_car = [d["date"] for d in car_data]
+    speed    = [d.get("speed", 0) for d in car_data]
+    rpm      = [d.get("rpm", 0) for d in car_data]
+    gear     = [d.get("n_gear", 0) for d in car_data]
+    throttle = [d.get("throttle", 0) for d in car_data]
+    brake    = [bool(d.get("brake", 0)) for d in car_data]
+    drs      = [d.get("drs", 0) for d in car_data]
+
     x_vals = [0.0] * len(car_data)
     y_vals = [0.0] * len(car_data)
 
@@ -283,8 +274,6 @@ def _fetch_openf1_telemetry(
         pos_dates = [d["date"] for d in pos_data]
         pos_x = [d.get("x", 0) for d in pos_data]
         pos_y = [d.get("y", 0) for d in pos_data]
-
-        # Simple nearest-match merge (both lists are time-sorted)
         j = 0
         for i, dc in enumerate(dates_car):
             while j < len(pos_dates) - 1 and pos_dates[j + 1] <= dc:
@@ -292,7 +281,6 @@ def _fetch_openf1_telemetry(
             x_vals[i] = pos_x[j]
             y_vals[i] = pos_y[j]
 
-    # Calculate distance
     dist = _distance_from_xy(x_vals, y_vals)
 
     return _sanitize_tel_data({
@@ -306,6 +294,33 @@ def _fetch_openf1_telemetry(
         "x":        x_vals,
         "y":        y_vals,
     })
+
+
+def _extract_lap_telemetry(car_data: list, pos_data: list, date_start: str, lap_duration: float) -> Optional[dict]:
+    """
+    Slice pre-fetched session car_data/pos_data for a single lap window.
+    Avoids making additional API calls per lap.
+    """
+    from datetime import datetime, timedelta
+
+    try:
+        dt_start = datetime.fromisoformat(date_start.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+    dt_end = dt_start + timedelta(seconds=lap_duration + 1)
+
+    def in_window(d: dict) -> bool:
+        try:
+            dt = datetime.fromisoformat(d.get("date", "").replace("Z", "+00:00"))
+            return dt_start <= dt <= dt_end
+        except Exception:
+            return False
+
+    lap_car = [d for d in car_data if in_window(d)]
+    lap_pos = [d for d in pos_data if in_window(d)]
+
+    return _build_telemetry_from_raw(lap_car, lap_pos)
 
 
 # ---------------------------------------------------------------------------
