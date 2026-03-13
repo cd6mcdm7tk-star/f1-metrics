@@ -1961,8 +1961,30 @@ async def get_racing_line(year: int, gp_round: int, session_type: str, driver: s
 
 
 # ---------------------------------------------------------------------------
-# Admin: force re-ingest a session (bypasses scheduler's is_ingested check)
+# Admin endpoints
 # ---------------------------------------------------------------------------
+@app.get("/api/admin/ingestion-status")
+async def admin_ingestion_status(request: Request, year: int, round: int):
+    import os
+    secret = request.headers.get("X-Admin-Secret", "")
+    if secret != os.getenv("ADMIN_SECRET", ""):
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    sessions = ["SQ", "S", "Q", "R"]
+    result = {}
+    for s in sessions:
+        row = db._execute(
+            "SELECT COUNT(*) FROM laps WHERE year=%s AND gp_round=%s AND session_type=%s",
+            (year, round, s), fetch="one"
+        )
+        tel_row = db._execute(
+            "SELECT COUNT(*) FROM telemetry WHERE year=%s AND gp_round=%s AND session_type=%s",
+            (year, round, s), fetch="one"
+        )
+        result[s] = {"laps": row[0] if row else 0, "telemetry": tel_row[0] if tel_row else 0}
+    return result
+
+
 @app.post("/api/admin/reingest")
 async def admin_reingest(request: Request):
     import os
