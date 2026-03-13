@@ -101,9 +101,8 @@ def _openf1_get(endpoint: str, params: dict, retries: int = 3) -> list:
 def _openf1_session_key(year: int, gp_round: int, session_type: str) -> int:
     """
     Resolve OpenF1 session_key from year + round number + session abbreviation.
-    session_type: 'Q' | 'R' | 'FP1' | 'FP2' | 'FP3' | 'S' | 'SS'
+    session_type: 'Q' | 'R' | 'FP1' | 'FP2' | 'FP3' | 'S' | 'SQ' | 'SS'
     """
-    # Map our abbreviations to OpenF1 session_name
     name_map = {
         "Q":   "Qualifying",
         "R":   "Race",
@@ -116,20 +115,20 @@ def _openf1_session_key(year: int, gp_round: int, session_type: str) -> int:
     }
     session_name = name_map.get(session_type.upper(), session_type)
 
-    sessions = _openf1_get("sessions", {"year": year, "session_name": session_name})
+    # Resolve the correct meeting_key for this gp_round
+    meetings = _openf1_get("meetings", {"year": year})
+    race_meetings = sorted(
+        [m for m in meetings if "test" not in m.get("meeting_name", "").lower()],
+        key=lambda m: m["date_start"],
+    )
+    if gp_round > len(race_meetings):
+        raise ValueError(f"OpenF1: round {gp_round} not found for {year}")
+    meeting_key = race_meetings[gp_round - 1]["meeting_key"]
+
+    sessions = _openf1_get("sessions", {"year": year, "meeting_key": meeting_key, "session_name": session_name})
     if not sessions:
-        raise ValueError(f"OpenF1: no sessions found for {year} {session_name}")
+        raise ValueError(f"OpenF1: no '{session_name}' session found for {year} R{gp_round} (meeting_key={meeting_key})")
 
-    # Filter by round if multiple hits (e.g. 2 sprint weekends)
-    # OpenF1 doesn't expose round number directly; we rely on chronological order
-    if len(sessions) == 1:
-        return sessions[0]["session_key"]
-
-    # If multiple, use round_number hint from meeting data
-    # Best effort: return session_key matching gp_round by index order
-    sessions.sort(key=lambda s: s.get("date_start", ""))
-    if gp_round <= len(sessions):
-        return sessions[gp_round - 1]["session_key"]
     return sessions[0]["session_key"]
 
 
