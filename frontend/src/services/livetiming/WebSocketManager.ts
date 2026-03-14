@@ -1,171 +1,128 @@
 /**
- * METRIK DELTA - Live Timing WebSocket Manager
- * Handles connection to F1 SignalR WebSocket and message parsing
+ * METRIK DELTA - WebSocket Manager
+ * Connects to our backend relay, parses raw SignalR messages,
+ * decompresses .z payloads, and forwards structured data upstream.
  */
 
 import pako from 'pako';
 
-// SignalR Message Structure
-export interface SignalRMessage {
-  H: string;  // Hub name (always "Streaming")
-  M: string;  // Method (always "feed")
-  A: [string, any, string];  // [topic, data, timestamp]
+export interface SignalRFeedMessage {
+  H: string;   // "Streaming"
+  M: string;   // "feed"
+  A: any[];    // [data, timestamp?] or ["Topic.z", compressed, timestamp?]
 }
 
-// WebSocket Data Structure
 export interface WebSocketData {
-  R?: {
-    Heartbeat?: any;
-    "CarData.z"?: string;
-    "Position.z"?: string;
-    CarData?: any;
-    Position?: any;
-    ExtrapolatedClock?: any;
-    TopThree?: any;
-    TimingStats?: any;
-    TimingAppData?: any;
-    WeatherData?: any;
-    TrackStatus?: any;
-    DriverList?: any;
-    RaceControlMessages?: any;
-    SessionInfo?: any;
-    SessionData?: any;
-    LapCount?: any;
-    TimingData?: any;
-    ChampionshipPrediction?: any;
-    TyreStintSeries?: any;
-    PitStopSeries?: any;
-  };
-  M?: SignalRMessage[];
-  C?: string;
-  H?: string;
-  A?: [string, any, string];
+  /** Initial snapshot — keys are topic names, values are data (already decompressed). */
+  R?: Record<string, any>;
+  /** Incremental feed messages. */
+  M?: SignalRFeedMessage[];
 }
 
 export class WebSocketManager {
   private ws: WebSocket | null = null;
   private onDataCallback: ((data: WebSocketData) => void) | null = null;
   private reconnectAttempts = 0;
-  private maxReconnectAttempts = 5;
-  private reconnectDelay = 3000;
+  private readonly maxReconnect = 5;
+  private readonly reconnectDelay = 3000;
 
-  /**
-   * Connect to F1 SignalR WebSocket
-   * @param url WebSocket URL (from negotiation)
-   * @param onData Callback for incoming data
-   */
   connect(url: string, onData: (data: WebSocketData) => void) {
     this.onDataCallback = onData;
+    this._open(url);
+  }
+
+  private _open(url: string) {
     this.ws = new WebSocket(url);
 
     this.ws.onopen = () => {
-      console.log('✅ METRIK DELTA - WebSocket connected to F1 Live Timing');
+      console.log('✅ METRIK DELTA — WebSocket relay connected');
       this.reconnectAttempts = 0;
     };
 
-    this.ws.onmessage = async (event) => {
+    this.ws.onmessage = (event) => {
       try {
-        const blob = event.data;
-        const text = await blob.text();
-        const rawData = JSON.parse(text) as WebSocketData;
-        
-        const processedData: WebSocketData = {};
+        const text = typeof event.data === 'string'
+          ? event.data
+          : '';
+        if (!text) return;
 
-        // Handle messages array (M)
-        if (rawData.M && Array.isArray(rawData.M)) {
-          processedData.M = rawData.M as SignalRMessage[];
-        }
-        // Handle response object (R)
-        else if (rawData.R) {
-          processedData.R = this.decompressData(rawData.R);
+        const raw = JSON.parse(text);
+        const out: WebSocketData = {};
+
+        // ── Initial state snapshot ─────────────────────────────────────
+        if (raw.R && typeof raw.R === 'object') {
+          out.R = this._decompressObject(raw.R);
         }
 
-        if (this.onDataCallback) {
-          this.onDataCallback(processedData);
+        // ── Incremental feed ───────────────────────────────────────────
+        if (Array.isArray(raw.M) && raw.M.length > 0) {
+          out.M = raw.M as SignalRFeedMessage[];
         }
-      } catch (error) {
-        console.error('❌ Error parsing WebSocket data:', error);
+
+        if (out.R || out.M) {
+          this.onDataCallback?.(out);
+        }
+      } catch {
+        // ignore malformed frames
       }
     };
 
     this.ws.onclose = () => {
-      console.log('🔌 WebSocket disconnected');
-      this.attemptReconnect(url);
+      console.log('🔌 WebSocket relay disconnected');
+      this._scheduleReconnect(url);
     };
 
-    this.ws.onerror = (error) => {
-      console.error('❌ WebSocket error:', error);
+    this.ws.onerror = () => {
+      console.error('❌ WebSocket relay error');
     };
   }
 
-  /**
-   * Decompress .z (zlib) data using pako
-   */
-  private decompressData(data: any): any {
-    const decompressed: any = {};
-
-    Object.entries(data).forEach(([key, value]) => {
+  /** Decompress every .z key in an object (R snapshot). */
+  private _decompressObject(obj: Record<string, any>): Record<string, any> {
+    const out: Record<string, any> = {};
+    for (const [key, value] of Object.entries(obj)) {
       if (key.endsWith('.z') && typeof value === 'string') {
         try {
-          // Decode base64 and decompress with pako
-          const decoded = atob(value);
-          const charData = decoded.split('').map(x => x.charCodeAt(0));
-          const binData = new Uint8Array(charData);
-          const inflated = pako.inflate(binData, { to: 'string' });
-          const parsed = JSON.parse(inflated);
-          
-          // Store without .z suffix
-          const cleanKey = key.replace('.z', '');
-          decompressed[cleanKey] = parsed;
-        } catch (error) {
-          console.error(`❌ Error decompressing ${key}:`, error);
-          decompressed[key] = value;
+          out[key.slice(0, -2)] = JSON.parse(
+            pako.inflate(Uint8Array.from(atob(value), c => c.charCodeAt(0)), { to: 'string' })
+          );
+        } catch {
+          out[key] = value;
         }
       } else {
-        decompressed[key] = value;
+        out[key] = value;
       }
-    });
-
-    return decompressed;
+    }
+    return out;
   }
 
-  /**
-   * Attempt to reconnect with exponential backoff
-   */
-  private attemptReconnect(url: string) {
-    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.error('❌ Max reconnection attempts reached');
-      return;
+  /** Decompress a single .z string (M feed). */
+  static decompress(value: string): any {
+    try {
+      return JSON.parse(
+        pako.inflate(Uint8Array.from(atob(value), c => c.charCodeAt(0)), { to: 'string' })
+      );
+    } catch {
+      return null;
     }
+  }
 
+  private _scheduleReconnect(url: string) {
+    if (this.reconnectAttempts >= this.maxReconnect) return;
     this.reconnectAttempts++;
     const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
-
-    console.log(`🔄 Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
-
-    setTimeout(() => {
-      if (this.onDataCallback) {
-        this.connect(url, this.onDataCallback);
-      }
-    }, delay);
+    console.log(`🔄 Reconnecting in ${delay}ms (${this.reconnectAttempts}/${this.maxReconnect})`);
+    setTimeout(() => this._open(url), delay);
   }
 
-  /**
-   * Disconnect from WebSocket
-   */
   disconnect() {
-    if (this.ws) {
-      this.ws.close();
-      this.ws = null;
-    }
+    this.ws?.close();
+    this.ws = null;
   }
 
-  /**
-   * Send message to WebSocket (for Subscribe)
-   */
-  send(message: any) {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(message));
+  send(msg: any) {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(msg));
     }
   }
 }

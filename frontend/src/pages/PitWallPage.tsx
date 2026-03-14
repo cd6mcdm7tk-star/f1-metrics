@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { ReactElement } from 'react';
+import SEO from '../components/SEO';
 import { ArrowLeft, Loader2, Play, Pause, RotateCcw, Radio, Flag, Clock, TrendingUp, Zap, Target, XCircle, CloudRain, Cloud, Sun, Wrench, Wind, ArrowUp, ArrowDown, Route, Users, Circle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import GrandPrixSelector from '../components/GrandPrixSelector';
@@ -293,6 +294,8 @@ export default function PitWallPage() {
   const maxGap = Math.max(...Array.from(cumulativeGaps.values()), 10);
 
   return (
+    <>
+    <SEO path="/pit-wall" title="F1 Pit Wall Strategy - METRIK DELTA" description="Analyze Formula 1 race strategy, pit stop data, position evolution and tyre strategy for all drivers." keywords="f1 pit stop strategy, formula 1 race strategy, f1 position evolution, f1 tyre strategy" />
     <div className="min-h-screen bg-metrik-black text-white">
       {/* Fixed Header - Compact */}
       <div className="fixed top-0 left-0 right-0 bg-metrik-black/95 backdrop-blur-xl border-b border-metrik-turquoise/20 z-50">
@@ -1055,5 +1058,6 @@ export default function PitWallPage() {
         }
       `}</style>
     </div>
+    </>
   );
 }

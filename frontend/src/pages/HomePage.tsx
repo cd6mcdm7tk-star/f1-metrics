@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import SEO from '../components/SEO';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import ImmersiveNav from '../components/ImmersiveNav';
@@ -70,6 +71,13 @@ export default function HomePageImmersive() {
   };
 
   return (
+    <>
+      <SEO
+        path="/"
+        title="METRIK DELTA - Professional F1 Telemetry Analysis"
+        description="Professional F1 telemetry analysis platform with detailed charts, GPS animations, pit wall strategy and championship data 2018-2026."
+        keywords="f1 telemetry, formula 1 analysis, f1 data, f1 standings, f1 results, télémétrie f1, analyse f1, telemetría f1"
+      />
     <div ref={containerRef} className="bg-metrik-black">
       {/* Navbar qui apparaît au scroll */}
       <ImmersiveNav 
@@ -105,5 +113,6 @@ export default function HomePageImmersive() {
         <AnatomySection navigate={navigate} />
       </div>
     </div>
+    </>
   );
 }

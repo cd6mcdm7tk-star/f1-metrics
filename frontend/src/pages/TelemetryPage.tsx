@@ -69,6 +69,7 @@ export default function TelemetryPage() {
       'mclaren': '#FF8700',
       'alpine': '#FF87BC',
       'aston martin': '#229971',
+      'racing bulls': '#6692FF',
       'rb': '#6692FF',
       'alphatauri': '#6692FF',
       'haas': '#B6BABD',
@@ -105,13 +106,6 @@ export default function TelemetryPage() {
     return team1.toLowerCase() === team2.toLowerCase();
   };
 
-  useEffect(() => {
-  // Si user change pour 2026 et n'est pas PRO → bloquer
-  if (year >= 2026 && !isPremium) {
-    setShowUpgradeModal(true);
-    setYear(2025); // Retour à 2025
-  }
-}, [year, isPremium]);
 
   useEffect(() => {
     setSelectedGP(1);
@@ -124,7 +118,7 @@ export default function TelemetryPage() {
     setSelection2(null);
     setDriver1('');
     setDriver2('');
-    loadDrivers();
+    // loadDrivers() retiré : l'effet suivant [year, selectedGP, sessionType] le déclenche déjà
   }, [year]);
 
   useEffect(() => {
@@ -155,22 +149,53 @@ export default function TelemetryPage() {
     }
   }, [selection1, selection2]);
 
+  const TEAMS_2026: Record<string, string> = {
+    VER: 'Red Bull Racing', HAD: 'Red Bull Racing',
+    LEC: 'Ferrari',         HAM: 'Ferrari',
+    RUS: 'Mercedes',        ANT: 'Mercedes',
+    NOR: 'McLaren',         PIA: 'McLaren',
+    ALO: 'Aston Martin',    STR: 'Aston Martin',
+    GAS: 'Alpine',          COL: 'Alpine',
+    ALB: 'Williams',        SAI: 'Williams',
+    OCO: 'Haas',            BEA: 'Haas',
+    LAW: 'Racing Bulls',    LIN: 'Racing Bulls',
+    HUL: 'Audi',            BOR: 'Audi',
+    PER: 'Cadillac',        BOT: 'Cadillac',
+  };
+
   const loadDrivers = async () => {
     try {
       const data = await getDrivers(year, selectedGP, sessionType);
       setDrivers(data);
-      
+
       const teamsMap: Record<string, string> = {};
       data.forEach((driver: any) => {
         if (driver.abbreviation && driver.team) {
           teamsMap[driver.abbreviation] = driver.team;
         }
       });
+      // Fallback statique pour 2026 : FastF1/OpenF1 peut retourner des noms d'équipe
+      // non reconnus par getTeamColor (ex: "Racing Bulls" absent de certaines versions)
+      if (year === 2026) {
+        Object.entries(TEAMS_2026).forEach(([code, team]) => {
+          if (!teamsMap[code]) teamsMap[code] = team;
+        });
+      }
       setDriverTeams(teamsMap);
-      
+
       if (data.length > 0) {
-        setDriver1(data[0].abbreviation);
-        setDriver2(data[1]?.abbreviation || data[0].abbreviation);
+        const d1 = data[0].abbreviation;
+        const d2 = data[1]?.abbreviation || data[0].abbreviation;
+        setDriver1(d1);
+        setDriver2(d2);
+
+        // Prefetch proactif : fastest laps en arrière-plan dès que les drivers sont connus
+        const fastestKey = getTelemetryKey(year, selectedGP, sessionType, d1, undefined, d2, undefined);
+        if (!getCached(fastestKey)) {
+          getTelemetryComparison(year, selectedGP, sessionType, d1, d2)
+            .then(prefetched => setCached(fastestKey, prefetched))
+            .catch(() => {});
+        }
       }
     } catch (error) {
       console.error('Error loading drivers:', error);
@@ -531,6 +556,7 @@ export default function TelemetryPage() {
               selection2={selection2} 
               getDriverColor={getDriverColor}
               areTeammates={areTeammates}
+              isPremium={isPremium}
             />
           )}
 

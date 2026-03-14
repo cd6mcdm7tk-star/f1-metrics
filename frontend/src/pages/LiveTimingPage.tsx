@@ -1,163 +1,229 @@
 /**
  * METRIK DELTA - Live Timing Page
- * Real-time F1 telemetry with METRIK DELTA design
- * 📱 MOBILE RESPONSIVE VERSION
+ * Real-time F1 telemetry — design METRIK DELTA
+ * Widgets: Timing Table · Car Telemetry · Race Control · Weather · Tyre Strategy
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import SEO from '../components/SEO';
 import { useLiveTiming } from '../hooks/useLiveTiming';
-import { motion } from 'framer-motion';
 import CountdownShowcase from '../components/CountdownShowcase';
+import { useSubscription } from '../hooks/useSubscription';
+import UpgradeModal from '../components/UpgradeModal';
+import { Lock, Radio, Cloud, Activity } from 'lucide-react';
 
+// ─── Team colours ────────────────────────────────────────────────────────────
+const TEAM_COLORS: Record<string, string> = {
+  'Red Bull Racing': '#3671C6', 'McLaren': '#FF8700', 'Ferrari': '#E8002D',
+  'Mercedes': '#27F4D2', 'Aston Martin': '#229971', 'Alpine': '#FF87BC',
+  'Williams': '#00A0DE', 'Racing Bulls': '#6692FF', 'Kick Sauber': '#00E701',
+  'Haas F1 Team': '#B6BABD',
+};
+
+function teamColor(teamName?: string): string {
+  if (!teamName) return '#00D2BE';
+  for (const [key, color] of Object.entries(TEAM_COLORS)) {
+    if (teamName.toLowerCase().includes(key.toLowerCase())) return color;
+  }
+  return '#00D2BE';
+}
+
+// ─── Compound badge ───────────────────────────────────────────────────────────
+const COMPOUND_COLORS: Record<string, string> = {
+  SOFT: '#E8002D', MEDIUM: '#FFD700', HARD: '#FFFFFF',
+  INTERMEDIATE: '#39B54A', WET: '#0067FF',
+};
+function CompoundBadge({ compound }: { compound?: string }) {
+  const c = (compound || '').toUpperCase();
+  const color = COMPOUND_COLORS[c] || '#888';
+  const letter = c[0] || '?';
+  return (
+    <span
+      className="inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-black"
+      style={{ backgroundColor: color, color: c === 'HARD' || c === 'MEDIUM' ? '#000' : '#fff' }}
+    >
+      {letter}
+    </span>
+  );
+}
+
+// ─── DRS indicator ────────────────────────────────────────────────────────────
+function DRSBadge({ active }: { active: boolean }) {
+  return (
+    <span className={`text-[10px] font-black px-1 rounded ${active ? 'bg-green-500 text-black' : 'text-gray-600'}`}>
+      DRS
+    </span>
+  );
+}
+
+// ─── Sector time cell ─────────────────────────────────────────────────────────
+function SectorCell({ value }: { value?: string }) {
+  if (!value) return <td className="px-2 py-3 text-center text-gray-600 text-xs">—</td>;
+  return <td className="px-2 py-3 text-center text-xs font-mono text-gray-300">{value}</td>;
+}
+
+// ============================================================================
+// MAIN PAGE
+// ============================================================================
 export default function LiveTimingPage() {
   const {
-    drivers,
-    positions,
-    timing,
-    weather,
-    session,
-    raceControl,
-    loading,
-    connected,
-    error,
+    drivers, positions, timing, timingStats, weather,
+    session, raceControl, carData, stints,
+    connected, loading, error,
   } = useLiveTiming();
 
   const [selectedDriver, setSelectedDriver] = useState<number | null>(null);
+  const { isPremium } = useSubscription();
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
-  // Change page title
-  useEffect(() => {
-    document.title = 'F1 Live - METRIK DELTA';
-    return () => {
-      document.title = 'METRIK DELTA';
-    };
-  }, []);
+  const isLive = connected && positions.length > 0;
 
+  // ── Error ────────────────────────────────────────────────────────────────
   if (error) {
     return (
-      <div className="relative min-h-screen bg-metrik-black overflow-hidden">
-        
-        <div className="relative z-10 container mx-auto px-4 py-20">
-          <div className="max-w-2xl mx-auto text-center">
-            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-red-500/20 border-2 border-red-500 mb-6">
-              <span className="text-4xl">❌</span>
-            </div>
-            <h1 className="text-2xl sm:text-4xl font-rajdhani font-black text-white mb-4">
-              Connection Error
-            </h1>
-            <p className="text-base sm:text-lg text-metrik-silver mb-6">
-              {error.message}
-            </p>
-            <button
-              onClick={() => window.location.reload()}
-              className="px-6 py-3 bg-metrik-turquoise text-metrik-black font-rajdhani font-bold rounded-lg hover:bg-metrik-turquoise/80 transition-colors"
-            >
-              Retry Connection
+      <>
+        <SEO path="/live-timing" title="F1 Live Timing - METRIK DELTA" description="Follow Formula 1 sessions in real-time." />
+        <div className="min-h-screen bg-metrik-black flex items-center justify-center p-6">
+          <div className="text-center">
+            <div className="text-5xl mb-4">❌</div>
+            <h1 className="text-2xl font-rajdhani font-black text-white mb-3">Connection Error</h1>
+            <p className="text-metrik-silver mb-6">{error.message}</p>
+            <button onClick={() => window.location.reload()}
+              className="px-6 py-3 bg-metrik-turquoise text-black font-bold rounded-lg">
+              Retry
             </button>
           </div>
         </div>
+      </>
+    );
+  }
+
+  // ── No live session ──────────────────────────────────────────────────────
+  if (loading || !isLive) {
+    return <CountdownShowcase />;
+  }
+
+  // ── Paywall ───────────────────────────────────────────────────────────────
+  if (!isPremium) {
+    return (
+      <div className="relative min-h-screen bg-metrik-black overflow-hidden">
+        {/* Blurred preview */}
+        <div className="absolute inset-0 blur-sm pointer-events-none opacity-40">
+          <TimingTable drivers={drivers} positions={positions} timing={timing}
+            timingStats={timingStats} carData={carData} stints={stints}
+            selectedDriver={null} onSelect={() => {}} />
+        </div>
+        {/* Overlay */}
+        <div className="relative z-10 flex items-center justify-center min-h-screen px-4">
+          <div className="max-w-md w-full backdrop-blur-xl bg-metrik-card/95 border-2 border-metrik-turquoise/50 rounded-xl p-8 text-center shadow-2xl">
+            <div className="p-5 bg-metrik-turquoise/10 rounded-full border-2 border-metrik-turquoise/30 inline-flex mb-5">
+              <Lock className="text-metrik-turquoise" size={36} />
+            </div>
+            <h2 className="text-2xl font-rajdhani font-black text-white mb-3">🏎️ Live Session In Progress</h2>
+            <p className="text-metrik-silver text-sm mb-6">
+              Access real-time timing, sectors, car telemetry and race control with METRIK+.
+            </p>
+            <div className="grid grid-cols-2 gap-3 mb-6 text-xs">
+              {[['📡','Live Timing'],['⏱️','Sector Times'],['🏎️','Car Telemetry'],['🚦','Race Control']].map(([icon,label])=>(
+                <div key={label} className="bg-metrik-black/50 border border-metrik-turquoise/20 rounded-lg p-3">
+                  <div className="text-2xl mb-1">{icon}</div>
+                  <div className="font-rajdhani font-bold text-metrik-silver">{label}</div>
+                </div>
+              ))}
+            </div>
+            <button onClick={() => setShowUpgradeModal(true)}
+              className="w-full py-3 bg-gradient-to-r from-metrik-turquoise to-cyan-500 text-black font-rajdhani font-black text-lg rounded-lg hover:scale-105 transition-all">
+              Unlock Live Timing — from 1.99€/mo
+            </button>
+          </div>
+        </div>
+        <UpgradeModal isOpen={showUpgradeModal} onClose={() => setShowUpgradeModal(false)} reason="live_timing" />
       </div>
     );
   }
 
-  if (loading) {
-    return <CountdownShowcase />;
-  }
+  // ── PRO view ──────────────────────────────────────────────────────────────
+  const selectedCarData = selectedDriver ? carData.find(c => c.driver_number === selectedDriver) : null;
+  const selectedDriver_ = selectedDriver ? drivers.find(d => d.driver_number === selectedDriver) : null;
 
   return (
-    <div className="relative min-h-screen bg-metrik-black overflow-hidden">
+    <>
+      <SEO path="/live-timing" title="F1 Live Timing - METRIK DELTA"
+        description="Follow Formula 1 sessions in real-time with live timing, telemetry and race control."
+        keywords="f1 live timing, formula 1 live, f1 real time, live f1 data" />
 
-      {/* CONTENT */}
-      <div className="relative z-10">
-        {/* HEADER */}
-        <SessionHeader 
-          session={session} 
-          weather={weather}
-          connected={connected}
-        />
+      <div className="min-h-screen bg-metrik-black text-white">
+        {/* ── Session header ─────────────────────────────────────────────── */}
+        <SessionHeader session={session} connected={connected} weather={weather} />
 
-        {/* MAIN GRID - 🔥 RESPONSIVE */}
-        <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
-            
-            {/* TIMING TABLE - 2 columns on large screens */}
-            <div className="lg:col-span-2">
+        {/* ── Main layout ────────────────────────────────────────────────── */}
+        <div className="container mx-auto px-3 sm:px-6 py-4">
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+
+            {/* LEFT — timing table (2 cols) */}
+            <div className="xl:col-span-2 space-y-4">
               <TimingTable
-                drivers={drivers}
-                positions={positions}
-                timing={timing}
-                selectedDriver={selectedDriver}
-                onSelectDriver={setSelectedDriver}
+                drivers={drivers} positions={positions} timing={timing}
+                timingStats={timingStats} carData={carData} stints={stints}
+                selectedDriver={selectedDriver} onSelect={setSelectedDriver}
               />
+
+              {/* Car telemetry for selected driver */}
+              {selectedCarData && selectedDriver_ && (
+                <CarTelemetryWidget driver={selectedDriver_} carData={selectedCarData} />
+              )}
             </div>
 
-            {/* RIGHT SIDEBAR - 1 column */}
-            <div className="space-y-4 sm:space-y-6">
-              {/* RACE CONTROL */}
-              <RaceControlFeed messages={raceControl} />
-
-              {/* WEATHER */}
+            {/* RIGHT — sidebar (1 col) */}
+            <div className="space-y-4">
               {weather && <WeatherWidget weather={weather} />}
+              <RaceControlWidget messages={raceControl} />
+              <TyreStrategyWidget drivers={drivers} positions={positions} stints={stints} />
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
 
-// ============================================
-// SESSION HEADER - 🔥 RESPONSIVE
-// ============================================
-
-interface SessionHeaderProps {
-  session: any;
-  weather: any;
-  connected: boolean;
-}
-
-function SessionHeader({ session, weather, connected }: SessionHeaderProps) {
+// ============================================================================
+// SESSION HEADER
+// ============================================================================
+function SessionHeader({ session, connected, weather }: any) {
   return (
-    <div className="border-b border-metrik-turquoise/30 backdrop-blur-xl bg-metrik-card/80">
-      <div className="container mx-auto px-4 py-3 sm:py-4">
-        {/* 🔥 FLEX COL MOBILE, ROW DESKTOP */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
-          {/* LEFT - Session Info */}
-          <div className="flex items-center gap-3 sm:gap-4 flex-wrap">
+    <div className="border-b border-metrik-turquoise/30 bg-metrik-card/80 backdrop-blur-xl">
+      <div className="container mx-auto px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <div className="flex items-center gap-2">
-              <div className={`w-3 h-3 rounded-full ${connected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
-              <span className="text-xs sm:text-sm font-rajdhani font-bold text-metrik-silver">
-                {connected ? 'LIVE' : 'DISCONNECTED'}
+              <div className={`w-2.5 h-2.5 rounded-full ${connected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+              <span className="text-xs font-rajdhani font-bold text-metrik-silver">
+                {connected ? 'LIVE' : 'OFFLINE'}
               </span>
             </div>
-
             {session && (
               <>
-                <div className="hidden sm:block h-6 w-px bg-metrik-turquoise/30" />
-                <h1 className="text-base sm:text-xl font-rajdhani font-black text-white">
+                <div className="w-px h-4 bg-metrik-turquoise/30" />
+                <span className="text-base sm:text-xl font-rajdhani font-black text-white">
                   {session.meeting_name || 'F1 Session'}
-                </h1>
-                <span className="text-xs sm:text-sm font-rajdhani font-bold text-metrik-turquoise">
-                  {session.session_name || 'Live Timing'}
                 </span>
+                <span className="text-xs sm:text-sm font-bold text-metrik-turquoise">
+                  {session.session_name}
+                </span>
+                {session.current_lap != null && session.total_laps != null && (
+                  <span className="text-xs text-metrik-silver font-mono">
+                    LAP {session.current_lap}/{session.total_laps}
+                  </span>
+                )}
               </>
             )}
           </div>
-
-          {/* RIGHT - Weather - 🔥 RESPONSIVE */}
           {weather && (
-            <div className="flex items-center gap-3 sm:gap-4 text-xs sm:text-sm">
-              <div className="flex items-center gap-2">
-                <span className="text-metrik-silver">🌡️ Air:</span>
-                <span className="font-rajdhani font-bold text-white">
-                  {weather.air_temperature}°C
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-metrik-silver">🏁 Track:</span>
-                <span className="font-rajdhani font-bold text-white">
-                  {weather.track_temperature}°C
-                </span>
-              </div>
+            <div className="flex items-center gap-4 text-xs text-metrik-silver">
+              <span>🌡️ Air <b className="text-white">{weather.air_temperature}°C</b></span>
+              <span>🏁 Track <b className="text-white">{weather.track_temperature}°C</b></span>
+              {weather.rainfall ? <span>🌧️ Rain</span> : null}
             </div>
           )}
         </div>
@@ -166,236 +232,268 @@ function SessionHeader({ session, weather, connected }: SessionHeaderProps) {
   );
 }
 
-// ============================================
-// TIMING TABLE - 🔥 RESPONSIVE
-// ============================================
-
-interface TimingTableProps {
-  drivers: any[];
-  positions: any[];
-  timing: any[];
-  selectedDriver: number | null;
-  onSelectDriver: (driverNumber: number | null) => void;
-}
-
-function TimingTable({ drivers, positions, timing, selectedDriver, onSelectDriver }: TimingTableProps) {
+// ============================================================================
+// TIMING TABLE
+// ============================================================================
+function TimingTable({ drivers, positions, timing, timingStats, carData, stints, selectedDriver, onSelect }: any) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="backdrop-blur-xl bg-metrik-card/80 border border-metrik-turquoise/30 rounded-lg overflow-hidden"
-    >
-      {/* HEADER - 🔥 RESPONSIVE */}
-      <div className="border-b border-metrik-turquoise/30 px-4 sm:px-6 py-3 sm:py-4">
-        <h2 className="text-xl sm:text-2xl font-rajdhani font-black text-white">
-          LIVE STANDINGS
-        </h2>
+    <div className="bg-metrik-card border border-metrik-turquoise/30 rounded-lg overflow-hidden">
+      <div className="border-b border-metrik-turquoise/30 px-4 py-3 flex items-center gap-2">
+        <Activity size={16} className="text-metrik-turquoise" />
+        <h2 className="text-lg font-rajdhani font-black text-white">LIVE STANDINGS</h2>
       </div>
-
-      {/* TABLE - 🔥 RESPONSIVE */}
       <div className="overflow-x-auto">
-        <table className="w-full">
+        <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-metrik-turquoise/20 text-left">
-              <th className="px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-rajdhani font-bold text-metrik-silver">POS</th>
-              <th className="px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-rajdhani font-bold text-metrik-silver">DRIVER</th>
-              {/* 🔥 TEAM CACHÉ SUR MOBILE */}
-              <th className="hidden sm:table-cell px-6 py-3 text-sm font-rajdhani font-bold text-metrik-silver">TEAM</th>
-              <th className="px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-rajdhani font-bold text-metrik-silver">GAP</th>
-              {/* 🔥 LAST LAP CACHÉ SUR TRÈS PETIT ÉCRAN */}
-              <th className="hidden md:table-cell px-6 py-3 text-sm font-rajdhani font-bold text-metrik-silver">LAST LAP</th>
-              <th className="px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-rajdhani font-bold text-metrik-silver">BEST</th>
+            <tr className="border-b border-metrik-turquoise/20 text-left text-xs text-metrik-silver font-rajdhani font-bold">
+              <th className="px-3 py-2 w-8">POS</th>
+              <th className="px-3 py-2">DRIVER</th>
+              <th className="hidden sm:table-cell px-2 py-2">GAP</th>
+              <th className="hidden md:table-cell px-2 py-2">INT</th>
+              <th className="px-2 py-2">LAST</th>
+              <th className="px-2 py-2 text-metrik-turquoise">BEST</th>
+              <th className="hidden lg:table-cell px-2 py-2 text-center">S1</th>
+              <th className="hidden lg:table-cell px-2 py-2 text-center">S2</th>
+              <th className="hidden lg:table-cell px-2 py-2 text-center">S3</th>
+              <th className="hidden xl:table-cell px-2 py-2 text-center">TYRE</th>
+              <th className="hidden xl:table-cell px-2 py-2 text-center">DRS</th>
             </tr>
           </thead>
           <tbody>
             {positions.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 sm:px-6 py-8 sm:py-12 text-center">
-                  <p className="text-sm sm:text-base text-metrik-silver font-inter">
-                    Waiting for session data...
-                  </p>
+                <td colSpan={11} className="px-4 py-10 text-center text-metrik-silver text-sm">
+                  Waiting for session data…
                 </td>
               </tr>
-            ) : (
-              positions.map((position) => {
-                const driver = drivers.find(d => d.driver_number === position.driver_number);
-                const driverTiming = timing.find(t => t.driver_number === position.driver_number);
-                const isSelected = selectedDriver === position.driver_number;
+            ) : positions.map((pos: any) => {
+              const driver = drivers.find((d: any) => d.driver_number === pos.driver_number);
+              const t = timing.find((t: any) => t.driver_number === pos.driver_number);
+              const cd = carData.find((c: any) => c.driver_number === pos.driver_number);
+              const driverStints = stints.filter((s: any) => s.driver_number === pos.driver_number);
+              const currentStint = driverStints[driverStints.length - 1];
+              const isSelected = selectedDriver === pos.driver_number;
+              const color = driver ? teamColor(driver.team_name) : '#00D2BE';
+              const drsActive = cd?.drs !== undefined && cd.drs > 10;
 
-                return (
-                  <motion.tr
-                    key={position.driver_number}
-                    onClick={() => onSelectDriver(isSelected ? null : position.driver_number)}
-                    className={`
-                      border-b border-metrik-turquoise/10 cursor-pointer transition-colors
-                      ${isSelected ? 'bg-metrik-turquoise/20' : 'hover:bg-metrik-turquoise/5'}
-                    `}
-                    whileHover={{ scale: 1.01 }}
-                  >
-                    {/* POSITION */}
-                    <td className="px-3 sm:px-6 py-3 sm:py-4">
-                      <span className="text-xl sm:text-2xl font-rajdhani font-black text-white">
-                        {position.position}
+              return (
+                <tr
+                  key={pos.driver_number}
+                  onClick={() => onSelect(isSelected ? null : pos.driver_number)}
+                  className={`border-b border-metrik-turquoise/10 cursor-pointer transition-colors
+                    ${isSelected ? 'bg-metrik-turquoise/10' : 'hover:bg-white/5'}`}
+                >
+                  <td className="px-3 py-3">
+                    <span className="text-xl font-rajdhani font-black text-white">{pos.position}</span>
+                  </td>
+                  <td className="px-3 py-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-1 h-8 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+                      <span className="font-rajdhani font-bold text-white text-base">
+                        {driver?.name_acronym || pos.driver_number}
                       </span>
-                    </td>
-
-                    {/* DRIVER */}
-                    <td className="px-3 sm:px-6 py-3 sm:py-4">
-                      <div className="flex items-center gap-2 sm:gap-3">
-                        {driver && (
-                          <div
-                            className="w-1 h-8 sm:h-12 rounded-full"
-                            style={{ backgroundColor: `#${driver.team_colour}` }}
-                          />
-                        )}
-                        <span className="text-base sm:text-lg font-rajdhani font-bold text-white">
-                          {driver?.name_acronym || position.driver_number}
-                        </span>
-                      </div>
-                    </td>
-
-                    {/* TEAM - 🔥 CACHÉ SUR MOBILE */}
-                    <td className="hidden sm:table-cell px-6 py-4">
-                      <span className="text-sm font-inter text-metrik-silver">
-                        {driver?.team_name || '-'}
-                      </span>
-                    </td>
-
-                    {/* GAP */}
-                    <td className="px-3 sm:px-6 py-3 sm:py-4">
-                      <span className="text-xs sm:text-sm font-inter text-metrik-silver">
-                        {position.gap_to_leader || '-'}
-                      </span>
-                    </td>
-
-                    {/* LAST LAP - 🔥 CACHÉ SUR TRÈS PETIT ÉCRAN */}
-                    <td className="hidden md:table-cell px-6 py-4">
-                      <span className="text-sm font-inter text-white">
-                        {driverTiming?.last_lap_time || '-'}
-                      </span>
-                    </td>
-
-                    {/* BEST LAP */}
-                    <td className="px-3 sm:px-6 py-3 sm:py-4">
-                      <span className="text-xs sm:text-sm font-inter text-metrik-turquoise">
-                        {driverTiming?.best_lap_time || '-'}
-                      </span>
-                    </td>
-                  </motion.tr>
-                );
-              })
-            )}
+                      <span className="hidden sm:inline text-xs text-metrik-silver">{driver?.team_name}</span>
+                    </div>
+                  </td>
+                  <td className="hidden sm:table-cell px-2 py-3 text-xs font-mono text-metrik-silver">
+                    {pos.gap_to_leader || '—'}
+                  </td>
+                  <td className="hidden md:table-cell px-2 py-3 text-xs font-mono text-metrik-silver">
+                    {pos.interval || '—'}
+                  </td>
+                  <td className="px-2 py-3 text-xs font-mono text-white">
+                    {t?.last_lap_time || '—'}
+                  </td>
+                  <td className="px-2 py-3 text-xs font-mono font-bold text-metrik-turquoise">
+                    {t?.best_lap_time || '—'}
+                  </td>
+                  <SectorCell value={t?.sector1} />
+                  <SectorCell value={t?.sector2} />
+                  <SectorCell value={t?.sector3} />
+                  <td className="hidden xl:table-cell px-2 py-3 text-center">
+                    <CompoundBadge compound={currentStint?.compound} />
+                  </td>
+                  <td className="hidden xl:table-cell px-2 py-3 text-center">
+                    <DRSBadge active={drsActive} />
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
-    </motion.div>
+    </div>
   );
 }
 
-// ============================================
-// RACE CONTROL FEED - 🔥 RESPONSIVE
-// ============================================
+// ============================================================================
+// CAR TELEMETRY WIDGET
+// ============================================================================
+function CarTelemetryWidget({ driver, carData }: { driver: any; carData: any }) {
+  const color = teamColor(driver?.team_name);
+  const gear = carData.gear ?? 0;
+  const speed = carData.speed ?? 0;
+  const throttle = carData.throttle ?? 0;
+  const brake = carData.brake ?? 0;
+  const rpm = carData.rpm ?? 0;
+  const drsOn = carData.drs !== undefined && carData.drs > 10;
 
-interface RaceControlFeedProps {
-  messages: any[];
+  return (
+    <div className="bg-metrik-card border border-metrik-turquoise/30 rounded-lg p-4">
+      <div className="flex items-center gap-2 mb-4">
+        <Activity size={16} className="text-metrik-turquoise" />
+        <h3 className="font-rajdhani font-black text-white">
+          {driver.name_acronym} — CAR TELEMETRY
+        </h3>
+        {drsOn && <span className="ml-auto text-xs font-black bg-green-500 text-black px-2 rounded">DRS OPEN</span>}
+      </div>
+      <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+        {/* Speed */}
+        <div className="text-center bg-metrik-black/50 rounded-lg p-3">
+          <div className="text-2xl font-rajdhani font-black text-white">{speed}</div>
+          <div className="text-[10px] text-metrik-silver font-bold">km/h</div>
+        </div>
+        {/* Gear */}
+        <div className="text-center bg-metrik-black/50 rounded-lg p-3">
+          <div className="text-2xl font-rajdhani font-black" style={{ color }}>{gear || 'N'}</div>
+          <div className="text-[10px] text-metrik-silver font-bold">GEAR</div>
+        </div>
+        {/* RPM */}
+        <div className="text-center bg-metrik-black/50 rounded-lg p-3">
+          <div className="text-2xl font-rajdhani font-black text-white">{(rpm / 1000).toFixed(1)}k</div>
+          <div className="text-[10px] text-metrik-silver font-bold">RPM</div>
+        </div>
+        {/* Throttle */}
+        <div className="text-center bg-metrik-black/50 rounded-lg p-3">
+          <div className="text-2xl font-rajdhani font-black text-green-400">{throttle}%</div>
+          <div className="text-[10px] text-metrik-silver font-bold">THROTTLE</div>
+        </div>
+        {/* Brake */}
+        <div className="text-center bg-metrik-black/50 rounded-lg p-3">
+          <div className={`text-2xl font-rajdhani font-black ${brake > 0 ? 'text-red-500' : 'text-gray-600'}`}>
+            {brake > 0 ? 'ON' : 'OFF'}
+          </div>
+          <div className="text-[10px] text-metrik-silver font-bold">BRAKE</div>
+        </div>
+        {/* Throttle bar */}
+        <div className="flex flex-col justify-center bg-metrik-black/50 rounded-lg p-3">
+          <div className="h-2 bg-gray-800 rounded-full overflow-hidden mb-1">
+            <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${throttle}%` }} />
+          </div>
+          <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
+            <div className="h-full bg-red-500 rounded-full transition-all" style={{ width: `${brake}%` }} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
-function RaceControlFeed({ messages }: RaceControlFeedProps) {
+// ============================================================================
+// WEATHER WIDGET
+// ============================================================================
+function WeatherWidget({ weather }: { weather: any }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, x: 20 }}
-      animate={{ opacity: 1, x: 0 }}
-      className="backdrop-blur-xl bg-metrik-card/80 border border-metrik-turquoise/30 rounded-lg overflow-hidden"
-    >
-      {/* HEADER - 🔥 RESPONSIVE */}
-      <div className="border-b border-metrik-turquoise/30 px-4 sm:px-6 py-3 sm:py-4">
-        <h2 className="text-lg sm:text-xl font-rajdhani font-black text-white">
-          RACE CONTROL
-        </h2>
+    <div className="bg-metrik-card border border-metrik-turquoise/30 rounded-lg p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <Cloud size={16} className="text-metrik-turquoise" />
+        <h3 className="font-rajdhani font-black text-white">WEATHER</h3>
+        {weather.rainfall ? <span className="ml-auto text-xs text-blue-400">🌧️ Rain</span> : null}
       </div>
+      <div className="grid grid-cols-2 gap-3 text-sm">
+        <div><p className="text-metrik-silver text-xs mb-0.5">Air Temp</p>
+          <p className="text-xl font-rajdhani font-black text-white">{weather.air_temperature}°C</p></div>
+        <div><p className="text-metrik-silver text-xs mb-0.5">Track Temp</p>
+          <p className="text-xl font-rajdhani font-black text-white">{weather.track_temperature}°C</p></div>
+        {weather.humidity != null && (
+          <div><p className="text-metrik-silver text-xs mb-0.5">Humidity</p>
+            <p className="text-xl font-rajdhani font-black text-white">{weather.humidity}%</p></div>
+        )}
+        {weather.wind_speed != null && (
+          <div><p className="text-metrik-silver text-xs mb-0.5">Wind</p>
+            <p className="text-xl font-rajdhani font-black text-white">{weather.wind_speed} km/h</p></div>
+        )}
+      </div>
+    </div>
+  );
+}
 
-      {/* MESSAGES - 🔥 RESPONSIVE */}
-      <div className="max-h-80 sm:max-h-96 overflow-y-auto">
+// ============================================================================
+// RACE CONTROL FEED
+// ============================================================================
+function RaceControlWidget({ messages }: { messages: any[] }) {
+  const flagColors: Record<string, string> = {
+    GREEN: 'border-l-green-500', YELLOW: 'border-l-yellow-400',
+    RED: 'border-l-red-500', BLUE: 'border-l-blue-400',
+    SC: 'border-l-yellow-300', VSC: 'border-l-yellow-300',
+  };
+
+  return (
+    <div className="bg-metrik-card border border-metrik-turquoise/30 rounded-lg overflow-hidden">
+      <div className="border-b border-metrik-turquoise/30 px-4 py-3 flex items-center gap-2">
+        <Radio size={16} className="text-metrik-turquoise" />
+        <h3 className="font-rajdhani font-black text-white">RACE CONTROL</h3>
+      </div>
+      <div className="max-h-72 overflow-y-auto">
         {messages.length === 0 ? (
-          <div className="px-4 sm:px-6 py-8 sm:py-12 text-center">
-            <p className="text-xs sm:text-sm text-metrik-silver font-inter">
-              No race control messages
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-2 p-3 sm:p-4">
-            {messages.slice(0, 10).map((msg, index) => (
-              <div
-                key={index}
-                className="p-2.5 sm:p-3 bg-metrik-black/50 border border-metrik-turquoise/20 rounded"
-              >
-                <p className="text-xs sm:text-sm font-inter text-white">
-                  {msg.message}
-                </p>
-                {msg.timestamp && (
-                  <p className="text-[10px] sm:text-xs font-inter text-metrik-silver mt-1">
-                    {msg.timestamp}
-                  </p>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
+          <p className="px-4 py-8 text-center text-metrik-silver text-xs">No messages yet</p>
+        ) : messages.map((msg, i) => {
+          const borderClass = flagColors[msg.flag || ''] || 'border-l-metrik-turquoise/40';
+          return (
+            <div key={i} className={`border-l-2 ${borderClass} px-3 py-2 border-b border-white/5`}>
+              <p className="text-xs text-white leading-snug">{msg.message}</p>
+              <p className="text-[10px] text-metrik-silver mt-0.5">
+                {msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString() : ''}
+                {msg.lap ? ` · Lap ${msg.lap}` : ''}
+              </p>
+            </div>
+          );
+        })}
       </div>
-    </motion.div>
+    </div>
   );
 }
 
-// ============================================
-// WEATHER WIDGET - 🔥 RESPONSIVE
-// ============================================
+// ============================================================================
+// TYRE STRATEGY
+// ============================================================================
+function TyreStrategyWidget({ drivers, positions, stints }: any) {
+  if (stints.length === 0) return null;
 
-interface WeatherWidgetProps {
-  weather: any;
-}
-
-function WeatherWidget({ weather }: WeatherWidgetProps) {
   return (
-    <motion.div
-      initial={{ opacity: 0, x: 20 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: 0.1 }}
-      className="backdrop-blur-xl bg-metrik-card/80 border border-metrik-turquoise/30 rounded-lg p-4 sm:p-6"
-    >
-      <h2 className="text-lg sm:text-xl font-rajdhani font-black text-white mb-3 sm:mb-4">
-        WEATHER
-      </h2>
-      
-      <div className="grid grid-cols-2 gap-3 sm:gap-4">
-        <div>
-          <p className="text-xs sm:text-sm font-inter text-metrik-silver mb-1">Air Temp</p>
-          <p className="text-xl sm:text-2xl font-rajdhani font-black text-white">
-            {weather.air_temperature}°C
-          </p>
-        </div>
-        <div>
-          <p className="text-xs sm:text-sm font-inter text-metrik-silver mb-1">Track Temp</p>
-          <p className="text-xl sm:text-2xl font-rajdhani font-black text-white">
-            {weather.track_temperature}°C
-          </p>
-        </div>
-        {weather.humidity && (
-          <div>
-            <p className="text-xs sm:text-sm font-inter text-metrik-silver mb-1">Humidity</p>
-            <p className="text-xl sm:text-2xl font-rajdhani font-black text-white">
-              {weather.humidity}%
-            </p>
-          </div>
-        )}
-        {weather.wind_speed && (
-          <div>
-            <p className="text-xs sm:text-sm font-inter text-metrik-silver mb-1">Wind</p>
-            <p className="text-xl sm:text-2xl font-rajdhani font-black text-white">
-              {weather.wind_speed} km/h
-            </p>
-          </div>
-        )}
+    <div className="bg-metrik-card border border-metrik-turquoise/30 rounded-lg overflow-hidden">
+      <div className="border-b border-metrik-turquoise/30 px-4 py-3">
+        <h3 className="font-rajdhani font-black text-white">TYRE STRATEGY</h3>
       </div>
-    </motion.div>
+      <div className="max-h-72 overflow-y-auto p-3 space-y-2">
+        {positions.slice(0, 10).map((pos: any) => {
+          const driver = drivers.find((d: any) => d.driver_number === pos.driver_number);
+          const driverStints = stints
+            .filter((s: any) => s.driver_number === pos.driver_number)
+            .sort((a: any, b: any) => a.stint_number - b.stint_number);
+
+          if (!driverStints.length) return null;
+
+          return (
+            <div key={pos.driver_number} className="flex items-center gap-2">
+              <span className="text-xs font-rajdhani font-black text-metrik-silver w-8">
+                P{pos.position}
+              </span>
+              <span className="text-xs font-bold text-white w-10">
+                {driver?.name_acronym || pos.driver_number}
+              </span>
+              <div className="flex items-center gap-1">
+                {driverStints.map((stint: any, idx: number) => (
+                  <div key={idx} className="flex items-center gap-1">
+                    <CompoundBadge compound={stint.compound} />
+                    <span className="text-[10px] text-metrik-silver">{stint.tyre_age_at_start}L</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }

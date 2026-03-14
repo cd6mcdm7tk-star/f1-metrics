@@ -1,4 +1,4 @@
-// 🔥 HOOK CUSTOM - Cache intelligent sessionStorage pour télémétrie
+// 🔥 HOOK CUSTOM - Cache intelligent localStorage pour télémétrie
 // Gère automatiquement get/set/clear du cache avec expiration
 
 import { useCallback } from 'react';
@@ -18,7 +18,7 @@ export function useTelemetryCache() {
    */
   const getCached = useCallback(<T,>(key: string): T | null => {
     try {
-      const cached = sessionStorage.getItem(key);
+      const cached = localStorage.getItem(key);
       if (!cached) return null;
 
       const entry: CacheEntry<T> = JSON.parse(cached);
@@ -27,7 +27,7 @@ export function useTelemetryCache() {
       const now = Date.now();
       if (now - entry.timestamp > entry.ttl) {
         // Expiré → supprimer
-        sessionStorage.removeItem(key);
+        localStorage.removeItem(key);
         return null;
       }
 
@@ -50,26 +50,29 @@ export function useTelemetryCache() {
         ttl
       };
 
-      sessionStorage.setItem(key, JSON.stringify(entry));
+      localStorage.setItem(key, JSON.stringify(entry));
       console.log(`💾 Cache SET: ${key}`);
     } catch (error) {
       console.error(`❌ Cache write error for ${key}:`, error);
       
-      // Si quota dépassé, nettoyer le cache le plus ancien
+      // Si quota dépassé, vider toutes les entrées télémétrie puis réessayer
       if (error instanceof DOMException && error.name === 'QuotaExceededError') {
-        console.warn('⚠️ SessionStorage full, clearing oldest entries...');
-        clearOldestEntries(5);
-        
-        // Réessayer
+        console.warn('⚠️ localStorage full, clearing all telemetry cache entries...');
+        for (let i = localStorage.length - 1; i >= 0; i--) {
+          const k = localStorage.key(i);
+          if (k && (k.startsWith('telemetry_') || k.startsWith('session_laps_'))) {
+            localStorage.removeItem(k);
+          }
+        }
         try {
           const entry: CacheEntry<T> = {
             data,
             timestamp: Date.now(),
             ttl
           };
-          sessionStorage.setItem(key, JSON.stringify(entry));
+          localStorage.setItem(key, JSON.stringify(entry));
         } catch (retryError) {
-          console.error('❌ Cache write failed after cleanup:', retryError);
+          console.warn('⚠️ Cache write failed after cleanup, skipping cache for this entry');
         }
       }
     }
@@ -79,7 +82,7 @@ export function useTelemetryCache() {
    * Supprimer une clé du cache
    */
   const removeCached = useCallback((key: string): void => {
-    sessionStorage.removeItem(key);
+    localStorage.removeItem(key);
     console.log(`🗑️ Cache REMOVE: ${key}`);
   }, []);
 
@@ -90,17 +93,17 @@ export function useTelemetryCache() {
     const now = Date.now();
     let cleaned = 0;
 
-    for (let i = 0; i < sessionStorage.length; i++) {
-      const key = sessionStorage.key(i);
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
       if (!key) continue;
 
       try {
-        const cached = sessionStorage.getItem(key);
+        const cached = localStorage.getItem(key);
         if (!cached) continue;
 
         const entry: CacheEntry<any> = JSON.parse(cached);
         if (now - entry.timestamp > entry.ttl) {
-          sessionStorage.removeItem(key);
+          localStorage.removeItem(key);
           cleaned++;
         }
       } catch (error) {
@@ -114,43 +117,10 @@ export function useTelemetryCache() {
   }, []);
 
   /**
-   * Nettoyer les N entrées les plus anciennes
-   */
-  const clearOldestEntries = useCallback((count: number): void => {
-    const entries: Array<{ key: string; timestamp: number }> = [];
-
-    // Collecter toutes les entrées avec timestamp
-    for (let i = 0; i < sessionStorage.length; i++) {
-      const key = sessionStorage.key(i);
-      if (!key) continue;
-
-      try {
-        const cached = sessionStorage.getItem(key);
-        if (!cached) continue;
-
-        const entry: CacheEntry<any> = JSON.parse(cached);
-        entries.push({ key, timestamp: entry.timestamp });
-      } catch (error) {
-        // Ignore
-      }
-    }
-
-    // Trier par timestamp (plus ancien en premier)
-    entries.sort((a, b) => a.timestamp - b.timestamp);
-
-    // Supprimer les N plus anciens
-    for (let i = 0; i < Math.min(count, entries.length); i++) {
-      sessionStorage.removeItem(entries[i].key);
-    }
-
-    console.log(`🧹 Removed ${Math.min(count, entries.length)} oldest cache entries`);
-  }, []);
-
-  /**
    * Nettoyer tout le cache
    */
   const clearAll = useCallback((): void => {
-    sessionStorage.clear();
+    localStorage.clear();
     console.log('🧹 Cache cleared completely');
   }, []);
 

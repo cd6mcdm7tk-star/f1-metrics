@@ -38,7 +38,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .from('subscriptions')
           .select('status, plan')
           .eq('user_id', user.id)
-          .eq('status', 'active')
+          .in('status', ['active', 'trialing'])
           .single()
 
         if (data && !error) {

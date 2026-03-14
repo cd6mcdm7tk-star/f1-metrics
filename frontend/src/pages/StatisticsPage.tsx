@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Trophy, Target, Award, Zap, Flag, BarChart3, Users } from 'lucide-react';
+import SEO from '../components/SEO';
 import { useNavigate } from 'react-router-dom';
 import { useSubscription } from '../hooks/useSubscription';
 import UpgradeModal from '../components/UpgradeModal';
@@ -32,6 +33,32 @@ interface H2HData {
   driver1: DriverInfo;
   driver2: DriverInfo;
 }
+
+// 🏎️ GRILLE 2026 - Fallback statique quand l'API n'a pas encore de données (avant la 1ère course)
+const DRIVERS_2026: Record<string, { team: string; fullName: string; number: string }> = {
+  VER: { team: 'Red Bull Racing', fullName: 'Max Verstappen',        number: '1'  },
+  HAD: { team: 'Red Bull Racing', fullName: 'Isack Hadjar',          number: '6'  },
+  LEC: { team: 'Ferrari',         fullName: 'Charles Leclerc',       number: '16' },
+  HAM: { team: 'Ferrari',         fullName: 'Lewis Hamilton',         number: '44' },
+  RUS: { team: 'Mercedes',        fullName: 'George Russell',         number: '63' },
+  ANT: { team: 'Mercedes',        fullName: 'Andrea Kimi Antonelli',  number: '12' },
+  NOR: { team: 'McLaren',         fullName: 'Lando Norris',           number: '4'  },
+  PIA: { team: 'McLaren',         fullName: 'Oscar Piastri',          number: '81' },
+  ALO: { team: 'Aston Martin',    fullName: 'Fernando Alonso',        number: '14' },
+  STR: { team: 'Aston Martin',    fullName: 'Lance Stroll',           number: '18' },
+  GAS: { team: 'Alpine',          fullName: 'Pierre Gasly',           number: '10' },
+  COL: { team: 'Alpine',          fullName: 'Franco Colapinto',       number: '43' },
+  ALB: { team: 'Williams',        fullName: 'Alex Albon',             number: '23' },
+  SAI: { team: 'Williams',        fullName: 'Carlos Sainz',           number: '55' },
+  OCO: { team: 'Haas',            fullName: 'Esteban Ocon',           number: '31' },
+  BEA: { team: 'Haas',            fullName: 'Oliver Bearman',         number: '87' },
+  LAW: { team: 'Racing Bulls',    fullName: 'Liam Lawson',            number: '30' },
+  LIN: { team: 'Racing Bulls',    fullName: 'Arvid Lindblad',         number: '8'  },
+  HUL: { team: 'Audi',            fullName: 'Nico Hülkenberg',        number: '27' },
+  BOR: { team: 'Audi',            fullName: 'Gabriel Bortoleto',      number: '5'  },
+  PER: { team: 'Cadillac',        fullName: 'Sergio Perez',           number: '11' },
+  BOT: { team: 'Cadillac',        fullName: 'Valtteri Bottas',        number: '77' },
+};
 
 // 🌐 ERGAST API HELPER
 const fetchErgastAPI = async (url: string, retries = 3): Promise<any> => {
@@ -88,21 +115,23 @@ export default function StatisticsPage() {
     'Alpine': '#FF87BC',
     'Williams': '#64C4FF',
     'RB': '#6692FF',
+    'Racing Bulls': '#6692FF',
     'AlphaTauri': '#6692FF',
     'Toro Rosso': '#6692FF',
     'Haas': '#B6BABD',
+    'Haas F1 Team': '#B6BABD',
     'Kick Sauber': '#52E252',
     'Sauber': '#52E252',
+    'Audi': '#BB0A30',
     'Alfa Romeo': '#C92D4B',
     'Racing Point': '#F596C8',
     'Renault': '#FFF500',
-    'Audi': '#BB0A30',
     'Cadillac': '#003DA5',
   };
 
   const getDriverColor = (teamName: string) => {
     if (teamColors[teamName]) return teamColors[teamName];
-    
+
     const teamLower = teamName.toLowerCase();
     if (teamLower.includes('red bull')) return '#3671C6';
     if (teamLower.includes('mclaren')) return '#FF8700';
@@ -111,12 +140,13 @@ export default function StatisticsPage() {
     if (teamLower.includes('aston martin')) return '#229971';
     if (teamLower.includes('alpine')) return '#FF87BC';
     if (teamLower.includes('williams')) return '#64C4FF';
-    if (teamLower.includes('alphatauri') || teamLower.includes('toro rosso')) return '#6692FF';
+    if (teamLower.includes('racing bulls') || teamLower.includes('alphatauri') || teamLower.includes('toro rosso')) return '#6692FF';
     if (teamLower.includes('haas')) return '#B6BABD';
-    if (teamLower.includes('sauber') || teamLower.includes('alfa romeo')) return '#52E252';
+    if (teamLower.includes('audi') || teamLower.includes('sauber') || teamLower.includes('alfa romeo')) return '#BB0A30';
+    if (teamLower.includes('cadillac')) return '#003DA5';
     if (teamLower.includes('racing point')) return '#F596C8';
     if (teamLower.includes('renault')) return '#FFF500';
-    
+
     return '#00E5CC';
   };
   
@@ -167,47 +197,84 @@ export default function StatisticsPage() {
       setDrivers([]);
       setDriver1('');
       setDriver2('');
-      
-      const resultsData = await fetchErgastAPI(`https://api.jolpi.ca/ergast/f1/${year}/results.json?limit=1000`);
-      
-      if (!resultsData || !resultsData.MRData?.RaceTable?.Races) {
-        console.error('No race data for', year);
-        setError(`No race data available for ${year}`);
-        return;
-      }
-      
-      const races = resultsData.MRData.RaceTable.Races;
-      
+
+      const jolpica_base = 'https://api.jolpi.ca/ergast/f1';
+      const resultsData = await fetchErgastAPI(`${jolpica_base}/${year}/results.json?limit=1000`);
+      const races = resultsData?.MRData?.RaceTable?.Races ?? [];
+
       const driverCodesSet = new Set<string>();
       const driverInfoMap = new Map<string, any>();
-      
-      races.forEach((race: any) => {
-        if (race.Results) {
-          race.Results.forEach((result: any) => {
-            const driver = result.Driver;
+
+      if (races.length > 0) {
+        // Season has started: build list from actual race results
+        races.forEach((race: any) => {
+          if (race.Results) {
+            race.Results.forEach((result: any) => {
+              const driver = result.Driver;
+              const code = generateDriverCode(driver);
+              if (!driverCodesSet.has(code)) {
+                driverCodesSet.add(code);
+                driverInfoMap.set(code, {
+                  abbreviation: code,
+                  number: driver.permanentNumber || '?',
+                  team: result.Constructor?.name || 'Unknown',
+                  fullName: `${driver.givenName} ${driver.familyName}`
+                });
+              }
+            });
+          }
+        });
+      } else {
+        // Season hasn't started yet: use static 2026 grid if available, else drivers.json
+        console.log(`No race results for ${year}, using fallback driver list`);
+        if (year === 2026) {
+          Object.entries(DRIVERS_2026).forEach(([code, info]) => {
+            driverInfoMap.set(code, {
+              abbreviation: code,
+              number: info.number,
+              team: info.team,
+              fullName: info.fullName,
+            });
+          });
+        } else {
+          const driversData = await fetchErgastAPI(`${jolpica_base}/${year}/drivers.json`);
+          const driversList = driversData?.MRData?.DriverTable?.Drivers ?? [];
+
+          if (driversList.length === 0) {
+            setError(`No driver data available for ${year}`);
+            return;
+          }
+
+          const entriesData = await fetchErgastAPI(`${jolpica_base}/${year}/driverStandings.json`);
+          const standingsList = entriesData?.MRData?.StandingsTable?.StandingsLists?.[0]?.DriverStandings ?? [];
+          const teamByDriverId = new Map<string, string>();
+          standingsList.forEach((s: any) => {
+            teamByDriverId.set(s.Driver.driverId, s.Constructors?.[0]?.name || 'Unknown');
+          });
+
+          driversList.forEach((driver: any) => {
             const code = generateDriverCode(driver);
-            
             if (!driverCodesSet.has(code)) {
               driverCodesSet.add(code);
               driverInfoMap.set(code, {
                 abbreviation: code,
                 number: driver.permanentNumber || '?',
-                team: result.Constructor?.name || 'Unknown',
+                team: teamByDriverId.get(driver.driverId) || 'Unknown',
                 fullName: `${driver.givenName} ${driver.familyName}`
               });
             }
           });
         }
-      });
-      
-      const formattedDrivers = Array.from(driverInfoMap.values()).sort((a, b) => 
+      }
+
+      const formattedDrivers = Array.from(driverInfoMap.values()).sort((a, b) =>
         a.abbreviation.localeCompare(b.abbreviation)
       );
-      
-      console.log(`✅ Found ${formattedDrivers.length} drivers who raced in ${year}`);
-      
+
+      console.log(`✅ Found ${formattedDrivers.length} drivers for ${year}`);
+
       setDrivers(formattedDrivers);
-      
+
       if (formattedDrivers.length > 0) {
         setDriver1(formattedDrivers[0].abbreviation);
         setDriver2(formattedDrivers[1]?.abbreviation || '');
@@ -471,13 +538,17 @@ export default function StatisticsPage() {
       
       let driver1Team = "Unknown";
       let driver2Team = "Unknown";
-      
+
       if (driver1Races.length > 0 && driver1Races[driver1Races.length - 1].Results?.[0]) {
         driver1Team = driver1Races[driver1Races.length - 1].Results[0].Constructor.name;
+      } else if (year === 2026 && DRIVERS_2026[driver1]) {
+        driver1Team = DRIVERS_2026[driver1].team;
       }
-      
+
       if (driver2Races.length > 0 && driver2Races[driver2Races.length - 1].Results?.[0]) {
         driver2Team = driver2Races[driver2Races.length - 1].Results[0].Constructor.name;
+      } else if (year === 2026 && DRIVERS_2026[driver2]) {
+        driver2Team = DRIVERS_2026[driver2].team;
       }
       
       setDrivers(prev => prev.map(d => {
@@ -644,6 +715,8 @@ export default function StatisticsPage() {
   };
 
   return (
+    <>
+    <SEO path="/statistics" title="F1 Driver Statistics - METRIK DELTA" description="Compare Formula 1 drivers with head-to-head statistics: wins, podiums, qualifying performance and race analysis." keywords="f1 driver statistics, formula 1 h2h, f1 driver comparison, f1 qualifying stats, f1 race stats" />
     <div className="min-h-screen bg-metrik-black text-white">
       <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-6 max-w-[1600px]">
         {/* 🔥 HEADER RESPONSIVE */}
@@ -864,11 +937,12 @@ export default function StatisticsPage() {
       </div>
 
       {/* 🔥 UPGRADE MODAL */}
-      <UpgradeModal 
+      <UpgradeModal
         isOpen={showUpgradeModal}
         onClose={() => setShowUpgradeModal(false)}
         reason="current_season"
       />
     </div>
+    </>
   );
 }

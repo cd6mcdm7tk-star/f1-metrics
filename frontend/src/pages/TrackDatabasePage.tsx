@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, Fragment } from 'react';
+import SEO from '../components/SEO';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Sphere } from '@react-three/drei';
 import * as THREE from 'three';
@@ -334,7 +335,7 @@ function CircuitDetailsCompact({ round }: { round: number }) {
       try {
         setLoading(true);
         setError('');
-        const url = `https://metrikdelta-backend-eu-production.up.railway.app/api/racing-line/2024/${round}/Q/VER`;
+        const url = `${import.meta.env.VITE_API_URL_EU || import.meta.env.VITE_API_URL}/api/racing-line/2024/${round}/Q/VER`;
         const response = await fetch(url);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
@@ -548,6 +549,8 @@ export default function TrackDatabasePage() {
   };
 
   return (
+    <>
+      <SEO path="/track-database" title="F1 Track Database - METRIK DELTA" description="Explore all Formula 1 circuits with detailed track maps, corner analysis and historical data." keywords="f1 circuits, formula 1 tracks, f1 track map, circuit database, f1 corners" />
     <div className="min-h-screen bg-metrik-black text-white pb-12">
       <div className="container mx-auto px-6 py-6">
         {/* Header */}
@@ -641,5 +644,6 @@ export default function TrackDatabasePage() {
         }
       `}</style>
     </div>
+    </>
   );
 }

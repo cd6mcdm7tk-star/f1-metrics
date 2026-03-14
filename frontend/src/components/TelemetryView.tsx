@@ -1,7 +1,7 @@
-import { Clock, Zap, Gauge, MapPin, Target, Wind, Thermometer } from 'lucide-react';
+import { Zap, Gauge, MapPin, Target } from 'lucide-react';
 import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import type { TelemetryData } from '../types/telemetry';
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useMemo, useRef, useEffect } from 'react';
 
 interface TelemetryViewProps {
   telemetryData: TelemetryData;
@@ -13,6 +13,28 @@ interface TelemetryViewProps {
   areTeammates: (driver1: string, driver2: string) => boolean;
   loading?: boolean; // 🔥 NOUVELLE PROP pour skeleton loaders
 }
+
+// SectorLabels défini hors du composant parent → référence stable, pas recréé à chaque render
+interface SectorLabelsProps {
+  sector1Percent: number;
+  sector2Percent: number;
+  sector3Percent: number;
+}
+const SectorLabels = ({ sector1Percent, sector2Percent, sector3Percent }: SectorLabelsProps) => (
+  <div className="hidden sm:flex absolute top-1 right-0 left-12 h-full text-[9px] font-rajdhani font-bold pointer-events-none z-10" style={{ paddingRight: '20px' }}>
+    <div className="flex items-start justify-center pt-0.5 text-metrik-silver/60" style={{ width: `${sector1Percent}%` }}>
+      <span>S1</span>
+    </div>
+    <div className="h-full w-px bg-metrik-silver/20" />
+    <div className="flex items-start justify-center pt-0.5 text-metrik-silver/60" style={{ width: `${sector2Percent - sector1Percent}%` }}>
+      <span>S2</span>
+    </div>
+    <div className="h-full w-px bg-metrik-silver/20" />
+    <div className="flex items-start justify-center pt-0.5 text-metrik-silver/60" style={{ width: `${sector3Percent}%` }}>
+      <span>S3</span>
+    </div>
+  </div>
+);
 
 // 🔥 COMPOSANT SKELETON LOADER
 const SkeletonChart = () => (
@@ -66,71 +88,81 @@ export default function TelemetryView({
     return Math.round(num).toString();
   };
 
-  const telemetryChartData = telemetryData.telemetry.map((point: any) => ({
-    distance: point.distance,
-    speed1: point.speed1,
-    speed2: point.speed2,
-    throttle1: point.throttle1,
-    throttle2: point.throttle2,
-    brake1: point.brake1 ? 100 : 0,
-    brake2: point.brake2 ? 100 : 0,
-    gear1: point.gear1,
-    gear2: point.gear2,
-    rpm1: point.rpm1 || 0,
-    rpm2: point.rpm2 || 0,
-    delta: point.delta
-  }));
+  // 🔥 Downsampler à 300 points pour le rendu Recharts (12k → 3.6k SVG segments)
+  // Les données complètes restent disponibles pour les calculs (trackMap, stats)
+  const telemetryChartData = useMemo(() => {
+    const full = telemetryData.telemetry;
+    const step = Math.max(1, Math.ceil(full.length / 300));
+    const result = [];
+    for (let i = 0; i < full.length; i += step) {
+      const point = full[i] as any;
+      result.push({
+        distance: point.distance,
+        speed1: point.speed1,
+        speed2: point.speed2,
+        throttle1: point.throttle1,
+        throttle2: point.throttle2,
+        brake1: point.brake1 ? 100 : 0,
+        brake2: point.brake2 ? 100 : 0,
+        gear1: point.gear1,
+        gear2: point.gear2,
+        rpm1: point.rpm1 || 0,
+        rpm2: point.rpm2 || 0,
+        delta: point.delta,
+      });
+    }
+    return result;
+  }, [telemetryData]);
 
-  const maxSpeed1 = Math.max(...telemetryData.telemetry.map((p: any) => p.speed1));
-  const maxSpeed2 = Math.max(...telemetryData.telemetry.map((p: any) => p.speed2));
-  const avgSpeed1 = telemetryData.telemetry.reduce((sum: number, p: any) => sum + p.speed1, 0) / telemetryData.telemetry.length;
-  const avgSpeed2 = telemetryData.telemetry.reduce((sum: number, p: any) => sum + p.speed2, 0) / telemetryData.telemetry.length;
-  const delta = (telemetryData.lapTime2 || 0) - (telemetryData.lapTime1 || 0);
+  // 🔥 Stats memoizées — recalculées seulement quand telemetryData change
+  const { maxSpeed1, maxSpeed2, avgSpeed1, avgSpeed2, delta, maxDistance } = useMemo(() => {
+    const tel = telemetryData.telemetry;
+    let ms1 = -Infinity, ms2 = -Infinity, sum1 = 0, sum2 = 0;
+    let md = -Infinity;
+    for (const p of tel) {
+      if (p.speed1 > ms1) ms1 = p.speed1;
+      if (p.speed2 > ms2) ms2 = p.speed2;
+      sum1 += p.speed1;
+      sum2 += p.speed2;
+      if (p.distance > md) md = p.distance;
+    }
+    return {
+      maxSpeed1: ms1,
+      maxSpeed2: ms2,
+      avgSpeed1: sum1 / tel.length,
+      avgSpeed2: sum2 / tel.length,
+      delta: (telemetryData.lapTime2 || 0) - (telemetryData.lapTime1 || 0),
+      maxDistance: md,
+    };
+  }, [telemetryData]);
 
-  const maxDistance = Math.max(...telemetryData.telemetry.map((p: any) => p.distance));
-  
-  let sector1Distance = maxDistance * 0.33;
-  let sector2Distance = maxDistance * 0.66;
-  
-  if (telemetryData.sectors1 && telemetryData.lapTime1) {
-    const totalTime = telemetryData.lapTime1;
-    const s1Time = telemetryData.sectors1.sector1 || 0;
-    const s2Time = telemetryData.sectors1.sector2 || 0;
-    
-    const s1Ratio = s1Time / totalTime;
-    const s2Ratio = (s1Time + s2Time) / totalTime;
-    
-    sector1Distance = maxDistance * s1Ratio;
-    sector2Distance = maxDistance * s2Ratio;
-  }
-  
-  const sector1Percent = (sector1Distance / maxDistance) * 100;
-  const sector2Percent = (sector2Distance / maxDistance) * 100;
-  const sector3Percent = 100 - sector2Percent;
+  // 🔥 Calcul des pourcentages de secteurs memoizé
+  const { sector1Percent, sector2Percent, sector3Percent } = useMemo(() => {
+    let sector1Distance = maxDistance * 0.33;
+    let sector2Distance = maxDistance * 0.66;
 
-  const SectorLabels = () => (
-    <div className="hidden sm:flex absolute top-1 right-0 left-12 h-full text-[9px] font-rajdhani font-bold pointer-events-none z-10" style={{ paddingRight: '20px' }}>
-      <div className="flex items-start justify-center pt-0.5 text-metrik-silver/60" style={{ width: `${sector1Percent}%` }}>
-        <span>S1</span>
-      </div>
-      <div className="h-full w-px bg-metrik-silver/20" />
-      <div className="flex items-start justify-center pt-0.5 text-metrik-silver/60" style={{ width: `${sector2Percent - sector1Percent}%` }}>
-        <span>S2</span>
-      </div>
-      <div className="h-full w-px bg-metrik-silver/20" />
-      <div className="flex items-start justify-center pt-0.5 text-metrik-silver/60" style={{ width: `${sector3Percent}%` }}>
-        <span>S3</span>
-      </div>
-    </div>
-  );
+    if (telemetryData.sectors1 && telemetryData.lapTime1) {
+      const totalTime = telemetryData.lapTime1;
+      const s1Time = telemetryData.sectors1.sector1 || 0;
+      const s2Time = telemetryData.sectors1.sector2 || 0;
+      sector1Distance = maxDistance * (s1Time / totalTime);
+      sector2Distance = maxDistance * ((s1Time + s2Time) / totalTime);
+    }
 
-  const rawGpsPoints = telemetryData.telemetry
-    .filter((p: any) => 
-      p.x != null && p.y != null && 
+    const s1p = (sector1Distance / maxDistance) * 100;
+    const s2p = (sector2Distance / maxDistance) * 100;
+    return { sector1Percent: s1p, sector2Percent: s2p, sector3Percent: 100 - s2p };
+  }, [telemetryData, maxDistance]);
+
+  // 🔥 GPS points memoizés
+  const rawGpsPoints = useMemo(() => telemetryData.telemetry
+    .filter((p: any) =>
+      p.x != null && p.y != null &&
       !isNaN(p.x) && !isNaN(p.y) &&
       Math.abs(p.x) > 0.001 && Math.abs(p.y) > 0.001
     )
-    .map((p: any) => ({ x: p.x, y: p.y, distance: p.distance || 0 }));
+    .map((p: any) => ({ x: p.x, y: p.y, distance: p.distance || 0 })),
+  [telemetryData]);
 
   const hasGpsData = rawGpsPoints.length >= 10;
 
@@ -167,6 +199,7 @@ export default function TelemetryView({
 
     const driver1Dominant = segments.filter(s => s.dominant === 'driver1').length;
     const driver2Dominant = segments.filter(s => s.dominant === 'driver2').length;
+
 
     return {
       segments,
@@ -243,21 +276,39 @@ export default function TelemetryView({
       fullPath += ` L ${transformedPoints[i].x},${transformedPoints[i].y}`;
     }
 
+    // Build colored paths by assigning each GPS point a dominance color,
+    // then grouping consecutive same-color points. This is robust to sparse
+    // GPS data (OpenF1 2026) where 20m segments might have 0-1 points.
     const coloredPaths: Array<{path: string, color: string}> = [];
-    if (trackDominanceData) {
-      for (const segment of trackDominanceData.segments) {
-        const segStart = segment.startDistance || 0;
-        const segEnd = segment.endDistance || Infinity;
-        const segmentPoints = transformedPoints.filter(p => p.distance >= segStart && p.distance < segEnd);
-        if (segmentPoints.length < 2) continue;
+    if (trackDominanceData && trackDominanceData.segments.length > 0) {
+      const segments = trackDominanceData.segments;
 
-        let segPath = `M ${segmentPoints[0].x},${segmentPoints[0].y}`;
-        for (let i = 1; i < segmentPoints.length; i++) {
-          segPath += ` L ${segmentPoints[i].x},${segmentPoints[i].y}`;
+      // Binary search: find which segment a distance value belongs to
+      const getColorForDist = (dist: number): string => {
+        let lo = 0, hi = segments.length - 1;
+        while (lo <= hi) {
+          const mid = (lo + hi) >> 1;
+          if (dist < segments[mid].startDistance) hi = mid - 1;
+          else if (dist >= segments[mid].endDistance) lo = mid + 1;
+          else return segments[mid].dominant === 'driver1' ? driver1Color : driver2Color;
         }
-        const color = segment.dominant === 'driver1' ? driver1Color : driver2Color;
-        coloredPaths.push({ path: segPath, color });
+        return driver1Color;
+      };
+
+      let currentColor = '';
+      let currentPath = '';
+
+      for (const point of transformedPoints) {
+        const color = getColorForDist(point.distance);
+        if (color !== currentColor) {
+          if (currentPath) coloredPaths.push({ path: currentPath, color: currentColor });
+          currentColor = color;
+          currentPath = `M ${point.x},${point.y}`;
+        } else {
+          currentPath += ` L ${point.x},${point.y}`;
+        }
       }
+      if (currentPath) coloredPaths.push({ path: currentPath, color: currentColor });
     }
 
     return {
@@ -292,12 +343,15 @@ export default function TelemetryView({
         const ratio = Math.max(0, Math.min(1, mouseX / chartWidth));
         const distance = ratio * maxDistance;
         
-        const hoverPoint = points.reduce((closest: any, point: any) => {
-          if (!closest) return point;
-          const distToHover = Math.abs(point.distance - distance);
-          const distToClosest = Math.abs(closest.distance - distance);
-          return distToHover < distToClosest ? point : closest;
-        }, null);
+        // 🔥 Binary search O(log n) au lieu de reduce O(n)
+        let lo = 0, hi = points.length - 1;
+        while (lo < hi - 1) {
+          const mid = (lo + hi) >> 1;
+          if (points[mid].distance <= distance) lo = mid;
+          else hi = mid;
+        }
+        const hoverPoint = Math.abs(points[lo].distance - distance) <= Math.abs(points[hi].distance - distance)
+          ? points[lo] : points[hi];
 
         if (hoverPoint) {
           marker.style.transform = `translate(${hoverPoint.x}px, ${hoverPoint.y}px)`;
@@ -661,7 +715,7 @@ export default function TelemetryView({
               <div className="w-0.5 sm:w-1 h-2 sm:h-3 bg-blue-500 rounded" />
               <h3 className="text-[10px] sm:text-xs font-rajdhani font-bold text-metrik-turquoise uppercase">Speed</h3>
             </div>
-            <SectorLabels />
+            <SectorLabels sector1Percent={sector1Percent} sector2Percent={sector2Percent} sector3Percent={sector3Percent} />
             {loading && <SkeletonChart />}
             <ResponsiveContainer width="100%" height={150} className="sm:!h-[200px]">
               <LineChart data={telemetryChartData} syncId="telemetry" margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
@@ -695,7 +749,7 @@ export default function TelemetryView({
               <div className="w-0.5 sm:w-1 h-2 sm:h-3 bg-yellow-500 rounded" />
               <h3 className="text-[10px] sm:text-xs font-rajdhani font-bold text-metrik-turquoise uppercase">Delta</h3>
             </div>
-            <SectorLabels />
+            <SectorLabels sector1Percent={sector1Percent} sector2Percent={sector2Percent} sector3Percent={sector3Percent} />
             {loading && <SkeletonChart />}
             <ResponsiveContainer width="100%" height={80} className="sm:!h-[100px]">
               <AreaChart data={telemetryChartData} syncId="telemetry" margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
@@ -740,7 +794,7 @@ export default function TelemetryView({
               <div className="w-0.5 sm:w-1 h-2 sm:h-3 bg-green-500 rounded" />
               <h3 className="text-[10px] sm:text-xs font-rajdhani font-bold text-metrik-turquoise uppercase">Throttle</h3>
             </div>
-            <SectorLabels />
+            <SectorLabels sector1Percent={sector1Percent} sector2Percent={sector2Percent} sector3Percent={sector3Percent} />
             {loading && <SkeletonChart />}
             <ResponsiveContainer width="100%" height={150} className="sm:!h-[200px]">
               <LineChart data={telemetryChartData} syncId="telemetry" margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
@@ -774,7 +828,7 @@ export default function TelemetryView({
               <div className="w-0.5 sm:w-1 h-2 sm:h-3 bg-red-500 rounded" />
               <h3 className="text-[10px] sm:text-xs font-rajdhani font-bold text-metrik-turquoise uppercase">Braking</h3>
             </div>
-            <SectorLabels />
+            <SectorLabels sector1Percent={sector1Percent} sector2Percent={sector2Percent} sector3Percent={sector3Percent} />
             {loading && <SkeletonChart />}
             <ResponsiveContainer width="100%" height={80} className="sm:!h-[100px]">
               <LineChart data={telemetryChartData} syncId="telemetry" margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
@@ -808,7 +862,7 @@ export default function TelemetryView({
               <div className="w-0.5 sm:w-1 h-2 sm:h-3 bg-orange-500 rounded" />
               <h3 className="text-[10px] sm:text-xs font-rajdhani font-bold text-metrik-turquoise uppercase">RPM</h3>
             </div>
-            <SectorLabels />
+            <SectorLabels sector1Percent={sector1Percent} sector2Percent={sector2Percent} sector3Percent={sector3Percent} />
             {loading && <SkeletonChart />}
             <ResponsiveContainer width="100%" height={150} className="sm:!h-[200px]">
               <LineChart data={telemetryChartData} syncId="telemetry" margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
@@ -842,7 +896,7 @@ export default function TelemetryView({
               <div className="w-0.5 sm:w-1 h-2 sm:h-3 bg-purple-500 rounded" />
               <h3 className="text-[10px] sm:text-xs font-rajdhani font-bold text-metrik-turquoise uppercase">Gear</h3>
             </div>
-            <SectorLabels />
+            <SectorLabels sector1Percent={sector1Percent} sector2Percent={sector2Percent} sector3Percent={sector3Percent} />
             {loading && <SkeletonChart />}
             <ResponsiveContainer width="100%" height={150} className="sm:!h-[200px]">
               <LineChart data={telemetryChartData} syncId="telemetry" margin={{ top: 5, right: 10, left: 0, bottom: 20 }}>

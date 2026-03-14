@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { Loader2, AlertCircle, Eye, EyeOff, TrendingUp } from 'lucide-react';
 import { useTelemetryCache } from '../hooks/useTelemetryCache';
@@ -64,6 +64,77 @@ interface LapData {
   laps: GPTempoLap[];
 }
 
+// Fonctions pures définies hors composant — références stables, pas recréées à chaque render
+const getTyreColor = (compound: string | null | undefined): string => {
+  if (!compound) return '#999999';
+  const c = compound.toLowerCase();
+  if (c.includes('soft')) return '#E74C3C';
+  if (c.includes('medium')) return '#F1C40F';
+  if (c.includes('hard')) return '#FFFFFF';
+  if (c.includes('intermediate') || c.includes('inter')) return '#52E252';
+  if (c.includes('wet')) return '#3498DB';
+  return '#999999';
+};
+
+interface CustomDotExtraProps {
+  driver1: string;
+  driver2: string;
+  driver1Color: string;
+  driver2Color: string;
+  hoveredLap: number | null;
+  selection1: LapSelection | null;
+  selection2: LapSelection | null;
+  onLapClick: (driver: string, lapNumber: number) => void;
+  setHoveredLap: (lap: number | null) => void;
+}
+
+// CustomDot sorti du composant — évite que Recharts re-rende tous les dots à chaque render parent
+const CustomDot = (props: any) => {
+  const {
+    cx, cy, payload, dataKey,
+    driver1, driver2, driver1Color, driver2Color,
+    hoveredLap, selection1, selection2,
+    onLapClick, setHoveredLap,
+  } = props as any & CustomDotExtraProps;
+
+  const lapTime = payload[dataKey];
+  if (!lapTime) return null;
+
+  const isDriver1 = dataKey === 'lapTime1';
+  const currentDriver = isDriver1 ? driver1 : driver2;
+  const lineColor = isDriver1 ? driver1Color : driver2Color;
+  const compound = isDriver1 ? payload.compound1 : payload.compound2;
+  const tyreColor = getTyreColor(compound);
+  const isHovered = hoveredLap === payload.lapNumber;
+
+  const isSelected =
+    (selection1?.driver === currentDriver && selection1?.lapNumber === payload.lapNumber) ||
+    (selection2?.driver === currentDriver && selection2?.lapNumber === payload.lapNumber);
+
+  return (
+    <g
+      onClick={(e) => { e.stopPropagation(); onLapClick(currentDriver, payload.lapNumber); }}
+      onMouseEnter={() => setHoveredLap(payload.lapNumber)}
+      onMouseLeave={() => setHoveredLap(null)}
+      style={{ cursor: 'pointer' }}
+    >
+      <circle cx={cx} cy={cy} r={15} fill="transparent" stroke="none" />
+      <circle
+        cx={cx}
+        cy={cy}
+        r={isSelected ? 9 : isHovered ? 7 : 5}
+        fill={tyreColor}
+        stroke={isSelected ? '#00E5CC' : lineColor}
+        strokeWidth={isSelected ? 3 : isHovered ? 2.5 : 2}
+        style={{
+          filter: `drop-shadow(0 0 ${isHovered || isSelected ? 10 : 4}px ${tyreColor})`,
+          transition: 'r 0.15s ease, stroke-width 0.15s ease',
+        }}
+      />
+    </g>
+  );
+};
+
 export default function SessionView({
   year,
   selectedGP,
@@ -86,7 +157,7 @@ export default function SessionView({
   const [lapData1, setLapData1] = useState<LapData | null>(null);
   const [lapData2, setLapData2] = useState<LapData | null>(null);
 
-  // 🎨 ANIMATION STATE - Detecte quand les lignes changent
+  // 🎨 ANIMATION STATE
   const [animationKey, setAnimationKey] = useState(0);
   const prevDriver1Ref = useRef<string>(driver1);
   const prevDriver2Ref = useRef<string>(driver2);
@@ -100,16 +171,6 @@ export default function SessionView({
   const driver1Color = driver1 ? getDriverColor(driver1) : '#999999';
   const driver2Color = (driver1 && driver2 && areTeammates(driver1, driver2)) ? '#FFFFFF' : (driver2 ? getDriverColor(driver2) : '#999999');
 
-  const getTyreColor = (compound: string | null | undefined): string => {
-    if (!compound) return '#999999';
-    const compoundLower = compound.toLowerCase();
-    if (compoundLower.includes('soft')) return '#E74C3C';
-    if (compoundLower.includes('medium')) return '#F1C40F';
-    if (compoundLower.includes('hard')) return '#FFFFFF';
-    if (compoundLower.includes('intermediate') || compoundLower.includes('inter')) return '#52E252';
-    if (compoundLower.includes('wet')) return '#3498DB';
-    return '#999999';
-  };
 
   useEffect(() => {
     setLapData1(null);
@@ -122,11 +183,12 @@ export default function SessionView({
   // 🎨 DÉTECTER CHANGEMENT DE DRIVERS → Trigger animation
   useEffect(() => {
     if (prevDriver1Ref.current !== driver1 || prevDriver2Ref.current !== driver2) {
-      setAnimationKey(prev => prev + 1); // Force re-render avec animation
+      setAnimationKey(prev => prev + 1);
       prevDriver1Ref.current = driver1;
       prevDriver2Ref.current = driver2;
     }
   }, [driver1, driver2]);
+
 
   // 🔥 FONCTION DE CHARGEMENT AVEC CACHE
   const loadDriversData = useCallback(async () => {
@@ -142,9 +204,7 @@ export default function SessionView({
     setError(null);
 
     try {
-      const API_BASE_URL = import.meta.env.PROD 
-        ? 'https://metrikdelta-backend-eu-production.up.railway.app'
-        : (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000');
+      const API_BASE_URL = import.meta.env.VITE_API_URL_EU || import.meta.env.VITE_API_URL;
 
       const promises: Promise<void>[] = [];
       
@@ -321,64 +381,17 @@ export default function SessionView({
     return `${mins}:${secs.padStart(6, '0')}`;
   };
 
-  const calculateYDomain = (): [number, number] => {
+  // 🔥 yDomain memoizé — recalculé seulement quand lapTimesData change
+  const yDomain = useMemo((): [number, number] => {
     const allValidTimes = lapTimesData
       .flatMap(lap => [lap.lapTime1, lap.lapTime2])
       .filter((t): t is number => t !== null);
 
     if (allValidTimes.length === 0) return [0, 120];
 
-    const minTime = Math.min(...allValidTimes);
-    const maxTime = Math.max(...allValidTimes);
-    
-    return [Math.floor(minTime - 0.5), Math.ceil(maxTime + 0.5)];
-  };
+    return [Math.floor(Math.min(...allValidTimes) - 0.5), Math.ceil(Math.max(...allValidTimes) + 0.5)];
+  }, [lapTimesData]);
 
-  const yDomain = calculateYDomain();
-
-  const CustomDot = (props: any) => {
-    const { cx, cy, payload, dataKey } = props;
-    const lapTime = payload[dataKey];
-    
-    if (!lapTime) return null;
-
-    const isDriver1 = dataKey === 'lapTime1';
-    const currentDriver = isDriver1 ? driver1 : driver2;
-    const lineColor = isDriver1 ? driver1Color : driver2Color;
-    const compound = isDriver1 ? payload.compound1 : payload.compound2;
-    const tyreColor = getTyreColor(compound);
-    const isHovered = hoveredLap === payload.lapNumber;
-    
-    const isSelected = 
-      (selection1?.driver === currentDriver && selection1?.lapNumber === payload.lapNumber) ||
-      (selection2?.driver === currentDriver && selection2?.lapNumber === payload.lapNumber);
-
-    return (
-      <g
-        onClick={(e) => {
-          e.stopPropagation();
-          onLapClick(currentDriver, payload.lapNumber);
-        }}
-        onMouseEnter={() => setHoveredLap(payload.lapNumber)}
-        onMouseLeave={() => setHoveredLap(null)}
-        style={{ cursor: 'pointer' }}
-      >
-        <circle cx={cx} cy={cy} r={15} fill="transparent" stroke="none" />
-        <circle
-          cx={cx}
-          cy={cy}
-          r={isSelected ? 9 : isHovered ? 7 : 5}
-          fill={tyreColor}
-          stroke={isSelected ? '#00E5CC' : lineColor}
-          strokeWidth={isSelected ? 3 : isHovered ? 2.5 : 2}
-          style={{
-            filter: `drop-shadow(0 0 ${isHovered || isSelected ? 10 : 4}px ${tyreColor})`,
-            transition: 'r 0.15s ease, stroke-width 0.15s ease'
-          }}
-        />
-      </g>
-    );
-  };
 
   if (!driver1 && !driver2) {
     return (
@@ -449,7 +462,7 @@ export default function SessionView({
           <ResponsiveContainer width="100%" height="100%">
             <LineChart
               data={lapTimesData}
-              key={animationKey} // 🎨 Force re-render avec animation
+              key={animationKey}
               margin={{
                 top: 40,
                 right: 30,
@@ -544,34 +557,47 @@ export default function SessionView({
 
               {/* 🎨 LIGNE DRIVER1 AVEC ANIMATION */}
               {driver1 && (
-                <Line 
-                  type="monotone" 
-                  dataKey="lapTime1" 
+                <Line
+                  type="monotone"
+                  dataKey="lapTime1"
                   stroke={driver1Color}
                   strokeWidth={1.5}
-                  dot={<CustomDot dataKey="lapTime1" />}
+                  dot={<CustomDot
+                    dataKey="lapTime1"
+                    driver1={driver1} driver2={driver2}
+                    driver1Color={driver1Color} driver2Color={driver2Color}
+                    hoveredLap={hoveredLap} selection1={selection1} selection2={selection2}
+                    onLapClick={onLapClick} setHoveredLap={setHoveredLap}
+                  />}
                   activeDot={false}
                   connectNulls={true}
-                  isAnimationActive={true} // ✨ ANIMATION ACTIVÉE
-                  animationDuration={800} // ✨ Durée 800ms
-                  animationEasing="ease-out" // ✨ Easing fluide
+                  isAnimationActive={true}
+                  animationDuration={700}
+                  animationEasing="ease-out"
+                  animationBegin={0}
                 />
               )}
-              
-              {/* 🎨 LIGNE DRIVER2 AVEC ANIMATION */}
+
+              {/* 🎨 LIGNE DRIVER2 */}
               {driver2 && (
-                <Line 
-                  type="monotone" 
-                  dataKey="lapTime2" 
+                <Line
+                  type="monotone"
+                  dataKey="lapTime2"
                   stroke={driver2Color}
                   strokeWidth={1.5}
-                  dot={<CustomDot dataKey="lapTime2" />}
+                  dot={<CustomDot
+                    dataKey="lapTime2"
+                    driver1={driver1} driver2={driver2}
+                    driver1Color={driver1Color} driver2Color={driver2Color}
+                    hoveredLap={hoveredLap} selection1={selection1} selection2={selection2}
+                    onLapClick={onLapClick} setHoveredLap={setHoveredLap}
+                  />}
                   activeDot={false}
                   connectNulls={true}
-                  isAnimationActive={true} // ✨ ANIMATION ACTIVÉE
-                  animationDuration={800} // ✨ Durée 800ms
-                  animationEasing="ease-out" // ✨ Easing fluide
-                  animationBegin={100} // ✨ Décalage 100ms pour effet stagger
+                  isAnimationActive={true}
+                  animationDuration={700}
+                  animationEasing="ease-out"
+                  animationBegin={150}
                 />
               )}
 

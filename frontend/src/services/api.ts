@@ -2,10 +2,9 @@ import type { TelemetryData } from '../types/telemetry';
 import type { EnhancedAnimationData, RaceAnimationData } from '../types/animation';
 import type { RaceData, PitStopsData, RaceEventsData } from '../types/pitwall';
 import type { PositionEvolution, StrategyComparison } from '../types/pitwall';
-import type { RacePaceData, MultiDriverPaceData, StintAnalysisData, SectorEvolutionData } from '../types/raceevolution';
 import type { DriverStanding, ConstructorStanding, Circuit } from '../types/championship';
 
-const API_BASE_URL = 'https://metrikdelta-backend-eu-production.up.railway.app/api';
+const API_BASE_URL = `${import.meta.env.VITE_API_URL_EU || import.meta.env.VITE_API_URL}/api`;
 
 export const getGrandsPrix = async (year: number) => {
   const response = await fetch(`${API_BASE_URL}/grands-prix/${year}`);
@@ -88,32 +87,6 @@ export const getPositionEvolution = async (year: number, gpRound: number): Promi
 export const getStrategyComparison = async (year: number, gpRound: number): Promise<StrategyComparison> => {
   const response = await fetch(`${API_BASE_URL}/strategy-comparison/${year}/${gpRound}`);
   if (!response.ok) throw new Error('Failed to fetch strategy comparison');
-  return response.json();
-};
-
-// RACE EVOLUTION ENDPOINTS
-export const getRacePace = async (year: number, gpRound: number, driver: string): Promise<RacePaceData> => {
-  const response = await fetch(`${API_BASE_URL}/race-pace/${year}/${gpRound}/${driver}`);
-  if (!response.ok) throw new Error('Failed to fetch race pace');
-  return response.json();
-};
-
-export const getMultiDriverPace = async (year: number, gpRound: number, drivers: string[]): Promise<MultiDriverPaceData> => {
-  const driversParam = drivers.join(',');
-  const response = await fetch(`${API_BASE_URL}/multi-driver-pace/${year}/${gpRound}?drivers=${driversParam}`);
-  if (!response.ok) throw new Error('Failed to fetch multi driver pace');
-  return response.json();
-};
-
-export const getStintAnalysis = async (year: number, gpRound: number, driver: string): Promise<StintAnalysisData> => {
-  const response = await fetch(`${API_BASE_URL}/stint-analysis/${year}/${gpRound}/${driver}`);
-  if (!response.ok) throw new Error('Failed to fetch stint analysis');
-  return response.json();
-};
-
-export const getSectorEvolution = async (year: number, gpRound: number, driver: string): Promise<SectorEvolutionData> => {
-  const response = await fetch(`${API_BASE_URL}/sector-evolution/${year}/${gpRound}/${driver}`);
-  if (!response.ok) throw new Error('Failed to fetch sector evolution');
   return response.json();
 };
 

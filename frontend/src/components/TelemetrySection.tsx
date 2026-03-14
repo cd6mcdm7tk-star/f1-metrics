@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useMemo } from 'react';
 import { motion, useInView } from 'framer-motion';
 import { Activity, ArrowRight, Zap } from 'lucide-react';
 import { Canvas, useFrame } from '@react-three/fiber';
@@ -8,34 +8,40 @@ import * as THREE from 'three';
 // Space particles component (from HeroSection)
 function SpaceParticles() {
   const ref = useRef<THREE.Points>(null);
-  
+
   const particleCount = 1500;
-  const positions = new Float32Array(particleCount * 3);
-  const velocities = new Float32Array(particleCount);
-  
-  for (let i = 0; i < particleCount; i++) {
-    positions[i * 3] = (Math.random() - 0.5) * 50;
-    positions[i * 3 + 1] = (Math.random() - 0.5) * 50;
-    positions[i * 3 + 2] = (Math.random() - 0.5) * 100 - 50;
-    velocities[i] = Math.random() * 0.5 + 0.1;
-  }
+  // useRef → tableau créé une seule fois, stable entre re-renders
+  const positions = useRef(new Float32Array(particleCount * 3));
+  const velocities = useRef(new Float32Array(particleCount));
+
+  // Initialisation une seule fois
+  useMemo(() => {
+    for (let i = 0; i < particleCount; i++) {
+      positions.current[i * 3] = (Math.random() - 0.5) * 50;
+      positions.current[i * 3 + 1] = (Math.random() - 0.5) * 50;
+      positions.current[i * 3 + 2] = (Math.random() - 0.5) * 100 - 50;
+      velocities.current[i] = Math.random() * 0.5 + 0.1;
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useFrame((state) => {
     if (!ref.current) return;
 
-    const positions = ref.current.geometry.attributes.position.array as Float32Array;
+    const pos = ref.current.geometry.attributes.position.array as Float32Array;
+    const vel = velocities.current;
     const time = state.clock.getElapsedTime();
 
     for (let i = 0; i < particleCount; i++) {
       const i3 = i * 3;
-      positions[i3 + 2] += velocities[i] * 0.3;
-      positions[i3] += Math.sin(time * 0.1 + i) * 0.01;
-      positions[i3 + 1] += Math.cos(time * 0.1 + i) * 0.01;
+      pos[i3 + 2] += vel[i] * 0.3;
+      pos[i3] += Math.sin(time * 0.1 + i) * 0.01;
+      pos[i3 + 1] += Math.cos(time * 0.1 + i) * 0.01;
 
-      if (positions[i3 + 2] > 10) {
-        positions[i3 + 2] = -100;
-        positions[i3] = (Math.random() - 0.5) * 50;
-        positions[i3 + 1] = (Math.random() - 0.5) * 50;
+      if (pos[i3 + 2] > 10) {
+        pos[i3 + 2] = -100;
+        pos[i3] = (Math.random() - 0.5) * 50;
+        pos[i3 + 1] = (Math.random() - 0.5) * 50;
       }
     }
 
@@ -44,7 +50,7 @@ function SpaceParticles() {
   });
 
   return (
-    <Points ref={ref} positions={positions} stride={3} frustumCulled={false}>
+    <Points ref={ref} positions={positions.current} stride={3} frustumCulled={false}>
       <PointMaterial
         transparent
         color="#00D2BE"
@@ -58,27 +64,23 @@ function SpaceParticles() {
   );
 }
 
+// Positions des nébuleuses générées une seule fois au module load — jamais recalculées
+const NEBULA_CONFIGS = Array.from({ length: 5 }, () => ({
+  x: (Math.random() - 0.5) * 40,
+  y: (Math.random() - 0.5) * 40,
+  z: -20 - Math.random() * 30,
+  scale: 5 + Math.random() * 10,
+}));
+
 function SpaceNebula() {
   return (
     <>
-      {[...Array(5)].map((_, i) => {
-        const x = (Math.random() - 0.5) * 40;
-        const y = (Math.random() - 0.5) * 40;
-        const z = -20 - Math.random() * 30;
-        const scale = 5 + Math.random() * 10;
-
-        return (
-          <mesh key={i} position={[x, y, z]}>
-            <sphereGeometry args={[scale, 32, 32]} />
-            <meshBasicMaterial
-              color="#00D2BE"
-              transparent
-              opacity={0.05}
-              depthWrite={false}
-            />
-          </mesh>
-        );
-      })}
+      {NEBULA_CONFIGS.map((cfg, i) => (
+        <mesh key={i} position={[cfg.x, cfg.y, cfg.z]}>
+          <sphereGeometry args={[cfg.scale, 32, 32]} />
+          <meshBasicMaterial color="#00D2BE" transparent opacity={0.05} depthWrite={false} />
+        </mesh>
+      ))}
     </>
   );
 }
@@ -86,13 +88,16 @@ function SpaceNebula() {
 function BrightStars() {
   const starsRef = useRef<THREE.Points>(null);
   const starCount = 100;
-  const positions = new Float32Array(starCount * 3);
-
-  for (let i = 0; i < starCount; i++) {
-    positions[i * 3] = (Math.random() - 0.5) * 60;
-    positions[i * 3 + 1] = (Math.random() - 0.5) * 60;
-    positions[i * 3 + 2] = -10 - Math.random() * 80;
-  }
+  // useRef → stable entre re-renders
+  const positions = useRef(new Float32Array(starCount * 3));
+  useMemo(() => {
+    for (let i = 0; i < starCount; i++) {
+      positions.current[i * 3] = (Math.random() - 0.5) * 60;
+      positions.current[i * 3 + 1] = (Math.random() - 0.5) * 60;
+      positions.current[i * 3 + 2] = -10 - Math.random() * 80;
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useFrame((state) => {
     if (!starsRef.current) return;
@@ -104,7 +109,7 @@ function BrightStars() {
   });
 
   return (
-    <Points ref={starsRef} positions={positions} stride={3}>
+    <Points ref={starsRef} positions={positions.current} stride={3}>
       <PointMaterial
         transparent
         color="#FFFFFF"
