@@ -176,17 +176,7 @@ def ingest_openf1(year: int, gp_round: int, session_type: str):
         if num is not None:
             laps_by_driver.setdefault(int(num), []).append(lap)
 
-    # --- Fetch bulk session telemetry per driver (2 requests per driver total) ---
-    logger.info(f"  Fetching bulk car_data + location per driver...")
-    session_car_data: dict[int, list] = {}
-    session_pos_data: dict[int, list] = {}
-    for driver_num, code in num_to_code.items():
-        car_data, pos_data = _fetch_driver_session_data(session_key, driver_num)
-        session_car_data[driver_num] = car_data
-        session_pos_data[driver_num] = pos_data
-        logger.info(f"  {code}: {len(car_data)} car_data points, {len(pos_data)} location points")
-
-    # --- Process each driver ---
+    # --- Process each driver one at a time (fetch → process → discard) ---
     for driver_num, code in num_to_code.items():
         driver_laps = laps_by_driver.get(driver_num, [])
         if not driver_laps:
@@ -197,8 +187,8 @@ def ingest_openf1(year: int, gp_round: int, session_type: str):
         valid_laps = [l for l in driver_laps if l.get("lap_duration") is not None]
         fastest_lap_time = min((l["lap_duration"] for l in valid_laps), default=None)
 
-        car_data = session_car_data.get(driver_num, [])
-        pos_data = session_pos_data.get(driver_num, [])
+        car_data, pos_data = _fetch_driver_session_data(session_key, driver_num)
+        logger.info(f"  {code}: {len(car_data)} car_data points, {len(pos_data)} location points")
 
         for lap in driver_laps:
             lap_num = lap.get("lap_number")
@@ -242,6 +232,8 @@ def ingest_openf1(year: int, gp_round: int, session_type: str):
             )
 
         logger.info(f"  Saved {code}: {len(driver_laps)} laps")
+        # Libérer la mémoire immédiatement après chaque driver
+        del car_data, pos_data
 
 
 def _fetch_driver_session_data(session_key: int, driver_number: int) -> tuple:
@@ -338,6 +330,7 @@ def _extract_lap_telemetry(car_data: list, pos_data: list, date_start: str, lap_
 def ingest_fastf1(year: int, gp_round: int, session_type: str):
     """Ingest all drivers' laps + fastest-lap telemetry for a session via FastF1."""
     import fastf1
+    import gc
 
     logger.info(f"[FastF1] Ingesting {year} R{gp_round} {session_type}")
 
@@ -345,7 +338,8 @@ def ingest_fastf1(year: int, gp_round: int, session_type: str):
     fastf1.Cache.enable_cache(cache_dir)
 
     session = fastf1.get_session(year, gp_round, session_type)
-    session.load()
+    # Charger uniquement laps + telemetry (pas météo, pas messages radio)
+    session.load(laps=True, telemetry=True, weather=False, messages=False)
 
     for driver_num in session.drivers:
         try:
@@ -419,6 +413,9 @@ def ingest_fastf1(year: int, gp_round: int, session_type: str):
         except Exception as e:
             logger.error(f"  Driver {driver_code} failed: {e}")
 
+    # Libérer la mémoire FastF1 explicitement
+    del session
+    gc.collect()
     logger.info(f"[FastF1] Done ingesting {year} R{gp_round} {session_type}")
 
 
