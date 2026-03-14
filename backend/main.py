@@ -70,23 +70,8 @@ async def startup_event():
     else:
         print("PostgreSQL not available - running in FastF1-only mode", flush=True)
 
-    # Lancer le scheduler d'ingestion automatique (toutes les heures)
-    try:
-        from apscheduler.schedulers.asyncio import AsyncIOScheduler
-        from jobs.schedule_ingest import run as ingest_run
-
-        def _run_ingest():
-            try:
-                ingest_run()
-            except Exception as e:
-                logger.error(f"[Scheduler] Ingestion error: {e}")
-
-        scheduler = AsyncIOScheduler()
-        scheduler.add_job(_run_ingest, "cron", minute=0)  # toutes les heures pile
-        scheduler.start()
-        print("[Scheduler] Auto-ingestion scheduled (every hour)", flush=True)
-    except Exception as e:
-        print(f"[Scheduler] Could not start scheduler: {e}", flush=True)
+    # Ingestion gérée par Railway Cron Job séparé (python jobs/schedule_ingest.py)
+    print("[Scheduler] Ingestion handled by dedicated Railway Cron Job", flush=True)
 
 
 # Root endpoint
