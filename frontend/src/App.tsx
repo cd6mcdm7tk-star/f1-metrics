@@ -13,6 +13,26 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { useSubscription } from './hooks/useSubscription';
 import { getBackendUrl } from './config';
 import GoogleAnalytics from './components/GoogleAnalytics';
+import { F1_2026_CALENDAR } from './data/f1Calendar2026';
+
+// Session durations in ms (generous estimates)
+const SESSION_DURATIONS: Record<string, number> = {
+  'FP1': 75, 'FP2': 75, 'FP3': 75,
+  'Sprint Shootout': 50, 'Sprint': 50,
+  'Qualifying': 75, 'Race': 150,
+};
+
+function isSessionLive(): boolean {
+  const now = Date.now();
+  for (const race of F1_2026_CALENDAR) {
+    for (const session of race.sessions) {
+      const start = session.date.getTime();
+      const duration = (SESSION_DURATIONS[session.type] ?? 90) * 60 * 1000;
+      if (now >= start && now <= start + duration) return true;
+    }
+  }
+  return false;
+}
 
 // Pages chargées en lazy — le bundle Three.js/D3/Recharts ne se télécharge
 // que quand l'utilisateur navigue vers la page concernée.
@@ -39,6 +59,7 @@ function Navigation() {
   const { canMakeRequest, incrementRequest, isPremium } = useSubscription();
 
   const isActive = (path: string) => location.pathname === path;
+  const liveNow = isSessionLive();
 
   const navLinks = [
     { path: '/', label: t('nav.home'), icon: Home },
@@ -128,7 +149,12 @@ function Navigation() {
                       }
                     `}
                   >
-                    <Icon size={18} />
+                    <div className="relative">
+                      <Icon size={18} />
+                      {link.path === '/live-timing' && liveNow && (
+                        <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                      )}
+                    </div>
                     <span>{link.label}</span>
                     {isActive(link.path) && (
                       <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-metrik-turquoise" />
@@ -237,7 +263,12 @@ function Navigation() {
                     }
                   `}
                 >
-                  <Icon size={24} />
+                  <div className="relative">
+                    <Icon size={24} />
+                    {link.path === '/live-timing' && liveNow && (
+                      <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse" />
+                    )}
+                  </div>
                   <span>{link.label}</span>
                 </Link>
               );
