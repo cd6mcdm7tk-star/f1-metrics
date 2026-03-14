@@ -358,6 +358,27 @@ export const F1_2026_CALENDAR: F1Race[] = [
 ];
 
 /**
+ * Check if a session is currently in progress (based on scheduled times)
+ */
+const SESSION_DURATIONS_MIN: Record<string, number> = {
+  'FP1': 75, 'FP2': 75, 'FP3': 75,
+  'Sprint Shootout': 50, 'Sprint': 50,
+  'Qualifying': 75, 'Race': 150,
+};
+
+export function isSessionCurrentlyLive(): boolean {
+  const now = Date.now();
+  for (const race of F1_2026_CALENDAR) {
+    for (const session of race.sessions) {
+      const start = session.date.getTime();
+      const duration = (SESSION_DURATIONS_MIN[session.type] ?? 90) * 60 * 1000;
+      if (now >= start && now <= start + duration) return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Get next upcoming session
  */
 export function getNextSession(): { race: F1Race; session: F1Session } | null {

@@ -7,6 +7,7 @@
 import React, { useState } from 'react';
 import SEO from '../components/SEO';
 import { useLiveTiming } from '../hooks/useLiveTiming';
+import { isSessionCurrentlyLive } from '../data/f1Calendar2026';
 import CountdownShowcase from '../components/CountdownShowcase';
 import { useSubscription } from '../hooks/useSubscription';
 import UpgradeModal from '../components/UpgradeModal';
@@ -76,7 +77,7 @@ export default function LiveTimingPage() {
   const { isPremium } = useSubscription();
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
-  const isLive = connected && positions.length > 0;
+  const isLive = connected && positions.length > 0 && isSessionCurrentlyLive();
 
   // ── Error ────────────────────────────────────────────────────────────────
   if (error) {
