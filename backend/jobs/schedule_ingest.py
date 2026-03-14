@@ -94,14 +94,21 @@ def openf1_get(endpoint: str, params: dict, retries: int = 3) -> list:
 
 
 def is_session_ingested(year: int, gp_round: int, session_type: str) -> bool:
-    """Retourne True si la table laps contient déjà des données pour cette session."""
+    """Retourne True si la session a des laps ET de la télémétrie en base."""
     try:
-        row = db._execute(
+        lap_row = db._execute(
             "SELECT COUNT(*) FROM laps WHERE year = %s AND gp_round = %s AND session_type = %s",
             (year, gp_round, session_type),
             fetch="one",
         )
-        return bool(row and row[0] > 0)
+        if not lap_row or lap_row[0] == 0:
+            return False
+        tel_row = db._execute(
+            "SELECT COUNT(*) FROM telemetry WHERE year = %s AND gp_round = %s AND session_type = %s",
+            (year, gp_round, session_type),
+            fetch="one",
+        )
+        return bool(tel_row and tel_row[0] > 0)
     except Exception as e:
         logger.warning(f"is_session_ingested check failed: {e}")
         return False
