@@ -335,6 +335,7 @@ def ingest_fastf1(year: int, gp_round: int, session_type: str):
     logger.info(f"[FastF1] Ingesting {year} R{gp_round} {session_type}")
 
     cache_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "cache")
+    os.makedirs(cache_dir, exist_ok=True)
     fastf1.Cache.enable_cache(cache_dir)
 
     session = fastf1.get_session(year, gp_round, session_type)
