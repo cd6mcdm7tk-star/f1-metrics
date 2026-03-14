@@ -1,4 +1,5 @@
 import React, { useState, useRef, Suspense, useMemo } from 'react';
+import SEO from '../components/SEO';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, Environment, Html, Line, MeshTransmissionMaterial } from '@react-three/drei';
 import { ArrowLeft, Loader2, Play, Pause, RotateCcw, Maximize2, Minimize2, Wind, Tag, Zap, MousePointer2, ZoomIn, Target, Waves, ArrowDown, Battery as BatteryIcon, Disc, Settings } from 'lucide-react';
@@ -1459,6 +1460,8 @@ export default function F1AnatomyPage() {
   const [windTunnel, setWindTunnel] = useState(false);
 
   return (
+    <>
+    <SEO path="/f1-anatomy" title="F1 Car Anatomy - METRIK DELTA" description="Explore the anatomy of a Formula 1 car in 3D: aerodynamics, DRS, power unit, tyres and all technical components explained." keywords="f1 car anatomy, formula 1 car parts, f1 aerodynamics, f1 drs, f1 technical explained" />
     <div className="min-h-screen bg-metrik-black text-white">
       <div className="container mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-4 md:mb-8">
@@ -1855,5 +1858,6 @@ export default function F1AnatomyPage() {
         </div>
       </div>
     </div>
+    </>
   );
 }

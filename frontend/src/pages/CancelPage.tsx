@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { XCircle, Home, RotateCcw } from 'lucide-react'
+import { Helmet } from 'react-helmet-async'
 
 export default function CancelPage() {
   const navigate = useNavigate()
@@ -10,6 +11,8 @@ export default function CancelPage() {
   }
 
   return (
+    <>
+    <Helmet><meta name="robots" content="noindex, nofollow" /></Helmet>
     <div className="min-h-screen bg-metrik-black flex items-center justify-center p-6">
       <div className="max-w-2xl w-full bg-metrik-card rounded-2xl border border-red-500/30 p-8 md:p-12 text-center">
         {/* Error Icon */}
@@ -63,5 +66,6 @@ export default function CancelPage() {
         </p>
       </div>
     </div>
+    </>
   )
 }

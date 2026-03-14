@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
         xmlns:xhtml="http://www.w3.org/1999/xhtml">
-  
+
   <!-- Homepage -->
   <url>
     <loc>https://metrikdelta.com/</loc>
@@ -9,7 +9,7 @@
     <xhtml:link rel="alternate" hreflang="en" href="https://metrikdelta.com/" />
     <xhtml:link rel="alternate" hreflang="es" href="https://metrikdelta.com/es/" />
     <xhtml:link rel="alternate" hreflang="x-default" href="https://metrikdelta.com/" />
-    <lastmod>2025-11-03</lastmod>
+    <lastmod>2026-03-14</lastmod>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
   </url>
@@ -21,31 +21,43 @@
     <xhtml:link rel="alternate" hreflang="en" href="https://metrikdelta.com/telemetry" />
     <xhtml:link rel="alternate" hreflang="es" href="https://metrikdelta.com/es/telemetry" />
     <xhtml:link rel="alternate" hreflang="x-default" href="https://metrikdelta.com/telemetry" />
-    <lastmod>2025-11-03</lastmod>
+    <lastmod>2026-03-14</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
 
-  <!-- Championship - TRÈS IMPORTANT POUR SEO -->
+  <!-- Championship -->
   <url>
     <loc>https://metrikdelta.com/championship</loc>
     <xhtml:link rel="alternate" hreflang="fr" href="https://metrikdelta.com/fr/championship" />
     <xhtml:link rel="alternate" hreflang="en" href="https://metrikdelta.com/championship" />
     <xhtml:link rel="alternate" hreflang="es" href="https://metrikdelta.com/es/championship" />
     <xhtml:link rel="alternate" hreflang="x-default" href="https://metrikdelta.com/championship" />
-    <lastmod>2025-11-03</lastmod>
+    <lastmod>2026-03-14</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.95</priority>
   </url>
 
-  <!-- Animation -->
+  <!-- Live Timing -->
   <url>
-    <loc>https://metrikdelta.com/animation</loc>
-    <xhtml:link rel="alternate" hreflang="fr" href="https://metrikdelta.com/fr/animation" />
-    <xhtml:link rel="alternate" hreflang="en" href="https://metrikdelta.com/animation" />
-    <xhtml:link rel="alternate" hreflang="es" href="https://metrikdelta.com/es/animation" />
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://metrikdelta.com/animation" />
-    <lastmod>2025-11-03</lastmod>
+    <loc>https://metrikdelta.com/live-timing</loc>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://metrikdelta.com/fr/live-timing" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://metrikdelta.com/live-timing" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://metrikdelta.com/es/live-timing" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://metrikdelta.com/live-timing" />
+    <lastmod>2026-03-14</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.85</priority>
+  </url>
+
+  <!-- Statistics -->
+  <url>
+    <loc>https://metrikdelta.com/statistics</loc>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://metrikdelta.com/fr/statistics" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://metrikdelta.com/statistics" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://metrikdelta.com/es/statistics" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://metrikdelta.com/statistics" />
+    <lastmod>2026-03-14</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
@@ -57,7 +69,7 @@
     <xhtml:link rel="alternate" hreflang="en" href="https://metrikdelta.com/pit-wall" />
     <xhtml:link rel="alternate" hreflang="es" href="https://metrikdelta.com/es/pit-wall" />
     <xhtml:link rel="alternate" hreflang="x-default" href="https://metrikdelta.com/pit-wall" />
-    <lastmod>2025-11-03</lastmod>
+    <lastmod>2026-03-14</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
@@ -69,7 +81,7 @@
     <xhtml:link rel="alternate" hreflang="en" href="https://metrikdelta.com/track-database" />
     <xhtml:link rel="alternate" hreflang="es" href="https://metrikdelta.com/es/track-database" />
     <xhtml:link rel="alternate" hreflang="x-default" href="https://metrikdelta.com/track-database" />
-    <lastmod>2025-11-03</lastmod>
+    <lastmod>2026-03-14</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
@@ -81,7 +93,7 @@
     <xhtml:link rel="alternate" hreflang="en" href="https://metrikdelta.com/f1-anatomy" />
     <xhtml:link rel="alternate" hreflang="es" href="https://metrikdelta.com/es/f1-anatomy" />
     <xhtml:link rel="alternate" hreflang="x-default" href="https://metrikdelta.com/f1-anatomy" />
-    <lastmod>2025-11-03</lastmod>
+    <lastmod>2026-03-14</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>

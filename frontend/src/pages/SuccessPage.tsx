@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { CheckCircle, Loader2, Home } from 'lucide-react'
+import { CheckCircle, Loader2, Zap, Radio, Activity, Database } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { Helmet } from 'react-helmet-async'
 
 export default function SuccessPage() {
   const [searchParams] = useSearchParams()
@@ -9,7 +10,6 @@ export default function SuccessPage() {
   const { user } = useAuth()
   const [loading, setLoading] = useState(true)
   const [verified, setVerified] = useState(false)
-  
   const sessionId = searchParams.get('session_id')
 
   useEffect(() => {
@@ -20,9 +20,8 @@ export default function SuccessPage() {
       }
 
       try {
-        // Attendre 2 secondes pour laisser le webhook se traiter
-        await new Promise(resolve => setTimeout(resolve, 2000))
-        
+        // Attendre 3 secondes pour laisser le webhook se traiter
+        await new Promise(resolve => setTimeout(resolve, 3000))
         setVerified(true)
         setLoading(false)
       } catch (error) {
@@ -38,73 +37,111 @@ export default function SuccessPage() {
     return (
       <div className="min-h-screen bg-metrik-black flex items-center justify-center">
         <div className="text-center">
-          <Loader2 className="w-16 h-16 text-turquoise-500 animate-spin mx-auto mb-4" />
-          <p className="text-white text-xl">Vérification du paiement...</p>
+          <Loader2 className="w-16 h-16 text-metrik-turquoise animate-spin mx-auto mb-4" />
+          <p className="text-white text-xl font-rajdhani font-bold">Activation de votre abonnement...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-metrik-black flex items-center justify-center p-6">
-      <div className="max-w-2xl w-full bg-metrik-card rounded-2xl border border-turquoise-500/30 p-8 md:p-12 text-center">
-        {/* Success Icon with animation */}
-        <div className="mb-6 flex justify-center">
+    <>
+    <Helmet><meta name="robots" content="noindex, nofollow" /></Helmet>
+    <div className="min-h-screen bg-metrik-black flex items-center justify-center p-4 sm:p-6">
+      <div className="max-w-3xl w-full backdrop-blur-xl bg-metrik-card/95 border-2 border-metrik-turquoise/50 rounded-xl p-6 sm:p-8 md:p-12 text-center shadow-2xl shadow-metrik-turquoise/20">
+        
+        {/* Success Icon with glow effect */}
+        <div className="mb-6 sm:mb-8 flex justify-center">
           <div className="relative">
-            <div className="absolute inset-0 bg-turquoise-500/20 rounded-full animate-ping"></div>
-            <CheckCircle className="w-24 h-24 text-turquoise-500 relative" />
+            <div className="absolute inset-0 bg-metrik-turquoise/30 rounded-full animate-ping"></div>
+            <div className="absolute inset-0 bg-metrik-turquoise/20 rounded-full blur-xl"></div>
+            <CheckCircle className="w-20 h-20 sm:w-24 sm:h-24 text-metrik-turquoise relative" strokeWidth={2} />
           </div>
         </div>
 
         {/* Title */}
-        <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">
-          Bienvenue dans METRIK+ ! 🎉
+        <h1 className="text-3xl sm:text-4xl md:text-5xl font-rajdhani font-black text-white mb-3 sm:mb-4">
+          Welcome to METRIK PRO! 🏎️
         </h1>
 
-        {/* Description */}
-        <p className="text-gray-300 text-lg mb-8">
-          Votre abonnement a été activé avec succès. Vous avez maintenant accès à toutes les fonctionnalités premium !
+        {/* Subtitle */}
+        <p className="text-metrik-silver text-base sm:text-lg mb-6 sm:mb-8 max-w-2xl mx-auto">
+          Your subscription has been activated. You now have full access to the 2026 season and all premium features!
         </p>
 
-        {/* Features */}
-        <div className="bg-metrik-black/50 rounded-xl p-6 mb-8 border border-turquoise-500/20">
-          <h2 className="text-xl font-bold text-turquoise-500 mb-4">
-            Ce qui est débloqué :
-          </h2>
-          <ul className="space-y-3 text-left">
-            <li className="flex items-center gap-3 text-gray-300">
-              <CheckCircle className="w-5 h-5 text-turquoise-500 flex-shrink-0" />
-              <span>Requêtes illimitées sur toutes les analyses</span>
-            </li>
-            <li className="flex items-center gap-3 text-gray-300">
-              <CheckCircle className="w-5 h-5 text-turquoise-500 flex-shrink-0" />
-              <span>Accès à l'easter egg exclusif</span>
-            </li>
-            <li className="flex items-center gap-3 text-gray-300">
-              <CheckCircle className="w-5 h-5 text-turquoise-500 flex-shrink-0" />
-              <span>Export PDF et PNG (bientôt disponible)</span>
-            </li>
-            <li className="flex items-center gap-3 text-gray-300">
-              <CheckCircle className="w-5 h-5 text-turquoise-500 flex-shrink-0" />
-              <span>Support prioritaire</span>
-            </li>
-          </ul>
+        {/* Features Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-6 sm:mb-8">
+          {[
+            {
+              icon: <Activity className="w-5 h-5 sm:w-6 sm:h-6" />,
+              title: '2026 Season Access',
+              description: 'Real-time data from current season'
+            },
+            {
+              icon: <Radio className="w-5 h-5 sm:w-6 sm:h-6" />,
+              title: 'Live Timing',
+              description: 'Follow races as they happen'
+            },
+            {
+              icon: <Zap className="w-5 h-5 sm:w-6 sm:h-6" />,
+              title: 'Full Telemetry',
+              description: 'Detailed lap-by-lap analysis'
+            },
+            {
+              icon: <Database className="w-5 h-5 sm:w-6 sm:h-6" />,
+              title: 'Historical Data',
+              description: 'Full access to 1950-2025'
+            }
+          ].map((feature, index) => (
+            <div
+              key={index}
+              className="bg-metrik-black/50 border border-metrik-turquoise/20 rounded-lg p-4 sm:p-5 text-left hover:border-metrik-turquoise/40 transition-all"
+            >
+              <div className="flex items-start gap-3">
+                <div className="p-2 bg-metrik-turquoise/10 rounded-lg text-metrik-turquoise flex-shrink-0">
+                  {feature.icon}
+                </div>
+                <div>
+                  <h3 className="font-rajdhani font-bold text-white text-sm sm:text-base mb-1">
+                    {feature.title}
+                  </h3>
+                  <p className="text-metrik-silver text-xs sm:text-sm">
+                    {feature.description}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
 
-        {/* CTA */}
+        {/* PRO Badge */}
+        <div className="inline-flex items-center gap-2 px-4 sm:px-6 py-2 sm:py-3 bg-gradient-to-r from-metrik-turquoise to-cyan-500 text-metrik-black font-rajdhani font-black text-sm sm:text-base rounded-full mb-6 sm:mb-8 shadow-lg shadow-metrik-turquoise/30">
+          <Zap className="w-4 h-4 sm:w-5 sm:h-5" />
+          METRIK PRO ACTIVATED
+        </div>
+
+        {/* CTA Button */}
         <button
           onClick={() => navigate('/')}
-          className="w-full md:w-auto px-8 py-4 bg-turquoise-500 hover:bg-[#00d4bb] text-black font-bold rounded-lg transition-colors flex items-center justify-center gap-2 mx-auto"
+          className="w-full sm:w-auto px-6 sm:px-10 py-3 sm:py-4 bg-metrik-turquoise hover:bg-metrik-turquoise/90 text-metrik-black font-rajdhani font-black text-base sm:text-lg rounded-lg transition-all hover:scale-105 shadow-lg shadow-metrik-turquoise/30"
         >
-          <Home className="w-5 h-5" />
-          Commencer l'exploration
+          Start Exploring →
         </button>
 
-        {/* Info */}
-        <p className="text-sm text-gray-500 mt-6">
-          Un email de confirmation a été envoyé à votre adresse
+        {/* Footer Info */}
+        <p className="text-xs sm:text-sm text-metrik-silver/60 mt-6 sm:mt-8">
+          A confirmation email has been sent to your address
         </p>
+
+        {/* Manage Subscription Link */}
+        <button
+          onClick={() => navigate('/')}
+          className="text-xs sm:text-sm text-metrik-turquoise hover:text-metrik-turquoise/80 mt-3 sm:mt-4 font-rajdhani font-bold underline"
+        >
+          Manage your subscription in Profile menu
+        </button>
       </div>
     </div>
+    </>
   )
 }
