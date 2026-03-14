@@ -161,6 +161,14 @@ def ingest_openf1(year: int, gp_round: int, session_type: str):
 
     # --- Laps ---
     all_laps = _openf1_get("laps", {"session_key": session_key})
+
+    # If OpenF1 has no valid lap_duration (data not yet processed), fall back to FastF1
+    valid_laps_check = [l for l in all_laps if l.get("lap_duration") is not None]
+    if not valid_laps_check:
+        logger.warning(f"  OpenF1 has no completed laps for {year} R{gp_round} {session_type} — falling back to FastF1")
+        ingest_fastf1(year, gp_round, session_type)
+        return
+
     # Group by driver_number
     laps_by_driver: dict[int, list] = {}
     for lap in all_laps:
