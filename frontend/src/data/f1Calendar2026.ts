@@ -1,6 +1,6 @@
 /**
  * METRIK DELTA - F1 2026 Calendar
- * Complete calendar with all races and sessions
+ * Complete calendar — confirmed official dates (UTC)
  */
 
 export interface F1Session {
@@ -14,11 +14,10 @@ export interface F1Race {
   country: string;
   circuit: string;
   city: string;
-  flag: string; // emoji flag
+  flag: string;
   sessions: F1Session[];
 }
 
-// Calendrier F1 2026 (dates estimées basées sur le calendrier habituel)
 export const F1_2026_CALENDAR: F1Race[] = [
   {
     round: 1,
@@ -27,11 +26,11 @@ export const F1_2026_CALENDAR: F1Race[] = [
     city: 'Melbourne',
     flag: '🇦🇺',
     sessions: [
-      { name: 'Free Practice 1', date: new Date('2026-03-13T03:30:00Z'), type: 'FP1' },
-      { name: 'Free Practice 2', date: new Date('2026-03-13T07:00:00Z'), type: 'FP2' },
-      { name: 'Free Practice 3', date: new Date('2026-03-14T03:30:00Z'), type: 'FP3' },
-      { name: 'Qualifying', date: new Date('2026-03-14T07:00:00Z'), type: 'Qualifying' },
-      { name: 'Race', date: new Date('2026-03-15T05:00:00Z'), type: 'Race' },
+      { name: 'Free Practice 1', date: new Date('2026-03-06T01:30:00Z'), type: 'FP1' },
+      { name: 'Free Practice 2', date: new Date('2026-03-06T05:00:00Z'), type: 'FP2' },
+      { name: 'Free Practice 3', date: new Date('2026-03-07T01:50:00Z'), type: 'FP3' },
+      { name: 'Qualifying',      date: new Date('2026-03-07T05:00:00Z'), type: 'Qualifying' },
+      { name: 'Race',            date: new Date('2026-03-08T04:00:00Z'), type: 'Race' },
     ],
   },
   {
@@ -41,11 +40,11 @@ export const F1_2026_CALENDAR: F1Race[] = [
     city: 'Shanghai',
     flag: '🇨🇳',
     sessions: [
-      { name: 'Free Practice 1', date: new Date('2026-03-20T03:30:00Z'), type: 'FP1' },
-      { name: 'Sprint Shootout', date: new Date('2026-03-20T07:30:00Z'), type: 'Sprint Shootout' },
-      { name: 'Sprint', date: new Date('2026-03-21T03:30:00Z'), type: 'Sprint' },
-      { name: 'Qualifying', date: new Date('2026-03-21T07:00:00Z'), type: 'Qualifying' },
-      { name: 'Race', date: new Date('2026-03-22T06:00:00Z'), type: 'Race' },
+      { name: 'Free Practice 1',   date: new Date('2026-03-13T03:30:00Z'), type: 'FP1' },
+      { name: 'Sprint Shootout',   date: new Date('2026-03-13T07:30:00Z'), type: 'Sprint Shootout' },
+      { name: 'Sprint',            date: new Date('2026-03-14T03:00:00Z'), type: 'Sprint' },
+      { name: 'Qualifying',        date: new Date('2026-03-14T07:00:00Z'), type: 'Qualifying' },
+      { name: 'Race',              date: new Date('2026-03-15T07:00:00Z'), type: 'Race' },
     ],
   },
   {
@@ -55,11 +54,11 @@ export const F1_2026_CALENDAR: F1Race[] = [
     city: 'Suzuka',
     flag: '🇯🇵',
     sessions: [
-      { name: 'Free Practice 1', date: new Date('2026-04-03T02:30:00Z'), type: 'FP1' },
-      { name: 'Free Practice 2', date: new Date('2026-04-03T06:00:00Z'), type: 'FP2' },
-      { name: 'Free Practice 3', date: new Date('2026-04-04T02:30:00Z'), type: 'FP3' },
-      { name: 'Qualifying', date: new Date('2026-04-04T06:00:00Z'), type: 'Qualifying' },
-      { name: 'Race', date: new Date('2026-04-05T05:00:00Z'), type: 'Race' },
+      { name: 'Free Practice 1', date: new Date('2026-03-27T02:30:00Z'), type: 'FP1' },
+      { name: 'Free Practice 2', date: new Date('2026-03-27T06:00:00Z'), type: 'FP2' },
+      { name: 'Free Practice 3', date: new Date('2026-03-28T02:30:00Z'), type: 'FP3' },
+      { name: 'Qualifying',      date: new Date('2026-03-28T06:00:00Z'), type: 'Qualifying' },
+      { name: 'Race',            date: new Date('2026-03-29T05:00:00Z'), type: 'Race' },
     ],
   },
   {
@@ -69,11 +68,11 @@ export const F1_2026_CALENDAR: F1Race[] = [
     city: 'Sakhir',
     flag: '🇧🇭',
     sessions: [
-      { name: 'Free Practice 1', date: new Date('2026-04-17T12:30:00Z'), type: 'FP1' },
-      { name: 'Free Practice 2', date: new Date('2026-04-17T16:00:00Z'), type: 'FP2' },
-      { name: 'Free Practice 3', date: new Date('2026-04-18T13:30:00Z'), type: 'FP3' },
-      { name: 'Qualifying', date: new Date('2026-04-18T17:00:00Z'), type: 'Qualifying' },
-      { name: 'Race', date: new Date('2026-04-19T15:00:00Z'), type: 'Race' },
+      { name: 'Free Practice 1', date: new Date('2026-04-10T11:30:00Z'), type: 'FP1' },
+      { name: 'Free Practice 2', date: new Date('2026-04-10T15:00:00Z'), type: 'FP2' },
+      { name: 'Free Practice 3', date: new Date('2026-04-11T12:30:00Z'), type: 'FP3' },
+      { name: 'Qualifying',      date: new Date('2026-04-11T16:00:00Z'), type: 'Qualifying' },
+      { name: 'Race',            date: new Date('2026-04-12T15:00:00Z'), type: 'Race' },
     ],
   },
   {
@@ -83,11 +82,11 @@ export const F1_2026_CALENDAR: F1Race[] = [
     city: 'Jeddah',
     flag: '🇸🇦',
     sessions: [
-      { name: 'Free Practice 1', date: new Date('2026-04-24T14:30:00Z'), type: 'FP1' },
-      { name: 'Free Practice 2', date: new Date('2026-04-24T18:00:00Z'), type: 'FP2' },
-      { name: 'Free Practice 3', date: new Date('2026-04-25T14:30:00Z'), type: 'FP3' },
-      { name: 'Qualifying', date: new Date('2026-04-25T18:00:00Z'), type: 'Qualifying' },
-      { name: 'Race', date: new Date('2026-04-26T17:00:00Z'), type: 'Race' },
+      { name: 'Free Practice 1', date: new Date('2026-04-17T10:30:00Z'), type: 'FP1' },
+      { name: 'Free Practice 2', date: new Date('2026-04-17T14:00:00Z'), type: 'FP2' },
+      { name: 'Free Practice 3', date: new Date('2026-04-18T10:30:00Z'), type: 'FP3' },
+      { name: 'Qualifying',      date: new Date('2026-04-18T14:00:00Z'), type: 'Qualifying' },
+      { name: 'Race',            date: new Date('2026-04-19T14:00:00Z'), type: 'Race' },
     ],
   },
   {
@@ -97,25 +96,25 @@ export const F1_2026_CALENDAR: F1Race[] = [
     city: 'Miami',
     flag: '🇺🇸',
     sessions: [
-      { name: 'Free Practice 1', date: new Date('2026-05-01T18:30:00Z'), type: 'FP1' },
-      { name: 'Sprint Shootout', date: new Date('2026-05-01T22:30:00Z'), type: 'Sprint Shootout' },
-      { name: 'Sprint', date: new Date('2026-05-02T18:00:00Z'), type: 'Sprint' },
-      { name: 'Qualifying', date: new Date('2026-05-02T22:00:00Z'), type: 'Qualifying' },
-      { name: 'Race', date: new Date('2026-05-03T19:30:00Z'), type: 'Race' },
+      { name: 'Free Practice 1', date: new Date('2026-05-01T16:30:00Z'), type: 'FP1' },
+      { name: 'Sprint Shootout', date: new Date('2026-05-01T20:30:00Z'), type: 'Sprint Shootout' },
+      { name: 'Sprint',          date: new Date('2026-05-02T16:00:00Z'), type: 'Sprint' },
+      { name: 'Qualifying',      date: new Date('2026-05-02T20:00:00Z'), type: 'Qualifying' },
+      { name: 'Race',            date: new Date('2026-05-03T20:00:00Z'), type: 'Race' },
     ],
   },
   {
     round: 7,
-    country: 'Italy',
-    circuit: 'Autodromo Enzo e Dino Ferrari',
-    city: 'Imola',
-    flag: '🇮🇹',
+    country: 'Canada',
+    circuit: 'Circuit Gilles Villeneuve',
+    city: 'Montreal',
+    flag: '🇨🇦',
     sessions: [
-      { name: 'Free Practice 1', date: new Date('2026-05-15T11:30:00Z'), type: 'FP1' },
-      { name: 'Free Practice 2', date: new Date('2026-05-15T15:00:00Z'), type: 'FP2' },
-      { name: 'Free Practice 3', date: new Date('2026-05-16T10:30:00Z'), type: 'FP3' },
-      { name: 'Qualifying', date: new Date('2026-05-16T14:00:00Z'), type: 'Qualifying' },
-      { name: 'Race', date: new Date('2026-05-17T13:00:00Z'), type: 'Race' },
+      { name: 'Free Practice 1', date: new Date('2026-05-22T16:30:00Z'), type: 'FP1' },
+      { name: 'Sprint Shootout', date: new Date('2026-05-22T20:30:00Z'), type: 'Sprint Shootout' },
+      { name: 'Sprint',          date: new Date('2026-05-23T16:00:00Z'), type: 'Sprint' },
+      { name: 'Qualifying',      date: new Date('2026-05-23T20:00:00Z'), type: 'Qualifying' },
+      { name: 'Race',            date: new Date('2026-05-24T20:00:00Z'), type: 'Race' },
     ],
   },
   {
@@ -125,11 +124,11 @@ export const F1_2026_CALENDAR: F1Race[] = [
     city: 'Monte Carlo',
     flag: '🇲🇨',
     sessions: [
-      { name: 'Free Practice 1', date: new Date('2026-05-22T11:30:00Z'), type: 'FP1' },
-      { name: 'Free Practice 2', date: new Date('2026-05-22T15:00:00Z'), type: 'FP2' },
-      { name: 'Free Practice 3', date: new Date('2026-05-23T10:30:00Z'), type: 'FP3' },
-      { name: 'Qualifying', date: new Date('2026-05-23T14:00:00Z'), type: 'Qualifying' },
-      { name: 'Race', date: new Date('2026-05-24T13:00:00Z'), type: 'Race' },
+      { name: 'Free Practice 1', date: new Date('2026-06-05T10:30:00Z'), type: 'FP1' },
+      { name: 'Free Practice 2', date: new Date('2026-06-05T14:00:00Z'), type: 'FP2' },
+      { name: 'Free Practice 3', date: new Date('2026-06-06T09:30:00Z'), type: 'FP3' },
+      { name: 'Qualifying',      date: new Date('2026-06-06T13:00:00Z'), type: 'Qualifying' },
+      { name: 'Race',            date: new Date('2026-06-07T12:00:00Z'), type: 'Race' },
     ],
   },
   {
@@ -139,109 +138,109 @@ export const F1_2026_CALENDAR: F1Race[] = [
     city: 'Barcelona',
     flag: '🇪🇸',
     sessions: [
-      { name: 'Free Practice 1', date: new Date('2026-05-29T11:30:00Z'), type: 'FP1' },
-      { name: 'Free Practice 2', date: new Date('2026-05-29T15:00:00Z'), type: 'FP2' },
-      { name: 'Free Practice 3', date: new Date('2026-05-30T10:30:00Z'), type: 'FP3' },
-      { name: 'Qualifying', date: new Date('2026-05-30T14:00:00Z'), type: 'Qualifying' },
-      { name: 'Race', date: new Date('2026-05-31T13:00:00Z'), type: 'Race' },
+      { name: 'Free Practice 1', date: new Date('2026-06-12T10:30:00Z'), type: 'FP1' },
+      { name: 'Free Practice 2', date: new Date('2026-06-12T14:00:00Z'), type: 'FP2' },
+      { name: 'Free Practice 3', date: new Date('2026-06-13T09:30:00Z'), type: 'FP3' },
+      { name: 'Qualifying',      date: new Date('2026-06-13T13:00:00Z'), type: 'Qualifying' },
+      { name: 'Race',            date: new Date('2026-06-14T12:00:00Z'), type: 'Race' },
     ],
   },
   {
     round: 10,
-    country: 'Canada',
-    circuit: 'Circuit Gilles Villeneuve',
-    city: 'Montreal',
-    flag: '🇨🇦',
-    sessions: [
-      { name: 'Free Practice 1', date: new Date('2026-06-12T17:30:00Z'), type: 'FP1' },
-      { name: 'Free Practice 2', date: new Date('2026-06-12T21:00:00Z'), type: 'FP2' },
-      { name: 'Free Practice 3', date: new Date('2026-06-13T16:30:00Z'), type: 'FP3' },
-      { name: 'Qualifying', date: new Date('2026-06-13T20:00:00Z'), type: 'Qualifying' },
-      { name: 'Race', date: new Date('2026-06-14T18:00:00Z'), type: 'Race' },
-    ],
-  },
-  {
-    round: 11,
     country: 'Austria',
     circuit: 'Red Bull Ring',
     city: 'Spielberg',
     flag: '🇦🇹',
     sessions: [
       { name: 'Free Practice 1', date: new Date('2026-06-26T10:30:00Z'), type: 'FP1' },
-      { name: 'Sprint Shootout', date: new Date('2026-06-26T14:30:00Z'), type: 'Sprint Shootout' },
-      { name: 'Sprint', date: new Date('2026-06-27T10:00:00Z'), type: 'Sprint' },
-      { name: 'Qualifying', date: new Date('2026-06-27T14:00:00Z'), type: 'Qualifying' },
-      { name: 'Race', date: new Date('2026-06-28T13:00:00Z'), type: 'Race' },
+      { name: 'Free Practice 2', date: new Date('2026-06-26T14:00:00Z'), type: 'FP2' },
+      { name: 'Free Practice 3', date: new Date('2026-06-27T09:30:00Z'), type: 'FP3' },
+      { name: 'Qualifying',      date: new Date('2026-06-27T13:00:00Z'), type: 'Qualifying' },
+      { name: 'Race',            date: new Date('2026-06-28T12:00:00Z'), type: 'Race' },
     ],
   },
   {
-    round: 12,
+    round: 11,
     country: 'Great Britain',
     circuit: 'Silverstone Circuit',
     city: 'Silverstone',
     flag: '🇬🇧',
     sessions: [
       { name: 'Free Practice 1', date: new Date('2026-07-03T11:30:00Z'), type: 'FP1' },
-      { name: 'Free Practice 2', date: new Date('2026-07-03T15:00:00Z'), type: 'FP2' },
-      { name: 'Free Practice 3', date: new Date('2026-07-04T10:30:00Z'), type: 'FP3' },
-      { name: 'Qualifying', date: new Date('2026-07-04T14:00:00Z'), type: 'Qualifying' },
-      { name: 'Race', date: new Date('2026-07-05T14:00:00Z'), type: 'Race' },
+      { name: 'Sprint Shootout', date: new Date('2026-07-03T15:30:00Z'), type: 'Sprint Shootout' },
+      { name: 'Sprint',          date: new Date('2026-07-04T10:00:00Z'), type: 'Sprint' },
+      { name: 'Qualifying',      date: new Date('2026-07-04T14:00:00Z'), type: 'Qualifying' },
+      { name: 'Race',            date: new Date('2026-07-05T14:00:00Z'), type: 'Race' },
     ],
   },
   {
-    round: 13,
+    round: 12,
     country: 'Belgium',
     circuit: 'Circuit de Spa-Francorchamps',
     city: 'Spa',
     flag: '🇧🇪',
     sessions: [
-      { name: 'Free Practice 1', date: new Date('2026-07-24T11:30:00Z'), type: 'FP1' },
-      { name: 'Sprint Shootout', date: new Date('2026-07-24T15:30:00Z'), type: 'Sprint Shootout' },
-      { name: 'Sprint', date: new Date('2026-07-25T11:00:00Z'), type: 'Sprint' },
-      { name: 'Qualifying', date: new Date('2026-07-25T15:00:00Z'), type: 'Qualifying' },
-      { name: 'Race', date: new Date('2026-07-26T13:00:00Z'), type: 'Race' },
+      { name: 'Free Practice 1', date: new Date('2026-07-17T10:30:00Z'), type: 'FP1' },
+      { name: 'Free Practice 2', date: new Date('2026-07-17T14:00:00Z'), type: 'FP2' },
+      { name: 'Free Practice 3', date: new Date('2026-07-18T09:30:00Z'), type: 'FP3' },
+      { name: 'Qualifying',      date: new Date('2026-07-18T13:00:00Z'), type: 'Qualifying' },
+      { name: 'Race',            date: new Date('2026-07-19T11:00:00Z'), type: 'Race' },
     ],
   },
   {
-    round: 14,
+    round: 13,
     country: 'Hungary',
     circuit: 'Hungaroring',
     city: 'Budapest',
     flag: '🇭🇺',
     sessions: [
-      { name: 'Free Practice 1', date: new Date('2026-07-31T11:30:00Z'), type: 'FP1' },
-      { name: 'Free Practice 2', date: new Date('2026-07-31T15:00:00Z'), type: 'FP2' },
-      { name: 'Free Practice 3', date: new Date('2026-08-01T10:30:00Z'), type: 'FP3' },
-      { name: 'Qualifying', date: new Date('2026-08-01T14:00:00Z'), type: 'Qualifying' },
-      { name: 'Race', date: new Date('2026-08-02T13:00:00Z'), type: 'Race' },
+      { name: 'Free Practice 1', date: new Date('2026-07-24T11:30:00Z'), type: 'FP1' },
+      { name: 'Free Practice 2', date: new Date('2026-07-24T15:00:00Z'), type: 'FP2' },
+      { name: 'Free Practice 3', date: new Date('2026-07-25T10:30:00Z'), type: 'FP3' },
+      { name: 'Qualifying',      date: new Date('2026-07-25T14:00:00Z'), type: 'Qualifying' },
+      { name: 'Race',            date: new Date('2026-07-26T13:00:00Z'), type: 'Race' },
     ],
   },
   {
-    round: 15,
+    round: 14,
     country: 'Netherlands',
     circuit: 'Circuit Zandvoort',
     city: 'Zandvoort',
     flag: '🇳🇱',
     sessions: [
-      { name: 'Free Practice 1', date: new Date('2026-08-28T10:30:00Z'), type: 'FP1' },
-      { name: 'Free Practice 2', date: new Date('2026-08-28T14:00:00Z'), type: 'FP2' },
-      { name: 'Free Practice 3', date: new Date('2026-08-29T09:30:00Z'), type: 'FP3' },
-      { name: 'Qualifying', date: new Date('2026-08-29T13:00:00Z'), type: 'Qualifying' },
-      { name: 'Race', date: new Date('2026-08-30T13:00:00Z'), type: 'Race' },
+      { name: 'Free Practice 1', date: new Date('2026-08-21T09:30:00Z'), type: 'FP1' },
+      { name: 'Sprint Shootout', date: new Date('2026-08-21T13:30:00Z'), type: 'Sprint Shootout' },
+      { name: 'Sprint',          date: new Date('2026-08-22T09:00:00Z'), type: 'Sprint' },
+      { name: 'Qualifying',      date: new Date('2026-08-22T13:00:00Z'), type: 'Qualifying' },
+      { name: 'Race',            date: new Date('2026-08-23T12:00:00Z'), type: 'Race' },
     ],
   },
   {
-    round: 16,
+    round: 15,
     country: 'Italy',
     circuit: 'Autodromo Nazionale di Monza',
     city: 'Monza',
     flag: '🇮🇹',
     sessions: [
-      { name: 'Free Practice 1', date: new Date('2026-09-04T11:30:00Z'), type: 'FP1' },
-      { name: 'Free Practice 2', date: new Date('2026-09-04T15:00:00Z'), type: 'FP2' },
-      { name: 'Free Practice 3', date: new Date('2026-09-05T10:30:00Z'), type: 'FP3' },
-      { name: 'Qualifying', date: new Date('2026-09-05T14:00:00Z'), type: 'Qualifying' },
-      { name: 'Race', date: new Date('2026-09-06T13:00:00Z'), type: 'Race' },
+      { name: 'Free Practice 1', date: new Date('2026-09-04T10:30:00Z'), type: 'FP1' },
+      { name: 'Free Practice 2', date: new Date('2026-09-04T14:00:00Z'), type: 'FP2' },
+      { name: 'Free Practice 3', date: new Date('2026-09-05T09:30:00Z'), type: 'FP3' },
+      { name: 'Qualifying',      date: new Date('2026-09-05T13:00:00Z'), type: 'Qualifying' },
+      { name: 'Race',            date: new Date('2026-09-06T12:00:00Z'), type: 'Race' },
+    ],
+  },
+  {
+    round: 16,
+    country: 'Spain',
+    circuit: 'Madring Circuit',
+    city: 'Madrid',
+    flag: '🇪🇸',
+    sessions: [
+      { name: 'Free Practice 1', date: new Date('2026-09-11T10:30:00Z'), type: 'FP1' },
+      { name: 'Free Practice 2', date: new Date('2026-09-11T14:00:00Z'), type: 'FP2' },
+      { name: 'Free Practice 3', date: new Date('2026-09-12T09:30:00Z'), type: 'FP3' },
+      { name: 'Qualifying',      date: new Date('2026-09-12T13:00:00Z'), type: 'Qualifying' },
+      { name: 'Race',            date: new Date('2026-09-13T12:00:00Z'), type: 'Race' },
     ],
   },
   {
@@ -251,11 +250,11 @@ export const F1_2026_CALENDAR: F1Race[] = [
     city: 'Baku',
     flag: '🇦🇿',
     sessions: [
-      { name: 'Free Practice 1', date: new Date('2026-09-11T10:30:00Z'), type: 'FP1' },
-      { name: 'Free Practice 2', date: new Date('2026-09-11T14:00:00Z'), type: 'FP2' },
-      { name: 'Free Practice 3', date: new Date('2026-09-12T09:30:00Z'), type: 'FP3' },
-      { name: 'Qualifying', date: new Date('2026-09-12T13:00:00Z'), type: 'Qualifying' },
-      { name: 'Race', date: new Date('2026-09-13T11:00:00Z'), type: 'Race' },
+      { name: 'Free Practice 1', date: new Date('2026-09-25T10:30:00Z'), type: 'FP1' },
+      { name: 'Free Practice 2', date: new Date('2026-09-25T14:00:00Z'), type: 'FP2' },
+      { name: 'Free Practice 3', date: new Date('2026-09-26T09:30:00Z'), type: 'FP3' },
+      { name: 'Qualifying',      date: new Date('2026-09-26T12:00:00Z'), type: 'Qualifying' },
+      { name: 'Race',            date: new Date('2026-09-27T10:00:00Z'), type: 'Race' },
     ],
   },
   {
@@ -265,11 +264,11 @@ export const F1_2026_CALENDAR: F1Race[] = [
     city: 'Singapore',
     flag: '🇸🇬',
     sessions: [
-      { name: 'Free Practice 1', date: new Date('2026-09-18T10:30:00Z'), type: 'FP1' },
-      { name: 'Free Practice 2', date: new Date('2026-09-18T14:00:00Z'), type: 'FP2' },
-      { name: 'Free Practice 3', date: new Date('2026-09-19T10:30:00Z'), type: 'FP3' },
-      { name: 'Qualifying', date: new Date('2026-09-19T14:00:00Z'), type: 'Qualifying' },
-      { name: 'Race', date: new Date('2026-09-20T12:00:00Z'), type: 'Race' },
+      { name: 'Free Practice 1', date: new Date('2026-10-09T07:30:00Z'), type: 'FP1' },
+      { name: 'Sprint Shootout', date: new Date('2026-10-09T11:30:00Z'), type: 'Sprint Shootout' },
+      { name: 'Sprint',          date: new Date('2026-10-10T08:00:00Z'), type: 'Sprint' },
+      { name: 'Qualifying',      date: new Date('2026-10-10T12:00:00Z'), type: 'Qualifying' },
+      { name: 'Race',            date: new Date('2026-10-11T11:00:00Z'), type: 'Race' },
     ],
   },
   {
@@ -279,11 +278,11 @@ export const F1_2026_CALENDAR: F1Race[] = [
     city: 'Austin',
     flag: '🇺🇸',
     sessions: [
-      { name: 'Free Practice 1', date: new Date('2026-10-16T18:30:00Z'), type: 'FP1' },
-      { name: 'Sprint Shootout', date: new Date('2026-10-16T22:30:00Z'), type: 'Sprint Shootout' },
-      { name: 'Sprint', date: new Date('2026-10-17T19:00:00Z'), type: 'Sprint' },
-      { name: 'Qualifying', date: new Date('2026-10-17T23:00:00Z'), type: 'Qualifying' },
-      { name: 'Race', date: new Date('2026-10-18T19:00:00Z'), type: 'Race' },
+      { name: 'Free Practice 1', date: new Date('2026-10-23T18:30:00Z'), type: 'FP1' },
+      { name: 'Free Practice 2', date: new Date('2026-10-23T22:00:00Z'), type: 'FP2' },
+      { name: 'Free Practice 3', date: new Date('2026-10-24T18:30:00Z'), type: 'FP3' },
+      { name: 'Qualifying',      date: new Date('2026-10-24T22:00:00Z'), type: 'Qualifying' },
+      { name: 'Race',            date: new Date('2026-10-25T20:00:00Z'), type: 'Race' },
     ],
   },
   {
@@ -293,11 +292,11 @@ export const F1_2026_CALENDAR: F1Race[] = [
     city: 'Mexico City',
     flag: '🇲🇽',
     sessions: [
-      { name: 'Free Practice 1', date: new Date('2026-10-23T19:30:00Z'), type: 'FP1' },
-      { name: 'Free Practice 2', date: new Date('2026-10-23T23:00:00Z'), type: 'FP2' },
-      { name: 'Free Practice 3', date: new Date('2026-10-24T18:30:00Z'), type: 'FP3' },
-      { name: 'Qualifying', date: new Date('2026-10-24T22:00:00Z'), type: 'Qualifying' },
-      { name: 'Race', date: new Date('2026-10-25T20:00:00Z'), type: 'Race' },
+      { name: 'Free Practice 1', date: new Date('2026-10-30T17:30:00Z'), type: 'FP1' },
+      { name: 'Free Practice 2', date: new Date('2026-10-30T21:00:00Z'), type: 'FP2' },
+      { name: 'Free Practice 3', date: new Date('2026-10-31T17:30:00Z'), type: 'FP3' },
+      { name: 'Qualifying',      date: new Date('2026-10-31T20:00:00Z'), type: 'Qualifying' },
+      { name: 'Race',            date: new Date('2026-11-01T19:00:00Z'), type: 'Race' },
     ],
   },
   {
@@ -307,11 +306,11 @@ export const F1_2026_CALENDAR: F1Race[] = [
     city: 'São Paulo',
     flag: '🇧🇷',
     sessions: [
-      { name: 'Free Practice 1', date: new Date('2026-11-06T14:30:00Z'), type: 'FP1' },
-      { name: 'Sprint Shootout', date: new Date('2026-11-06T18:30:00Z'), type: 'Sprint Shootout' },
-      { name: 'Sprint', date: new Date('2026-11-07T15:00:00Z'), type: 'Sprint' },
-      { name: 'Qualifying', date: new Date('2026-11-07T19:00:00Z'), type: 'Qualifying' },
-      { name: 'Race', date: new Date('2026-11-08T17:00:00Z'), type: 'Race' },
+      { name: 'Free Practice 1', date: new Date('2026-11-06T16:30:00Z'), type: 'FP1' },
+      { name: 'Free Practice 2', date: new Date('2026-11-06T20:00:00Z'), type: 'FP2' },
+      { name: 'Free Practice 3', date: new Date('2026-11-07T16:30:00Z'), type: 'FP3' },
+      { name: 'Qualifying',      date: new Date('2026-11-07T20:00:00Z'), type: 'Qualifying' },
+      { name: 'Race',            date: new Date('2026-11-08T17:00:00Z'), type: 'Race' },
     ],
   },
   {
@@ -321,11 +320,11 @@ export const F1_2026_CALENDAR: F1Race[] = [
     city: 'Las Vegas',
     flag: '🇺🇸',
     sessions: [
-      { name: 'Free Practice 1', date: new Date('2026-11-20T06:30:00Z'), type: 'FP1' },
-      { name: 'Free Practice 2', date: new Date('2026-11-20T10:00:00Z'), type: 'FP2' },
-      { name: 'Free Practice 3', date: new Date('2026-11-21T06:30:00Z'), type: 'FP3' },
-      { name: 'Qualifying', date: new Date('2026-11-21T10:00:00Z'), type: 'Qualifying' },
-      { name: 'Race', date: new Date('2026-11-22T06:00:00Z'), type: 'Race' },
+      { name: 'Free Practice 1', date: new Date('2026-11-20T00:30:00Z'), type: 'FP1' },
+      { name: 'Free Practice 2', date: new Date('2026-11-20T04:00:00Z'), type: 'FP2' },
+      { name: 'Free Practice 3', date: new Date('2026-11-21T00:30:00Z'), type: 'FP3' },
+      { name: 'Qualifying',      date: new Date('2026-11-21T04:00:00Z'), type: 'Qualifying' },
+      { name: 'Race',            date: new Date('2026-11-22T03:00:00Z'), type: 'Race' },
     ],
   },
   {
@@ -336,10 +335,10 @@ export const F1_2026_CALENDAR: F1Race[] = [
     flag: '🇶🇦',
     sessions: [
       { name: 'Free Practice 1', date: new Date('2026-11-27T13:30:00Z'), type: 'FP1' },
-      { name: 'Sprint Shootout', date: new Date('2026-11-27T17:30:00Z'), type: 'Sprint Shootout' },
-      { name: 'Sprint', date: new Date('2026-11-28T13:00:00Z'), type: 'Sprint' },
-      { name: 'Qualifying', date: new Date('2026-11-28T17:00:00Z'), type: 'Qualifying' },
-      { name: 'Race', date: new Date('2026-11-29T15:00:00Z'), type: 'Race' },
+      { name: 'Free Practice 2', date: new Date('2026-11-27T17:00:00Z'), type: 'FP2' },
+      { name: 'Free Practice 3', date: new Date('2026-11-28T13:30:00Z'), type: 'FP3' },
+      { name: 'Qualifying',      date: new Date('2026-11-28T17:00:00Z'), type: 'Qualifying' },
+      { name: 'Race',            date: new Date('2026-11-29T15:00:00Z'), type: 'Race' },
     ],
   },
   {
@@ -349,11 +348,11 @@ export const F1_2026_CALENDAR: F1Race[] = [
     city: 'Abu Dhabi',
     flag: '🇦🇪',
     sessions: [
-      { name: 'Free Practice 1', date: new Date('2026-12-04T10:30:00Z'), type: 'FP1' },
-      { name: 'Free Practice 2', date: new Date('2026-12-04T14:00:00Z'), type: 'FP2' },
-      { name: 'Free Practice 3', date: new Date('2026-12-05T11:30:00Z'), type: 'FP3' },
-      { name: 'Qualifying', date: new Date('2026-12-05T15:00:00Z'), type: 'Qualifying' },
-      { name: 'Race', date: new Date('2026-12-06T13:00:00Z'), type: 'Race' },
+      { name: 'Free Practice 1', date: new Date('2026-12-04T12:30:00Z'), type: 'FP1' },
+      { name: 'Free Practice 2', date: new Date('2026-12-04T16:00:00Z'), type: 'FP2' },
+      { name: 'Free Practice 3', date: new Date('2026-12-05T12:30:00Z'), type: 'FP3' },
+      { name: 'Qualifying',      date: new Date('2026-12-05T13:00:00Z'), type: 'Qualifying' },
+      { name: 'Race',            date: new Date('2026-12-06T12:00:00Z'), type: 'Race' },
     ],
   },
 ];
@@ -372,7 +371,7 @@ export function getNextSession(): { race: F1Race; session: F1Session } | null {
     }
   }
 
-  return null; // Season finished
+  return null;
 }
 
 /**
@@ -394,8 +393,8 @@ export function getTimeRemaining(targetDate: Date) {
     return { days: 0, hours: 0, minutes: 0, seconds: 0, expired: true };
   }
 
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-  const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+  const days    = Math.floor(diff / (1000 * 60 * 60 * 24));
+  const hours   = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
   const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
   const seconds = Math.floor((diff % (1000 * 60)) / 1000);
 
