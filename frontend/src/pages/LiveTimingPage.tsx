@@ -77,7 +77,7 @@ export default function LiveTimingPage() {
   const { isPremium } = useSubscription();
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
-  const isLive = connected && positions.length > 0 && isSessionCurrentlyLive();
+  const isLive = connected && positions.length > 0;
 
   // ── Error ────────────────────────────────────────────────────────────────
   if (error) {
