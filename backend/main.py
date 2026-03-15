@@ -626,8 +626,11 @@ async def get_telemetry_comparison(
             else:
                 lap2 = session.laps.pick_drivers(driver2).pick_fastest()
 
-            if lap1 is None or lap2 is None:
-                missing = driver1 if lap1 is None else driver2
+            def _lap_invalid(lap) -> bool:
+                return lap is None or (hasattr(lap, '__getitem__') and pd.isna(lap['DriverNumber']))
+
+            if _lap_invalid(lap1) or _lap_invalid(lap2):
+                missing = driver1 if _lap_invalid(lap1) else driver2
                 raise HTTPException(status_code=404, detail=f"Driver {missing} not found or no valid laps")
 
             sectors_driver1 = {
