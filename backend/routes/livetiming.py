@@ -20,7 +20,10 @@ logger = logging.getLogger(__name__)
 
 F1_HTTP  = "https://livetiming.formula1.com/signalr"
 F1_WS    = "wss://livetiming.formula1.com/signalr"
-F1_HEADERS = {"User-Agent": "BestHTTP"}
+F1_HEADERS = {
+    "User-Agent": "BestHTTP",
+    "Accept-Encoding": "gzip, identity",
+}
 
 F1_TOPICS = [
     "Heartbeat", "CarData.z", "Position.z", "ExtrapolatedClock",
