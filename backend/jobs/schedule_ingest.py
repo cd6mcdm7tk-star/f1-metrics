@@ -26,6 +26,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import requests
+import fastf1
+import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -114,6 +116,39 @@ def is_session_ingested(year: int, gp_round: int, session_type: str) -> bool:
         return False
 
 
+def get_meetings_fastf1(year: int) -> list:
+    """Fallback: construit la liste des meetings depuis FastF1."""
+    schedule = fastf1.get_event_schedule(year, include_testing=False)
+    meetings = []
+    for _, row in schedule.iterrows():
+        meetings.append({
+            "meeting_key":  int(row["RoundNumber"]),
+            "meeting_name": str(row["EventName"]),
+            "date_start":   str(row["EventDate"].date()),
+        })
+    return meetings
+
+
+def get_sessions_fastf1(year: int) -> list:
+    """Fallback: construit la liste des sessions depuis FastF1."""
+    schedule = fastf1.get_event_schedule(year, include_testing=False)
+    sessions = []
+    for _, row in schedule.iterrows():
+        for i in range(1, 6):
+            sname = row.get(f"Session{i}")
+            sdate = row.get(f"Session{i}DateUtc")
+            if not sname or pd.isna(sname) or str(sname).lower() == "none":
+                continue
+            if pd.isna(sdate):
+                continue
+            sessions.append({
+                "meeting_key":  int(row["RoundNumber"]),
+                "session_name": str(sname),
+                "date_start":   sdate.isoformat() if hasattr(sdate, "isoformat") else str(sdate),
+            })
+    return sessions
+
+
 def get_round_number(meetings: list, meeting_key: int) -> Optional[int]:
     """Retourne le numéro de round (1-based) à partir du meeting_key."""
     race_meetings = sorted(
@@ -142,12 +177,20 @@ def run():
 
     logger.info(f"[Schedule] Vérification sessions {current_year} — {now.strftime('%Y-%m-%d %H:%M UTC')}")
 
-    meetings = openf1_get("meetings", {"year": current_year})
+    try:
+        meetings = openf1_get("meetings", {"year": current_year})
+    except RuntimeError:
+        logger.warning("OpenF1 /meetings indisponible — fallback FastF1")
+        meetings = get_meetings_fastf1(current_year)
     if not meetings:
         logger.info("Aucun meeting trouvé pour l'année en cours")
         return
 
-    sessions = openf1_get("sessions", {"year": current_year})
+    try:
+        sessions = openf1_get("sessions", {"year": current_year})
+    except RuntimeError:
+        logger.warning("OpenF1 /sessions indisponible — fallback FastF1")
+        sessions = get_sessions_fastf1(current_year)
     if not sessions:
         logger.info("Aucune session trouvée")
         return
