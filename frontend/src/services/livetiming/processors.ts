@@ -93,9 +93,24 @@ export class TimingProcessor {
       if (line.NumberOfLaps != null) updated.number_of_laps = parseInt(line.NumberOfLaps);
 
       if (line.Sectors) {
-        if (line.Sectors['0']?.Value) updated.sector1 = line.Sectors['0'].Value;
-        if (line.Sectors['1']?.Value) updated.sector2 = line.Sectors['1'].Value;
-        if (line.Sectors['2']?.Value) updated.sector3 = line.Sectors['2'].Value;
+        if (line.Sectors['0']?.Value)          updated.sector1          = line.Sectors['0'].Value;
+        if (line.Sectors['0']?.OverallFastest != null) updated.sector1_fastest  = !!line.Sectors['0'].OverallFastest;
+        if (line.Sectors['0']?.PersonalFastest != null) updated.sector1_personal = !!line.Sectors['0'].PersonalFastest;
+        if (line.Sectors['0']?.Segments) {
+          updated.sector1_segments = Object.values(line.Sectors['0'].Segments).map((s: any) => s.Status ?? 0);
+        }
+        if (line.Sectors['1']?.Value)          updated.sector2          = line.Sectors['1'].Value;
+        if (line.Sectors['1']?.OverallFastest != null) updated.sector2_fastest  = !!line.Sectors['1'].OverallFastest;
+        if (line.Sectors['1']?.PersonalFastest != null) updated.sector2_personal = !!line.Sectors['1'].PersonalFastest;
+        if (line.Sectors['1']?.Segments) {
+          updated.sector2_segments = Object.values(line.Sectors['1'].Segments).map((s: any) => s.Status ?? 0);
+        }
+        if (line.Sectors['2']?.Value)          updated.sector3          = line.Sectors['2'].Value;
+        if (line.Sectors['2']?.OverallFastest != null) updated.sector3_fastest  = !!line.Sectors['2'].OverallFastest;
+        if (line.Sectors['2']?.PersonalFastest != null) updated.sector3_personal = !!line.Sectors['2'].PersonalFastest;
+        if (line.Sectors['2']?.Segments) {
+          updated.sector3_segments = Object.values(line.Sectors['2'].Segments).map((s: any) => s.Status ?? 0);
+        }
       }
 
       if (line.Speeds) {

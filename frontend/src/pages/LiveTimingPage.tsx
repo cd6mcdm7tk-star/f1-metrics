@@ -4,7 +4,7 @@
  * Widgets: Timing Table · Car Telemetry · Race Control · Weather · Tyre Strategy
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import SEO from '../components/SEO';
 import { useLiveTiming } from '../hooks/useLiveTiming';
 import CountdownShowcase from '../components/CountdownShowcase';
@@ -12,6 +12,7 @@ import { useSubscription } from '../hooks/useSubscription';
 import UpgradeModal from '../components/UpgradeModal';
 import { Lock, Radio, Cloud, Activity } from 'lucide-react';
 import TrackMapWidget from '../components/livetiming/TrackMapWidget';
+import TeamRadioWidget from '../components/livetiming/TeamRadioWidget';
 
 // ─── Team colours ────────────────────────────────────────────────────────────
 const TEAM_COLORS: Record<string, string> = {
@@ -57,10 +58,40 @@ function DRSBadge({ active }: { active: boolean }) {
   );
 }
 
+// ─── Segment dot colors ───────────────────────────────────────────────────────
+function segmentColor(status: number): string {
+  if (status === 2048) return '#a855f7'; // purple
+  if (status === 2049) return '#22c55e'; // green
+  if (status === 2051) return '#eab308'; // yellow/amber
+  if (status === 0)    return '#4b5563'; // gray
+  return '#ffffff';                       // white/unknown
+}
+
 // ─── Sector time cell ─────────────────────────────────────────────────────────
-function SectorCell({ value }: { value?: string }) {
+function SectorCell({ value, fastest, personal, segments }: {
+  value?: string; fastest?: boolean; personal?: boolean; segments?: number[];
+}) {
   if (!value) return <td className="px-2 py-3 text-center text-gray-600 text-xs">—</td>;
-  return <td className="px-2 py-3 text-center text-xs font-mono text-gray-300">{value}</td>;
+  let className = 'px-2 py-3 text-center text-xs font-mono rounded';
+  if (fastest)       className += ' text-purple-400 bg-purple-900/30';
+  else if (personal) className += ' text-green-400 bg-green-900/30';
+  else               className += ' text-gray-300';
+  return (
+    <td className={className}>
+      <div>{value}</div>
+      {segments && segments.length > 0 && (
+        <div className="flex items-center justify-center gap-0.5 mt-1">
+          {segments.map((s, i) => (
+            <div
+              key={i}
+              className="rounded-full flex-shrink-0"
+              style={{ width: 4, height: 4, backgroundColor: segmentColor(s) }}
+            />
+          ))}
+        </div>
+      )}
+    </td>
+  );
 }
 
 // ============================================================================
@@ -70,13 +101,31 @@ export default function LiveTimingPage() {
   const {
     drivers, positions, timing, timingStats, weather,
     session, raceControl, carData, stints,
-    gpsPositions, trackHistory,
+    gpsPositions, trackHistory, teamRadio,
     connected, loading, error,
   } = useLiveTiming();
 
   const [selectedDriver, setSelectedDriver] = useState<number | null>(null);
+  const [mobileTab, setMobileTab] = useState<'Timing' | 'Map' | 'Radio' | 'Control' | 'Weather'>('Timing');
   const { isPremium } = useSubscription();
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [circuitPoints, setCircuitPoints] = useState<{ x: number; y: number }[] | undefined>(undefined);
+
+  // Fetch static circuit map from backend when session changes
+  useEffect(() => {
+    const shortName = session?.circuit_short_name;
+    if (!shortName) return;
+    let cancelled = false;
+    fetch(`/api/livetiming/circuit-map?circuit_short_name=${encodeURIComponent(shortName)}`)
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (!cancelled && data?.points?.length) {
+          setCircuitPoints(data.points);
+        }
+      })
+      .catch(() => { /* ignore errors, fall back to trackHistory */ });
+    return () => { cancelled = true; };
+  }, [session?.circuit_short_name]);
 
   const isLive = connected && positions.length > 0;
 
@@ -158,30 +207,87 @@ export default function LiveTimingPage() {
         {/* ── Session header ─────────────────────────────────────────────── */}
         <SessionHeader session={session} connected={connected} weather={weather} />
 
-        {/* ── Main layout ────────────────────────────────────────────────── */}
-        <div className="container mx-auto px-3 sm:px-6 py-4">
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-
-            {/* LEFT — timing table (2 cols) */}
-            <div className="xl:col-span-2 space-y-4">
-              <TimingTable
-                drivers={drivers} positions={positions} timing={timing}
-                timingStats={timingStats} carData={carData} stints={stints}
-                selectedDriver={selectedDriver} onSelect={setSelectedDriver}
-              />
-
-              {/* Car telemetry for selected driver */}
-              {selectedCarData && selectedDriver_ && (
-                <CarTelemetryWidget driver={selectedDriver_} carData={selectedCarData} />
-              )}
-            </div>
-
-            {/* RIGHT — sidebar (1 col) */}
-            <div className="space-y-4">
-              <TrackMapWidget gpsPositions={gpsPositions} trackHistory={trackHistory} drivers={drivers} />
-              {weather && <WeatherWidget weather={weather} />}
+        {/* ── Mobile tabs (< lg) ─────────────────────────────────────────── */}
+        <div className="lg:hidden">
+          {/* Tab bar */}
+          <div className="flex border-b border-metrik-turquoise/30 bg-metrik-card/80 backdrop-blur-xl overflow-x-auto">
+            {(['Timing', 'Map', 'Radio', 'Control', 'Weather'] as const).map(tab => (
+              <button
+                key={tab}
+                onClick={() => setMobileTab(tab)}
+                className={`flex-shrink-0 px-4 py-3 text-xs font-rajdhani font-bold transition-colors
+                  ${mobileTab === tab
+                    ? 'text-metrik-turquoise border-b-2 border-metrik-turquoise'
+                    : 'text-metrik-silver hover:text-white'}`}
+              >
+                {tab.toUpperCase()}
+              </button>
+            ))}
+          </div>
+          {/* Tab content */}
+          <div className="container mx-auto px-3 py-4">
+            {mobileTab === 'Timing' && (
+              <div className="space-y-4">
+                <TimingTable
+                  drivers={drivers} positions={positions} timing={timing}
+                  timingStats={timingStats} carData={carData} stints={stints}
+                  selectedDriver={selectedDriver} onSelect={setSelectedDriver}
+                />
+                {selectedCarData && selectedDriver_ && (
+                  <CarTelemetryWidget driver={selectedDriver_} carData={selectedCarData} />
+                )}
+              </div>
+            )}
+            {mobileTab === 'Map' && (
+              <div className="space-y-4">
+                <TrackMapWidget gpsPositions={gpsPositions} trackHistory={trackHistory} drivers={drivers} circuitPoints={circuitPoints} />
+                {selectedCarData && selectedDriver_ && (
+                  <CarTelemetryWidget driver={selectedDriver_} carData={selectedCarData} />
+                )}
+              </div>
+            )}
+            {mobileTab === 'Radio' && (
+              <TeamRadioWidget captures={teamRadio.captures} drivers={drivers} />
+            )}
+            {mobileTab === 'Control' && (
               <RaceControlWidget messages={raceControl} />
-              <TyreStrategyWidget drivers={drivers} positions={positions} stints={stints} />
+            )}
+            {mobileTab === 'Weather' && (
+              <div className="space-y-4">
+                {weather && <WeatherWidget weather={weather} />}
+                <TyreStrategyWidget drivers={drivers} positions={positions} stints={stints} />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ── Desktop layout (lg+) ───────────────────────────────────────── */}
+        <div className="hidden lg:block">
+          <div className="container mx-auto px-3 sm:px-6 py-4">
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+
+              {/* LEFT — timing table (2 cols) */}
+              <div className="xl:col-span-2 space-y-4">
+                <TimingTable
+                  drivers={drivers} positions={positions} timing={timing}
+                  timingStats={timingStats} carData={carData} stints={stints}
+                  selectedDriver={selectedDriver} onSelect={setSelectedDriver}
+                />
+
+                {/* Car telemetry for selected driver */}
+                {selectedCarData && selectedDriver_ && (
+                  <CarTelemetryWidget driver={selectedDriver_} carData={selectedCarData} />
+                )}
+              </div>
+
+              {/* RIGHT — sidebar (1 col) */}
+              <div className="space-y-4">
+                <TrackMapWidget gpsPositions={gpsPositions} trackHistory={trackHistory} drivers={drivers} circuitPoints={circuitPoints} />
+                {weather && <WeatherWidget weather={weather} />}
+                <RaceControlWidget messages={raceControl} />
+                <TeamRadioWidget captures={teamRadio.captures} drivers={drivers} />
+                <TyreStrategyWidget drivers={drivers} positions={positions} stints={stints} />
+              </div>
             </div>
           </div>
         </div>
@@ -287,7 +393,25 @@ function TimingTable({ drivers, positions, timing, timingStats, carData, stints,
                     ${isSelected ? 'bg-metrik-turquoise/10' : 'hover:bg-white/5'}`}
                 >
                   <td className="px-3 py-3">
-                    <span className="text-xl font-rajdhani font-black text-white">{pos.position}</span>
+                    <div className="flex items-center gap-1">
+                      <span className="text-xl font-rajdhani font-black text-white">{pos.position}</span>
+                      {driver?.grid_position != null && pos.position !== driver.grid_position && (() => {
+                        const delta = driver.grid_position - pos.position;
+                        if (delta > 0) {
+                          return (
+                            <span className="text-xs font-bold text-green-400 leading-none">
+                              ▲{delta}
+                            </span>
+                          );
+                        } else {
+                          return (
+                            <span className="text-xs font-bold text-red-400 leading-none">
+                              ▼{Math.abs(delta)}
+                            </span>
+                          );
+                        }
+                      })()}
+                    </div>
                   </td>
                   <td className="px-3 py-3">
                     <div className="flex items-center gap-2">
@@ -310,9 +434,9 @@ function TimingTable({ drivers, positions, timing, timingStats, carData, stints,
                   <td className="px-2 py-3 text-xs font-mono font-bold text-metrik-turquoise">
                     {t?.best_lap_time || '—'}
                   </td>
-                  <SectorCell value={t?.sector1} />
-                  <SectorCell value={t?.sector2} />
-                  <SectorCell value={t?.sector3} />
+                  <SectorCell value={t?.sector1} fastest={t?.sector1_fastest} personal={t?.sector1_personal} segments={t?.sector1_segments} />
+                  <SectorCell value={t?.sector2} fastest={t?.sector2_fastest} personal={t?.sector2_personal} segments={t?.sector2_segments} />
+                  <SectorCell value={t?.sector3} fastest={t?.sector3_fastest} personal={t?.sector3_personal} segments={t?.sector3_segments} />
                   <td className="hidden xl:table-cell px-2 py-3 text-center">
                     <CompoundBadge compound={currentStint?.compound} />
                   </td>

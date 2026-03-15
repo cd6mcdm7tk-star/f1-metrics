@@ -26,6 +26,15 @@ export interface ProcessedTiming {
   sector1?: string;
   sector2?: string;
   sector3?: string;
+  sector1_fastest?: boolean;  // purple - overall best
+  sector1_personal?: boolean; // green - personal best
+  sector2_fastest?: boolean;
+  sector2_personal?: boolean;
+  sector3_fastest?: boolean;
+  sector3_personal?: boolean;
+  sector1_segments?: number[];
+  sector2_segments?: number[];
+  sector3_segments?: number[];
   number_of_laps?: number;
   speeds?: {
     i1?: number;

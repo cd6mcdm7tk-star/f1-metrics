@@ -57,6 +57,68 @@ async def negotiate_f1_connection():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+
+# Simple in-process cache for circuit map data
+_circuit_map_cache: dict = {}
+
+@router.get("/circuit-map")
+async def get_circuit_map(circuit_short_name: str = "", session_key: int = 0):
+    """
+    Fetch track outline coordinates from OpenF1 API.
+    Accepts either a session_key directly or a circuit_short_name to look up the latest session.
+    Results are cached in memory for the lifetime of the process.
+    """
+    cache_key = f"{circuit_short_name}:{session_key}"
+    if cache_key in _circuit_map_cache:
+        return _circuit_map_cache[cache_key]
+
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            # Resolve session_key if not provided
+            resolved_key = session_key
+            if not resolved_key and circuit_short_name:
+                sessions_resp = await client.get(
+                    "https://api.openf1.org/v1/sessions",
+                    params={"circuit_short_name": circuit_short_name, "year": 2026},
+                )
+                sessions_resp.raise_for_status()
+                sessions = sessions_resp.json()
+                if not sessions:
+                    raise HTTPException(status_code=404, detail="No sessions found for this circuit")
+                # Take the most recent session
+                resolved_key = sessions[-1].get("session_key")
+
+            if not resolved_key:
+                raise HTTPException(status_code=404, detail="No session_key available")
+
+            # Fetch location data for driver_number=1
+            loc_resp = await client.get(
+                "https://api.openf1.org/v1/location",
+                params={"session_key": resolved_key, "driver_number": 1},
+            )
+            loc_resp.raise_for_status()
+            points_raw = loc_resp.json()
+
+        if not points_raw:
+            raise HTTPException(status_code=404, detail="No location data for this session")
+
+        # Downsample to ~400 points
+        total = len(points_raw)
+        step = max(1, total // 400)
+        points = [{"x": p["x"], "y": p["y"]} for p in points_raw[::step]]
+
+        result = {"points": points, "session_key": resolved_key}
+        _circuit_map_cache[cache_key] = result
+        return result
+
+    except HTTPException:
+        raise
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=503, detail=f"OpenF1 API error: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/status")
 async def check_f1_status():
     """Check if F1 Live Timing API is reachable."""

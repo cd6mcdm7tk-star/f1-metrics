@@ -2,9 +2,10 @@ import React, { useMemo } from 'react';
 import type { ProcessedPositionData, ProcessedDriver } from '../../services/livetiming/types';
 
 interface Props {
-  gpsPositions: ProcessedPositionData[];
-  trackHistory:  { x: number; y: number }[];
-  drivers:       ProcessedDriver[];
+  gpsPositions:   ProcessedPositionData[];
+  trackHistory:   { x: number; y: number }[];
+  drivers:        ProcessedDriver[];
+  circuitPoints?: { x: number; y: number }[];
 }
 
 const SVG_SIZE    = 400;
@@ -55,42 +56,44 @@ function normalize(
   ];
 }
 
-export default function TrackMapWidget({ gpsPositions, trackHistory, drivers }: Props) {
+export default function TrackMapWidget({ gpsPositions, trackHistory, drivers, circuitPoints }: Props) {
+  // Use circuitPoints from backend if available, otherwise fall back to trackHistory
+  const activeTrackSource = (circuitPoints && circuitPoints.length > 0) ? circuitPoints : trackHistory;
   const driverMap = useMemo(() => {
     const m = new Map<number, ProcessedDriver>();
     drivers.forEach(d => m.set(d.driver_number, d));
     return m;
   }, [drivers]);
 
-  // Build bounds from track history (rotated)
+  // Build bounds from active track source (rotated)
   const bounds = useMemo(() => {
-    if (trackHistory.length === 0) return null;
-    const cx = trackHistory.reduce((s, p) => s + p.x, 0) / trackHistory.length;
-    const cy = trackHistory.reduce((s, p) => s + p.y, 0) / trackHistory.length;
-    const rotated = trackHistory.map(p => {
+    if (activeTrackSource.length === 0) return null;
+    const cx = activeTrackSource.reduce((s, p) => s + p.x, 0) / activeTrackSource.length;
+    const cy = activeTrackSource.reduce((s, p) => s + p.y, 0) / activeTrackSource.length;
+    const rotated = activeTrackSource.map(p => {
       const [rx, ry] = rotate90(p.x, p.y, cx, cy);
       return { x: rx, y: ry };
     });
     return computeBounds(rotated);
-  }, [trackHistory]);
+  }, [activeTrackSource]);
 
   // Track path
   const trackPath = useMemo(() => {
-    if (!bounds || trackHistory.length < 5) return '';
-    const cx = trackHistory.reduce((s, p) => s + p.x, 0) / trackHistory.length;
-    const cy = trackHistory.reduce((s, p) => s + p.y, 0) / trackHistory.length;
-    return trackHistory.map((p, i) => {
+    if (!bounds || activeTrackSource.length < 5) return '';
+    const cx = activeTrackSource.reduce((s, p) => s + p.x, 0) / activeTrackSource.length;
+    const cy = activeTrackSource.reduce((s, p) => s + p.y, 0) / activeTrackSource.length;
+    return activeTrackSource.map((p, i) => {
       const [rx, ry] = rotate90(p.x, p.y, cx, cy);
       const [sx, sy] = normalize(rx, ry, bounds, false);
       return `${i === 0 ? 'M' : 'L'}${sx.toFixed(1)},${sy.toFixed(1)}`;
     }).join(' ');
-  }, [trackHistory, bounds]);
+  }, [activeTrackSource, bounds]);
 
   // Driver positions normalized
   const driverDots = useMemo(() => {
     if (!bounds || gpsPositions.length === 0) return [];
-    const cx = trackHistory.reduce((s, p) => s + p.x, 0) / (trackHistory.length || 1);
-    const cy = trackHistory.reduce((s, p) => s + p.y, 0) / (trackHistory.length || 1);
+    const cx = activeTrackSource.reduce((s, p) => s + p.x, 0) / (activeTrackSource.length || 1);
+    const cy = activeTrackSource.reduce((s, p) => s + p.y, 0) / (activeTrackSource.length || 1);
     return gpsPositions
       .filter(p => p.x != null && p.y != null)
       .map(p => {
@@ -103,10 +106,10 @@ export default function TrackMapWidget({ gpsPositions, trackHistory, drivers }: 
         const retired   = p.status === 'Stopped';
         return { sx, sy, color, acronym, inPit, retired, driver_number: p.driver_number };
       });
-  }, [gpsPositions, trackHistory, bounds, driverMap]);
+  }, [gpsPositions, activeTrackSource, bounds, driverMap]);
 
   const onTrackCount = gpsPositions.filter(p => p.status === 'OnTrack').length;
-  const hasTrack     = trackHistory.length >= 20;
+  const hasTrack     = activeTrackSource.length >= 20;
 
   return (
     <div className="bg-gray-900 border border-gray-700 rounded-xl p-4">
@@ -123,7 +126,7 @@ export default function TrackMapWidget({ gpsPositions, trackHistory, drivers }: 
         <div className="flex flex-col items-center justify-center h-64 text-gray-500 text-sm gap-2">
           <span className="text-2xl">🏎️</span>
           <span>Building track map…</span>
-          <span className="text-xs text-gray-600">{trackHistory.length} / ~200 points</span>
+          <span className="text-xs text-gray-600">{activeTrackSource.length} / ~200 points</span>
         </div>
       ) : (
         <svg
