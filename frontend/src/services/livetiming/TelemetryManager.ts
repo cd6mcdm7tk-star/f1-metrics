@@ -31,6 +31,9 @@ export class TelemetryManager {
   private session:       ProcessedSession | null = null;
   private carData:       Map<number, ProcessedCarData> = new Map();
   private positionData:  Map<number, ProcessedPositionData> = new Map();
+  private gpsPositions:  Map<number, ProcessedPositionData> = new Map();
+  private trackHistory:  { x: number; y: number }[] = [];
+  private trackHistoryKeys: Set<string> = new Set();
   private stints:        ProcessedStint[]   = [];
   private pitStops:      ProcessedPitStop[] = [];
   private timingStats:   ProcessedTimingStats[] = [];
@@ -118,7 +121,7 @@ export class TelemetryManager {
         break;
       case 'TimingAppData':     this.driverProcessor.processGridPositions(data); break;
       case 'TimingStats':       this._processTimingStats(data); break;
-      case 'Position':
+      case 'Position':          this._processGpsPositions(data); break;
       case 'CarData':           this._processCarData(data); break;
       case 'WeatherData':       this._processWeather(data); break;
       case 'RaceControlMessages': this._processRaceControl(data); break;
@@ -201,6 +204,33 @@ export class TelemetryManager {
         ...(this.session || {}),
         track_status: data.Status,
       };
+    }
+  }
+
+  private _processGpsPositions(data: any) {
+    // Position.z: {Entries: [{Utc, Cars: {num: {Status, X, Y, Z}}}]}
+    const entries: any[] = Array.isArray(data.Entries) ? data.Entries : [];
+    const last = entries[entries.length - 1];
+    if (!last?.Cars) return;
+
+    for (const [num, car] of Object.entries(last.Cars as Record<string, any>)) {
+      const driverNum = parseInt(num);
+      if (isNaN(driverNum) || car.X == null || car.Y == null) continue;
+      this.gpsPositions.set(driverNum, {
+        driver_number: driverNum,
+        x: car.X,
+        y: car.Y,
+        z: car.Z,
+        status: car.Status,
+      });
+      // Accumulate track outline (sample every ~50m to keep array small)
+      const rx = Math.round(car.X / 50) * 50;
+      const ry = Math.round(car.Y / 50) * 50;
+      const key = `${rx},${ry}`;
+      if (!this.trackHistoryKeys.has(key)) {
+        this.trackHistoryKeys.add(key);
+        this.trackHistory.push({ x: car.X, y: car.Y });
+      }
     }
   }
 
@@ -332,6 +362,8 @@ export class TelemetryManager {
       raceControl:   this.raceControl,
       carData:       Array.from(this.carData.values()),
       positionData:  Array.from(this.positionData.values()),
+      gpsPositions:  Array.from(this.gpsPositions.values()),
+      trackHistory:  this.trackHistory,
       stints:        this.stints,
       pitStops:      this.pitStops,
       teamRadio:     this.teamRadio,

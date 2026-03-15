@@ -7,11 +7,11 @@
 import React, { useState } from 'react';
 import SEO from '../components/SEO';
 import { useLiveTiming } from '../hooks/useLiveTiming';
-import { isSessionCurrentlyLive } from '../data/f1Calendar2026';
 import CountdownShowcase from '../components/CountdownShowcase';
 import { useSubscription } from '../hooks/useSubscription';
 import UpgradeModal from '../components/UpgradeModal';
 import { Lock, Radio, Cloud, Activity } from 'lucide-react';
+import TrackMapWidget from '../components/livetiming/TrackMapWidget';
 
 // ─── Team colours ────────────────────────────────────────────────────────────
 const TEAM_COLORS: Record<string, string> = {
@@ -70,6 +70,7 @@ export default function LiveTimingPage() {
   const {
     drivers, positions, timing, timingStats, weather,
     session, raceControl, carData, stints,
+    gpsPositions, trackHistory,
     connected, loading, error,
   } = useLiveTiming();
 
@@ -177,6 +178,7 @@ export default function LiveTimingPage() {
 
             {/* RIGHT — sidebar (1 col) */}
             <div className="space-y-4">
+              <TrackMapWidget gpsPositions={gpsPositions} trackHistory={trackHistory} drivers={drivers} />
               {weather && <WeatherWidget weather={weather} />}
               <RaceControlWidget messages={raceControl} />
               <TyreStrategyWidget drivers={drivers} positions={positions} stints={stints} />

@@ -57,6 +57,8 @@ export function useLiveTiming() {
     session:      data?.session     ?? null,
     raceControl:  data?.raceControl ?? [],
     carData:      data?.carData     ?? [],
+    gpsPositions: data?.gpsPositions ?? [],
+    trackHistory: data?.trackHistory ?? [],
     stints:       data?.stints      ?? [],
     pitStops:     data?.pitStops    ?? [],
     teamRadio:    data?.teamRadio   ?? { captures: [] },

@@ -189,6 +189,8 @@ export interface TelemetryData {
   session: ProcessedSession | null;
   carData: ProcessedCarData[];
   positionData: ProcessedPositionData[];
+  gpsPositions: ProcessedPositionData[];
+  trackHistory: { x: number; y: number }[];
   driversWithDRS: number[];
   timingStats: ProcessedTimingStats[];
   teamRadio: ProcessedTeamRadio;
