@@ -141,7 +141,12 @@ def ingest_openf1(year: int, gp_round: int, session_type: str):
     """Ingest all drivers' laps + telemetry for a session via OpenF1 API."""
     logger.info(f"[OpenF1] Ingesting {year} R{gp_round} {session_type}")
 
-    session_key = _openf1_session_key(year, gp_round, session_type)
+    try:
+        session_key = _openf1_session_key(year, gp_round, session_type)
+    except RuntimeError as e:
+        logger.warning(f"  OpenF1 indisponible ({e}) — fallback FastF1")
+        ingest_fastf1(year, gp_round, session_type)
+        return
     logger.info(f"  session_key = {session_key}")
 
     # --- Drivers ---
