@@ -127,10 +127,16 @@ interface TelemetrySectionProps {
   navigate: (path: string) => void;
 }
 
+// ── Real telemetry: ANT vs HAM — China 2026 Race fastest laps ────────────────
+const ANT_SPEED = [281.0,282.4,284.5,286.1,288.0,288.0,288.0,288.0,289.1,290.2,291.9,292.0,292.0,292.0,292.0,292.0,292.3,292.5,292.8,293.0,293.0,293.0,293.0,293.0,293.0,293.0,293.0,293.0,293.0,293.0,293.0,291.8,289.8,288.7,286.9,284.5,273.6,244.1,230.3,228.0,212.2,206.0,206.0,194.2,180.0,180.0,167.2,157.4,148.1,140.0,130.6,124.3,118.0,109.8,103.8,100.6,97.5,97.1,108.2,116.3,111.0,106.3,99.6,93.0,94.9,99.0,107.0,110.4,135.3,147.7,155.0,159.8,168.4,175.4,186.9,196.4,209.7,218.2,224.1,227.3,234.2,241.1,250.7,256.0,258.2,259.3,261.9,264.0,266.5,267.9,269.6,270.3,271.0,271.6,272.5,273.1,274.2,274.7,275.3,275.7,276.4,277.0,277.0,276.1,274.3,273.1,259.6,234.6,197.0,171.9,145.3,120.9,96.0,88.0,79.7,83.8,109.8,127.3,163.5,179.3,190.4,194.1,195.0,195.0,200.0,217.9,227.4,230.0,230.0,240.1,247.7,251.7,258.1,259.3,260.2,261.1,262.6,263.8,266.0,265.6,265.0,263.6,263.0,262.0,259.6,259.2,257.3,255.7,255.0,253.5,253.0,253.0,252.7,251.3,249.3,247.7,246.2,246.6,246.2,244.8,242.8,241.5,238.0,233.0,224.0,217.0,198.6,194.8,188.6,182.4,180.2,180.0,180.0,181.5,184.8,188.8,192.2,187.7,175.4,149.6,142.0,142.0,136.7,131.8,122.0,115.0,116.5,127.4,143.7,152.4,162.9,172.0,178.3,188.7,197.0,201.6,208.5,213.1,220.7,224.4,229.3,232.5,237.4,240.2,241.7,243.5,246.4,248.2,249.9,251.0,253.3,254.6,256.1,257.1,259.8,262.1,262.8,263.2,263.6,263.9,250.1,236.2,208.9,187.9,145.1,128.3,103.9,96.2,95.2,109.7,117.4,114.6,110.7,109.4,109.7,110.9,113.9,116.5,125.0,125.0,149.1,153.6,166.1,171.3,182.9,189.5,196.6,202.7,212.0,216.8,226.0,226.5,231.1,236.2,246.6,251.7,255.9,258.0,261.3,263.0,263.0,263.0,263.0,269.6,280.1,285.2,292.4,295.7,297.9,299.4,304.1,305.7,307.0,307.8,309.0,309.8,311.1,312.0,313.2,314.0,315.1,315.9,317.2,318.0,318.0,318.2,318.8,319.3,320.0,320.2,320.5,320.8,321.0,321.0,321.0,320.9,319.7,318.9,317.7,316.8,315.6,315.0,315.0,315.0,314.6,314.3,313.9,313.6,313.1,312.6,312.0,312.0,311.8,311.5,311.0,310.6,309.9,309.5,309.0,309.0,309.0,309.0,308.3,307.8,307.0,307.0,306.9,306.7,306.2,306.0,306.0,305.2,304.1,303.7,303.1,303.0,303.0,303.0,302.8,301.0,298.3,270.1,220.9,188.1,147.4,126.6,102.6,86.7,67.3,67.0,90.1,115.8,146.3,156.0,157.9,161.3,165.9,168.0,191.0,198.4,210.0,213.2,217.5,220.0,223.8,225.5,227.9,228.5,229.8,230.9,217.5,206.5,194.0,193.0,156.5,150.7,148.5,153.1,155.0,168.0,186.4,193.9,202.8,208.8,216.5,222.3,238.5,246.1,256.7,258.0,261.5,264.8,268.5,270.6,273.8,277.0,278.0,278.0,278.0,278.0];
+const HAM_SPEED = [289.0,291.6,295.4,296.0,297.6,299.5,302.7,305.0,305.3,305.5,305.8,306.0,306.0,306.3,307.0,307.0,307.0,307.0,307.0,307.0,306.8,306.3,306.0,306.0,305.9,305.8,305.5,305.3,305.0,304.8,304.5,304.3,302.1,296.7,288.8,280.7,258.8,244.9,228.9,222.8,214.0,206.9,194.8,190.1,182.4,175.3,169.7,161.7,148.4,141.8,133.2,126.0,121.9,115.9,101.1,97.6,95.0,95.0,103.4,117.4,109.2,106.0,98.8,94.2,92.5,107.1,120.0,130.6,136.0,139.5,147.1,153.3,168.9,178.3,191.0,202.0,208.9,211.7,221.0,226.9,235.1,240.7,248.2,251.4,255.1,257.3,259.8,261.4,264.8,268.4,270.8,270.0,271.2,272.0,272.7,272.8,272.1,272.4,273.2,273.6,274.0,274.0,274.0,274.5,275.0,270.2,250.3,237.1,217.6,204.5,147.5,120.9,94.8,84.9,79.0,86.9,107.4,133.5,155.3,166.6,182.2,188.5,198.1,204.0,211.8,214.7,219.2,225.1,231.0,234.3,236.3,240.1,246.2,247.8,249.6,250.0,250.0,252.0,252.4,252.7,253.0,253.0,252.1,251.5,250.5,249.7,248.5,248.0,248.0,248.0,248.0,248.0,245.6,245.0,245.0,244.6,244.0,244.3,244.7,245.0,245.0,245.0,245.0,240.8,221.5,215.1,205.7,199.5,192.2,187.5,177.9,173.0,173.0,175.5,178.8,178.1,177.1,176.4,168.5,160.0,144.9,139.0,125.8,123.9,119.4,113.3,119.0,122.8,135.7,147.6,165.8,169.7,180.4,187.7,196.6,201.7,210.3,214.5,220.4,224.0,227.8,230.1,234.5,240.2,245.4,248.6,251.5,253.4,255.7,256.5,257.4,258.0,259.2,259.9,261.1,262.6,264.8,265.3,265.9,261.8,251.4,244.5,214.3,190.1,141.7,116.0,102.2,94.9,93.8,107.3,117.8,112.7,104.9,103.0,104.0,106.3,109.8,117.9,127.8,135.5,146.6,152.9,162.5,169.5,179.1,188.3,194.0,198.0,205.1,209.8,216.9,218.2,224.0,230.6,242.6,245.3,250.4,254.2,256.0,259.3,263.7,266.2,270.1,273.3,279.0,285.6,288.7,290.6,294.1,296.3,299.1,300.9,303.0,304.3,306.4,307.6,309.4,310.2,311.5,312.2,312.9,313.4,314.2,314.6,315.4,315.9,319.3,319.8,319.3,319.1,320.0,320.0,320.0,319.4,318.1,317.0,317.0,316.4,315.3,314.7,314.1,313.0,312.7,312.5,312.2,312.0,312.0,312.0,311.0,309.8,308.8,308.6,308.3,308.0,308.0,308.0,308.0,307.0,307.0,306.9,306.0,306.0,306.0,305.8,305.5,305.3,305.1,304.8,304.3,304.0,304.0,304.0,304.0,304.0,303.4,302.5,294.4,289.1,281.0,275.6,220.6,206.7,186.5,174.4,144.0,121.7,99.6,83.7,67.2,69.6,89.3,106.3,137.4,149.3,167.9,175.4,184.0,188.6,191.6,194.3,200.3,206.1,214.4,216.2,219.6,221.6,223.4,224.4,225.0,225.1,226.8,221.5,207.2,185.0,154.9,152.3,150.2,154.0,166.2,174.6,194.1,203.0,206.5,208.8,226.3,233.2,242.4,247.5,253.8,256.8,263.7,266.6,270.8,273.7,279.0,282.4,284.9,286.6,290.7,294.5];
+const ANT_LAP = '1:35.275';
+const HAM_LAP = '1:36.092';
+
 export default function TelemetrySection({ navigate }: TelemetrySectionProps) {
   const sectionRef = useRef<HTMLDivElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const isInView = useInView(sectionRef, { amount: 0.3 }); // 0.5 → 0.3 pour mobile
+  const canvasRef  = useRef<HTMLCanvasElement>(null);
+  const isInView   = useInView(sectionRef, { amount: 0.3 });
 
   // Animated professional telemetry chart (smooth and clean)
   useEffect(() => {
@@ -237,8 +243,8 @@ export default function TelemetrySection({ navigate }: TelemetrySectionProps) {
       return data;
     };
 
-    const speedData1 = generateSpeedData('NOR');
-    const speedData2 = generateSpeedData('VER');
+    const speedData1 = ANT_SPEED;
+    const speedData2 = HAM_SPEED;
 
     const animate = () => {
       if (!ctx || !canvas) return;
@@ -302,9 +308,9 @@ export default function TelemetrySection({ navigate }: TelemetrySectionProps) {
       let speed1Display = 280;
       let speed2Display = 275;
 
-      // Draw NOR Orange
+      // Draw Driver 1
       ctx.save();
-      ctx.strokeStyle = '#FF8700';
+      ctx.strokeStyle = '#27F4D2';
       ctx.lineWidth = isMobile ? 1.5 : 2;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
@@ -326,9 +332,9 @@ export default function TelemetrySection({ navigate }: TelemetrySectionProps) {
       ctx.stroke();
       ctx.restore();
 
-      // Draw VER Blue
+      // Draw Driver 2
       ctx.save();
-      ctx.strokeStyle = '#3671C6';
+      ctx.strokeStyle = '#E8002D';
       ctx.lineWidth = isMobile ? 1.5 : 2;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
@@ -366,19 +372,17 @@ export default function TelemetrySection({ navigate }: TelemetrySectionProps) {
       const lineHeight = isMobile ? 15 : 18;
 
       ctx.textAlign = 'right';
-      ctx.fillStyle = '#FF8700';
+      ctx.fillStyle = '#27F4D2';
       ctx.font = `bold ${labelFontSize + 1}px Rajdhani`;
-      ctx.fillText('NOR', legendX, legendY);
-      
-      ctx.fillStyle = 'rgba(255, 135, 0, 0.8)';
+      ctx.fillText('ANT', legendX, legendY);
+      ctx.fillStyle = '#27F4D2' + 'CC';
       ctx.font = `bold ${speedFontSize}px Rajdhani`;
       ctx.fillText(speed1Display + ' km/h', legendX, legendY + 12);
 
-      ctx.fillStyle = '#3671C6';
+      ctx.fillStyle = '#E8002D';
       ctx.font = `bold ${labelFontSize + 1}px Rajdhani`;
-      ctx.fillText('VER', legendX, legendY + lineHeight + 20);
-      
-      ctx.fillStyle = 'rgba(54, 113, 198, 0.8)';
+      ctx.fillText('HAM', legendX, legendY + lineHeight + 20);
+      ctx.fillStyle = '#E8002D' + 'CC';
       ctx.font = `bold ${speedFontSize}px Rajdhani`;
       ctx.fillText(speed2Display + ' km/h', legendX, legendY + lineHeight + 32);
 
@@ -545,19 +549,24 @@ export default function TelemetrySection({ navigate }: TelemetrySectionProps) {
               </div>
 
               {/* Legend */}
-              <div className="flex items-center justify-center gap-8 mt-4">
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-0.5 bg-gradient-to-r from-orange-500 to-orange-400" />
-                  <span className="text-xs font-rajdhani font-bold text-gray-300 uppercase tracking-wide">
-                    NOR
-                  </span>
+              <div className="flex items-center justify-between mt-4">
+                <div className="flex items-center gap-6">
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-0.5 bg-metrik-turquoise" />
+                    <span className="text-xs font-rajdhani font-bold text-gray-300 uppercase tracking-wide">
+                      ANT <span className="text-metrik-turquoise">{ANT_LAP}</span>
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-0.5 bg-red-500" />
+                    <span className="text-xs font-rajdhani font-bold text-gray-300 uppercase tracking-wide">
+                      HAM <span className="text-gray-400">{HAM_LAP}</span>
+                    </span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-0.5 bg-[#3671C6]" />
-                  <span className="text-xs font-rajdhani font-bold text-gray-300 uppercase tracking-wide">
-                    VER
-                  </span>
-                </div>
+                <span className="text-[10px] font-rajdhani text-gray-600 uppercase tracking-wider">
+                  🇨🇳 China 2026 Race
+                </span>
               </div>
             </div>
 

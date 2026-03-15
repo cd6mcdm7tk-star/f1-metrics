@@ -6,7 +6,7 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import ImmersiveNav from '../components/ImmersiveNav';
 import HeroSection from '../components/HeroSection';
 import TelemetrySection from '../components/TelemetrySection';
-import PitWallSection from '../components/PitWallSection';
+import LiveTimingSection from '../components/LiveTimingSection';
 import StatisticsSection from '../components/StatisticsSection';
 import ChampionshipSection from '../components/ChampionshipSection';
 import TracksSection from '../components/TracksSection';
@@ -106,7 +106,7 @@ export default function HomePageImmersive() {
       <div className="snap-y snap-mandatory h-screen overflow-y-scroll scroll-smooth">
         <HeroSection navigate={navigate} />
         <TelemetrySection navigate={navigate} />
-        <PitWallSection navigate={navigate} />
+        <LiveTimingSection navigate={navigate} />
         <StatisticsSection navigate={navigate} />
         <ChampionshipSection navigate={navigate} />
         <TracksSection navigate={navigate} />

@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { supabase } from './lib/supabase';
-import { Home, Activity, Trophy, Map, Target, Radio, Menu, X, Cpu, LogIn, Zap, BarChart3, User, CreditCard, LogOut, ChevronDown } from 'lucide-react';
+import { Home, Activity, Trophy, Map, Radio, Menu, X, Cpu, LogIn, Zap, BarChart3, User, CreditCard, LogOut, ChevronDown } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useState, useRef, useEffect, lazy, Suspense } from 'react';
 import { useToast } from './hooks/useToast';
@@ -68,7 +68,6 @@ function Navigation() {
     { path: '/championship', label: t('nav.championship'), icon: Trophy },
     { path: '/statistics', label: 'Statistics', icon: BarChart3 },
     { path: '/track-database', label: t('nav.trackDatabase'), icon: Map },
-    { path: '/pit-wall', label: t('nav.pitWall'), icon: Target },
     { path: '/f1-anatomy', label: t('nav.anatomy'), icon: Cpu },
   ];
 
@@ -246,7 +245,7 @@ function Navigation() {
 
       {mobileMenuOpen && (
         <div className="md:hidden fixed inset-0 z-40 bg-metrik-black/95 backdrop-blur-xl">
-          <div className="flex flex-col items-center justify-center h-full gap-4 p-8">
+          <div className="flex flex-col items-center justify-center min-h-full gap-4 p-8 overflow-y-auto">
             {navLinks.map((link) => {
               const Icon = link.icon;
               return (
