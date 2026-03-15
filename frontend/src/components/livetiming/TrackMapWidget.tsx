@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import type { ProcessedPositionData, ProcessedDriver } from '../../services/livetiming/types';
 
 interface Props {
@@ -7,127 +7,185 @@ interface Props {
   drivers:       ProcessedDriver[];
 }
 
-const CANVAS_SIZE = 380;
-const PADDING     = 20;
-const DOT_RADIUS  = 6;
+const SVG_SIZE    = 400;
+const PADDING     = 28;
+const DOT_RADIUS  = 7;
+
+// Rotate F1 coordinates 90° clockwise to match visual orientation
+function rotate90(x: number, y: number, cx: number, cy: number): [number, number] {
+  const dx = x - cx;
+  const dy = y - cy;
+  return [cx + dy, cy - dx];
+}
+
+interface Bounds { minX: number; maxX: number; minY: number; maxY: number }
+
+function computeBounds(points: { x: number; y: number }[]): Bounds | null {
+  if (points.length === 0) return null;
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const p of points) {
+    if (p.x < minX) minX = p.x;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.y > maxY) maxY = p.y;
+  }
+  return { minX, maxX, minY, maxY };
+}
+
+function normalize(
+  x: number, y: number, bounds: Bounds, rotated = true
+): [number, number] {
+  const cx = (bounds.minX + bounds.maxX) / 2;
+  const cy = (bounds.minY + bounds.maxY) / 2;
+  const [rx, ry] = rotated ? rotate90(x, y, cx, cy) : [x, y];
+
+  const rangeX = bounds.maxX - bounds.minX || 1;
+  const rangeY = bounds.maxY - bounds.minY || 1;
+  const scale  = Math.min(
+    (SVG_SIZE - PADDING * 2) / rangeX,
+    (SVG_SIZE - PADDING * 2) / rangeY,
+  );
+
+  const offX = (SVG_SIZE - rangeX * scale) / 2;
+  const offY = (SVG_SIZE - rangeY * scale) / 2;
+
+  return [
+    offX + (rx - bounds.minX) * scale,
+    SVG_SIZE - offY - (ry - bounds.minY) * scale,
+  ];
+}
 
 export default function TrackMapWidget({ gpsPositions, trackHistory, drivers }: Props) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-
   const driverMap = useMemo(() => {
     const m = new Map<number, ProcessedDriver>();
     drivers.forEach(d => m.set(d.driver_number, d));
     return m;
   }, [drivers]);
 
-  // Compute bounding box from track history + current positions
+  // Build bounds from track history (rotated)
   const bounds = useMemo(() => {
-    const all = [...trackHistory, ...gpsPositions.map(p => ({ x: p.x ?? 0, y: p.y ?? 0 }))];
-    if (all.length === 0) return null;
-    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-    for (const p of all) {
-      if (p.x < minX) minX = p.x;
-      if (p.x > maxX) maxX = p.x;
-      if (p.y < minY) minY = p.y;
-      if (p.y > maxY) maxY = p.y;
-    }
-    return { minX, maxX, minY, maxY };
-  }, [trackHistory, gpsPositions]);
+    if (trackHistory.length === 0) return null;
+    const cx = trackHistory.reduce((s, p) => s + p.x, 0) / trackHistory.length;
+    const cy = trackHistory.reduce((s, p) => s + p.y, 0) / trackHistory.length;
+    const rotated = trackHistory.map(p => {
+      const [rx, ry] = rotate90(p.x, p.y, cx, cy);
+      return { x: rx, y: ry };
+    });
+    return computeBounds(rotated);
+  }, [trackHistory]);
 
-  const toCanvas = (x: number, y: number): [number, number] => {
-    if (!bounds) return [CANVAS_SIZE / 2, CANVAS_SIZE / 2];
-    const rangeX = bounds.maxX - bounds.minX || 1;
-    const rangeY = bounds.maxY - bounds.minY || 1;
-    const scale  = Math.min(
-      (CANVAS_SIZE - PADDING * 2) / rangeX,
-      (CANVAS_SIZE - PADDING * 2) / rangeY,
-    );
-    const cx = PADDING + (x - bounds.minX) * scale;
-    // F1 Y axis is inverted vs canvas
-    const cy = CANVAS_SIZE - PADDING - (y - bounds.minY) * scale;
-    return [cx, cy];
-  };
+  // Track path
+  const trackPath = useMemo(() => {
+    if (!bounds || trackHistory.length < 5) return '';
+    const cx = trackHistory.reduce((s, p) => s + p.x, 0) / trackHistory.length;
+    const cy = trackHistory.reduce((s, p) => s + p.y, 0) / trackHistory.length;
+    return trackHistory.map((p, i) => {
+      const [rx, ry] = rotate90(p.x, p.y, cx, cy);
+      const [sx, sy] = normalize(rx, ry, bounds, false);
+      return `${i === 0 ? 'M' : 'L'}${sx.toFixed(1)},${sy.toFixed(1)}`;
+    }).join(' ');
+  }, [trackHistory, bounds]);
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
-
-    // ── Track outline ───────────────────────────────────────────────────────
-    if (trackHistory.length > 2) {
-      ctx.beginPath();
-      ctx.strokeStyle = 'rgba(255,255,255,0.15)';
-      ctx.lineWidth   = 3;
-      ctx.lineCap     = 'round';
-      ctx.lineJoin    = 'round';
-      const [sx, sy] = toCanvas(trackHistory[0].x, trackHistory[0].y);
-      ctx.moveTo(sx, sy);
-      for (let i = 1; i < trackHistory.length; i++) {
-        const [px, py] = toCanvas(trackHistory[i].x, trackHistory[i].y);
-        ctx.lineTo(px, py);
-      }
-      ctx.stroke();
-    }
-
-    // ── Driver dots ─────────────────────────────────────────────────────────
-    for (const pos of gpsPositions) {
-      if (pos.x == null || pos.y == null) continue;
-      const driver = driverMap.get(pos.driver_number);
-      const color  = driver ? `#${driver.team_colour}` : '#888888';
-      const acronym = driver?.name_acronym ?? String(pos.driver_number);
-      const [cx, cy] = toCanvas(pos.x, pos.y);
-
-      // Shadow
-      ctx.shadowColor = color;
-      ctx.shadowBlur  = 6;
-
-      // Dot
-      ctx.beginPath();
-      ctx.arc(cx, cy, DOT_RADIUS, 0, Math.PI * 2);
-      ctx.fillStyle = color;
-      ctx.fill();
-
-      ctx.shadowBlur = 0;
-
-      // Acronym label
-      ctx.font         = 'bold 8px monospace';
-      ctx.fillStyle    = '#ffffff';
-      ctx.textAlign    = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(acronym, cx, cy);
-    }
-  }, [gpsPositions, trackHistory, driverMap, bounds]);
+  // Driver positions normalized
+  const driverDots = useMemo(() => {
+    if (!bounds || gpsPositions.length === 0) return [];
+    const cx = trackHistory.reduce((s, p) => s + p.x, 0) / (trackHistory.length || 1);
+    const cy = trackHistory.reduce((s, p) => s + p.y, 0) / (trackHistory.length || 1);
+    return gpsPositions
+      .filter(p => p.x != null && p.y != null)
+      .map(p => {
+        const [rx, ry] = rotate90(p.x!, p.y!, cx, cy);
+        const [sx, sy] = normalize(rx, ry, bounds, false);
+        const driver    = driverMap.get(p.driver_number);
+        const color     = driver ? `#${driver.team_colour}` : '#888888';
+        const acronym   = driver?.name_acronym ?? String(p.driver_number);
+        const inPit     = p.status === 'InPit';
+        const retired   = p.status === 'Stopped';
+        return { sx, sy, color, acronym, inPit, retired, driver_number: p.driver_number };
+      });
+  }, [gpsPositions, trackHistory, bounds, driverMap]);
 
   const onTrackCount = gpsPositions.filter(p => p.status === 'OnTrack').length;
+  const hasTrack     = trackHistory.length >= 20;
 
   return (
     <div className="bg-gray-900 border border-gray-700 rounded-xl p-4">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-          <span className="text-base">🗺️</span> TRACK MAP
+          <span>🗺️</span> TRACK MAP
         </h3>
         {onTrackCount > 0 && (
           <span className="text-xs text-gray-400">{onTrackCount} on track</span>
         )}
       </div>
 
-      {trackHistory.length < 10 ? (
+      {!hasTrack ? (
         <div className="flex flex-col items-center justify-center h-64 text-gray-500 text-sm gap-2">
           <span className="text-2xl">🏎️</span>
           <span>Building track map…</span>
-          <span className="text-xs text-gray-600">Needs ~1 lap of position data</span>
+          <span className="text-xs text-gray-600">{trackHistory.length} / ~200 points</span>
         </div>
       ) : (
-        <canvas
-          ref={canvasRef}
-          width={CANVAS_SIZE}
-          height={CANVAS_SIZE}
-          className="w-full"
-          style={{ maxWidth: CANVAS_SIZE, display: 'block', margin: '0 auto' }}
-        />
+        <svg
+          viewBox={`0 0 ${SVG_SIZE} ${SVG_SIZE}`}
+          className="w-full h-full"
+          style={{ maxHeight: SVG_SIZE }}
+        >
+          {/* Track outline */}
+          {trackPath && (
+            <path
+              d={trackPath}
+              fill="none"
+              stroke="rgba(255,255,255,0.18)"
+              strokeWidth="4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          )}
+
+          {/* Driver dots */}
+          {driverDots.map(({ sx, sy, color, acronym, inPit, retired }) => (
+            <g
+              key={acronym}
+              style={{ transition: 'transform 0.8s ease-out' }}
+              transform={`translate(${sx.toFixed(1)}, ${sy.toFixed(1)})`}
+              opacity={retired ? 0.3 : inPit ? 0.6 : 1}
+            >
+              {/* Glow */}
+              {!retired && (
+                <circle r={DOT_RADIUS + 3} fill={color} opacity={0.2} />
+              )}
+              {/* Dot */}
+              <circle
+                r={DOT_RADIUS}
+                fill={inPit ? '#333' : color}
+                stroke={color}
+                strokeWidth={inPit ? 2 : 0}
+              />
+              {/* Acronym */}
+              <text
+                textAnchor="middle"
+                dominantBaseline="middle"
+                fontSize="6"
+                fontWeight="bold"
+                fontFamily="monospace"
+                fill="white"
+              >
+                {acronym}
+              </text>
+            </g>
+          ))}
+        </svg>
+      )}
+
+      {/* Legend */}
+      {hasTrack && driverDots.some(d => d.inPit) && (
+        <div className="flex gap-4 mt-2 text-xs text-gray-500">
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full bg-gray-600 border border-gray-400 inline-block" />
+            In Pit
+          </span>
+        </div>
       )}
     </div>
   );

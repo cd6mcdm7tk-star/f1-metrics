@@ -167,7 +167,7 @@ async def livetiming_ws_relay(websocket: WebSocket):
     except WebSocketDisconnect:
         logger.info("🔌 Client disconnected from live timing relay")
     except Exception as e:
-        logger.error(f"❌ Live timing relay error: {e}")
+        logger.error(f"❌ Live timing relay error: {type(e).__name__}: {e}")
         try:
             await websocket.send_text(json.dumps({"error": str(e)}))
         except Exception:
