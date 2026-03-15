@@ -141,6 +141,9 @@ def get_sessions_fastf1(year: int) -> list:
                 continue
             if pd.isna(sdate):
                 continue
+            # FastF1 dates are UTC but timezone-naive — make them aware
+            if hasattr(sdate, "tzinfo") and sdate.tzinfo is None:
+                sdate = sdate.replace(tzinfo=timezone.utc)
             sessions.append({
                 "meeting_key":  int(row["RoundNumber"]),
                 "session_name": str(sname),
