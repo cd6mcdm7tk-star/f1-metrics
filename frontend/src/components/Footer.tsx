@@ -3,10 +3,32 @@ import Modal from './Modal';
 import TermsContent from './TermsContent';
 import PrivacyContent from './PrivacyContent';
 import DonkeyLogo from './DonkeyLogo';
+import { Download, Smartphone } from 'lucide-react';
+
+const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
+const isInStandaloneMode = () => ('standalone' in navigator) && (navigator as any).standalone;
 
 const Footer: React.FC = () => {
   const [termsOpen, setTermsOpen] = useState(false);
   const [privacyOpen, setPrivacyOpen] = useState(false);
+  const [installPrompt, setInstallPrompt] = useState<any>(null);
+  const [showIOSTooltip, setShowIOSTooltip] = useState(false);
+  const [installed, setInstalled] = useState(false);
+
+  useEffect(() => {
+    if (isInStandaloneMode()) { setInstalled(true); return; }
+    const handler = (e: Event) => { e.preventDefault(); setInstallPrompt(e); };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const handleAndroidInstall = async () => {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice;
+    if (outcome === 'accepted') setInstalled(true);
+    setInstallPrompt(null);
+  };
 
   return (
     <>
@@ -151,6 +173,49 @@ const Footer: React.FC = () => {
             </div>
 
           </div>
+
+          {/* PWA Install */}
+          {!installed && (isIOS() || installPrompt) && (
+            <div className="mb-8 p-4 rounded-xl border border-metrik-turquoise/20 bg-metrik-turquoise/5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+              <div className="flex items-center gap-3">
+                <Smartphone className="text-metrik-turquoise w-6 h-6 shrink-0" />
+                <div>
+                  <p className="text-white font-rajdhani font-bold text-sm">Install Metrik Delta</p>
+                  <p className="text-metrik-silver font-rajdhani text-xs">Access F1 data instantly from your home screen</p>
+                </div>
+              </div>
+              <div className="flex gap-3 ml-0 sm:ml-auto">
+                {installPrompt && (
+                  <button
+                    onClick={handleAndroidInstall}
+                    className="flex items-center gap-2 px-4 py-2 bg-metrik-turquoise text-black font-rajdhani font-bold text-sm rounded-lg hover:bg-metrik-turquoise/90 transition-all"
+                  >
+                    <Download size={14} />
+                    Android
+                  </button>
+                )}
+                {isIOS() && (
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowIOSTooltip(!showIOSTooltip)}
+                      className="flex items-center gap-2 px-4 py-2 border border-metrik-turquoise/40 text-metrik-turquoise font-rajdhani font-bold text-sm rounded-lg hover:bg-metrik-turquoise/10 transition-all"
+                    >
+                      <Download size={14} />
+                      iPhone / iPad
+                    </button>
+                    {showIOSTooltip && (
+                      <div className="absolute bottom-12 right-0 w-64 p-3 bg-metrik-card border border-metrik-turquoise/30 rounded-xl shadow-lg text-xs text-metrik-silver font-rajdhani z-50">
+                        <p className="font-bold text-white mb-1">How to install on iOS:</p>
+                        <p>1. Tap the <span className="text-metrik-turquoise font-bold">Share</span> button (↑) in Safari</p>
+                        <p>2. Tap <span className="text-metrik-turquoise font-bold">"Add to Home Screen"</span></p>
+                        <p>3. Tap <span className="text-metrik-turquoise font-bold">Add</span> — done!</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Bottom Bar */}
           <div className="pt-8 border-t border-metrik-turquoise/20">
