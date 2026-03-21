@@ -204,7 +204,7 @@ const Footer: React.FC = () => {
                       iPhone / iPad
                     </button>
                     {showIOSTooltip && (
-                      <div className="absolute bottom-12 right-0 w-64 p-3 bg-metrik-card border border-metrik-turquoise/30 rounded-xl shadow-lg text-xs text-metrik-silver font-rajdhani z-50">
+                      <div className="absolute bottom-12 left-1/2 -translate-x-1/2 w-64 p-3 bg-metrik-card border border-metrik-turquoise/30 rounded-xl shadow-lg text-xs text-metrik-silver font-rajdhani z-50">
                         <p className="font-bold text-white mb-1">How to install on iOS:</p>
                         <p>1. Tap the <span className="text-metrik-turquoise font-bold">Share</span> button (↑) in Safari</p>
                         <p>2. Tap <span className="text-metrik-turquoise font-bold">"Add to Home Screen"</span></p>
