@@ -10,7 +10,7 @@ import { useLiveTiming } from '../hooks/useLiveTiming';
 import CountdownShowcase from '../components/CountdownShowcase';
 import { useSubscription } from '../hooks/useSubscription';
 import UpgradeModal from '../components/UpgradeModal';
-import { Lock, Radio, Cloud, Activity } from 'lucide-react';
+import { Lock, Radio, Cloud, Activity, Timer, Gauge, Flag, Zap } from 'lucide-react';
 import TrackMapWidget from '../components/livetiming/TrackMapWidget';
 import TeamRadioWidget from '../components/livetiming/TeamRadioWidget';
 
@@ -170,14 +170,22 @@ export default function LiveTimingPage() {
             <div className="p-5 bg-metrik-turquoise/10 rounded-full border-2 border-metrik-turquoise/30 inline-flex mb-5">
               <Lock className="text-metrik-turquoise" size={36} />
             </div>
-            <h2 className="text-2xl font-rajdhani font-black text-white mb-3">🏎️ Live Session In Progress</h2>
+            <h2 className="text-2xl font-rajdhani font-black text-white mb-3 flex items-center justify-center gap-2">
+              <Zap className="text-metrik-turquoise" size={22} />
+              Live Session In Progress
+            </h2>
             <p className="text-metrik-silver text-sm mb-6">
               Access real-time timing, sectors, car telemetry and race control with METRIK+.
             </p>
             <div className="grid grid-cols-2 gap-3 mb-6 text-xs">
-              {[['📡','Live Timing'],['⏱️','Sector Times'],['🏎️','Car Telemetry'],['🚦','Race Control']].map(([icon,label])=>(
+              {([
+                { Icon: Radio, label: 'Live Timing' },
+                { Icon: Timer, label: 'Sector Times' },
+                { Icon: Gauge, label: 'Car Telemetry' },
+                { Icon: Flag,  label: 'Race Control' },
+              ]).map(({ Icon, label }) => (
                 <div key={label} className="bg-metrik-black/50 border border-metrik-turquoise/20 rounded-lg p-3">
-                  <div className="text-2xl mb-1">{icon}</div>
+                  <div className="flex justify-center mb-2"><Icon className="text-metrik-turquoise" size={22} /></div>
                   <div className="font-rajdhani font-bold text-metrik-silver">{label}</div>
                 </div>
               ))}

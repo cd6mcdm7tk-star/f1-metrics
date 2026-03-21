@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { supabase } from './lib/supabase';
-import { Home, Activity, Trophy, Map, Radio, Menu, X, Cpu, LogIn, Zap, BarChart3, User, CreditCard, LogOut, ChevronDown } from 'lucide-react';
+import { Home, Activity, Trophy, Map, Radio, Menu, X, Cpu, LogIn, Zap, BarChart3, User, CreditCard, LogOut, ChevronDown, Heart } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useState, useRef, useEffect, lazy, Suspense } from 'react';
 import { useToast } from './hooks/useToast';
@@ -232,6 +232,16 @@ function Navigation() {
                 )}
               </div>
             </div>
+
+            <a
+              href="https://buymeacoffee.com/metrikdelta"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-2 rounded-lg text-red-400 hover:text-red-300 hover:bg-red-400/10 transition-all"
+              title="Support Metrik Delta"
+            >
+              <Heart size={20} fill="currentColor" />
+            </a>
 
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
