@@ -26,8 +26,8 @@ export default defineConfig({
       workbox: {
         // Ne cacher que HTML, CSS, images, fonts — PAS les JS chunks
         globPatterns: ['**/*.{html,css,ico,png,svg,woff2}'],
-        skipWaiting: true,
-        clientsClaim: true,
+        skipWaiting: false,
+        clientsClaim: false,
       },
     }),
   ],
