@@ -656,12 +656,12 @@ export default function SessionView({
                       <div className="text-[10px] sm:text-xs text-metrik-silver mb-0.5 sm:mb-1">Lap {lap.lapNumber}</div>
                       <div className="flex items-center justify-center gap-1 sm:gap-1.5">
                         <span className="text-[11px] sm:text-sm">{formatLapTime(lap.lapTime1)}</span>
-                        {hasTelemetry && lap.compound1 && (
+                        {hasTelemetry && lap.compound1 && lap.compound1 !== 'None' && (
                           <span className="text-xs sm:text-sm font-black" style={{ color: getTyreColor(lap.compound1) }}>
                             {lap.compound1.charAt(0).toUpperCase()}
                           </span>
                         )}
-                        {hasTelemetry && !lap.compound1 && (
+                        {hasTelemetry && (!lap.compound1 || lap.compound1 === 'None') && (
                           <span className="text-metrik-turquoise text-xs sm:text-sm">⊕</span>
                         )}
                       </div>
@@ -708,12 +708,12 @@ export default function SessionView({
                       <div className="text-[10px] sm:text-xs text-metrik-silver mb-0.5 sm:mb-1">Lap {lap.lapNumber}</div>
                       <div className="flex items-center justify-center gap-1 sm:gap-1.5">
                         <span className="text-[11px] sm:text-sm">{formatLapTime(lap.lapTime2)}</span>
-                        {hasTelemetry && lap.compound2 && (
+                        {hasTelemetry && lap.compound2 && lap.compound2 !== 'None' && (
                           <span className="text-xs sm:text-sm font-black" style={{ color: getTyreColor(lap.compound2) }}>
                             {lap.compound2.charAt(0).toUpperCase()}
                           </span>
                         )}
-                        {hasTelemetry && !lap.compound2 && (
+                        {hasTelemetry && (!lap.compound2 || lap.compound2 === 'None') && (
                           <span className="text-metrik-turquoise text-xs sm:text-sm">⊕</span>
                         )}
                       </div>
