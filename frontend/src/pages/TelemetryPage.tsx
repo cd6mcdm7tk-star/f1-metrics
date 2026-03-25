@@ -453,13 +453,6 @@ export default function TelemetryPage() {
               onClick={() => {
                 if (activeTab === 'telemetry') {
                   setActiveTab('session');
-                } else if (selection1 || selection2) {
-                  setSelection1(null);
-                  setSelection2(null);
-                  setTelemetryData(null);
-                } else if (drivers.length > 0) {
-                  setDrivers([]);
-                  setTelemetryData(null);
                 } else {
                   navigate('/');
                 }

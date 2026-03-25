@@ -66,7 +66,7 @@ interface LapData {
 
 // Fonctions pures définies hors composant — références stables, pas recréées à chaque render
 const getTyreColor = (compound: string | null | undefined): string => {
-  if (!compound) return '#999999';
+  if (!compound || compound === 'None' || compound === 'none') return '#999999';
   const c = compound.toLowerCase();
   if (c.includes('soft') || c === 'c5' || c === 'c6') return '#E74C3C';
   if (c.includes('medium') || c === 'c3' || c === 'c4') return '#F1C40F';
