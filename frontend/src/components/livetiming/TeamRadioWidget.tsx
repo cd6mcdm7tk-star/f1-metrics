@@ -3,7 +3,7 @@
  * Displays recent team radio captures with playback controls.
  */
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Radio } from 'lucide-react';
 import type { TeamRadioCapture, ProcessedDriver } from '../../services/livetiming/types';
 
@@ -37,7 +37,31 @@ function formatTime(utc: string): string {
 
 export default function TeamRadioWidget({ captures, drivers }: Props) {
   const [playingUrl, setPlayingUrl] = useState<string | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioRef   = useRef<HTMLAudioElement | null>(null);
+  const prevCount  = useRef<number>(0);
+
+  // Auto-play new radio messages as they arrive live
+  useEffect(() => {
+    if (captures.length > prevCount.current && prevCount.current > 0) {
+      const newest = captures[captures.length - 1];
+      if (newest?.recording_url) {
+        // Stop any currently playing audio
+        if (audioRef.current) {
+          audioRef.current.pause();
+          audioRef.current = null;
+        }
+        const audio = new Audio(newest.recording_url);
+        audioRef.current = audio;
+        setPlayingUrl(newest.recording_url);
+        audio.play().catch(() => {});
+        audio.onended = () => {
+          setPlayingUrl(null);
+          audioRef.current = null;
+        };
+      }
+    }
+    prevCount.current = captures.length;
+  }, [captures.length]);
 
   // Most recent first — all messages
   const recent = [...captures].reverse();
