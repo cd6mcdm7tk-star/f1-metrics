@@ -68,9 +68,9 @@ interface LapData {
 const getTyreColor = (compound: string | null | undefined): string => {
   if (!compound) return '#999999';
   const c = compound.toLowerCase();
-  if (c.includes('soft')) return '#E74C3C';
-  if (c.includes('medium')) return '#F1C40F';
-  if (c.includes('hard')) return '#FFFFFF';
+  if (c.includes('soft') || c === 'c5' || c === 'c6') return '#E74C3C';
+  if (c.includes('medium') || c === 'c3' || c === 'c4') return '#F1C40F';
+  if (c.includes('hard') || c === 'c1' || c === 'c2') return '#FFFFFF';
   if (c.includes('intermediate') || c.includes('inter')) return '#52E252';
   if (c.includes('wet')) return '#3498DB';
   return '#999999';

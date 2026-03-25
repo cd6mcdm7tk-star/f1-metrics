@@ -450,7 +450,20 @@ export default function TelemetryPage() {
           {/* Header */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 mb-6 sm:mb-8">
             <button
-              onClick={() => navigate('/')}
+              onClick={() => {
+                if (activeTab === 'telemetry') {
+                  setActiveTab('session');
+                } else if (selection1 || selection2) {
+                  setSelection1(null);
+                  setSelection2(null);
+                  setTelemetryData(null);
+                } else if (drivers.length > 0) {
+                  setDrivers([]);
+                  setTelemetryData(null);
+                } else {
+                  navigate('/');
+                }
+              }}
               className="flex items-center gap-2 text-metrik-silver hover:text-metrik-turquoise transition-colors group"
             >
               <ArrowLeft className="group-hover:-translate-x-1 transition-transform" size={18} />
