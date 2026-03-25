@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useRef } from 'react';
+import { Radio } from 'lucide-react';
 import type { TeamRadioCapture, ProcessedDriver } from '../../services/livetiming/types';
 
 interface Props {
@@ -38,10 +39,8 @@ export default function TeamRadioWidget({ captures, drivers }: Props) {
   const [playingUrl, setPlayingUrl] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  if (captures.length === 0) return null;
-
-  // Most recent first, max 5
-  const recent = [...captures].reverse().slice(0, 5);
+  // Most recent first — all messages
+  const recent = [...captures].reverse();
 
   function handlePlay(url: string) {
     if (playingUrl === url) {
@@ -68,13 +67,23 @@ export default function TeamRadioWidget({ captures, drivers }: Props) {
   return (
     <div className="bg-metrik-card border border-metrik-turquoise/30 rounded-lg overflow-hidden">
       {/* Header */}
-      <div className="border-b border-metrik-turquoise/30 px-4 py-3 flex items-center gap-2">
-        <span className="text-base">🎙️</span>
-        <h3 className="font-rajdhani font-black text-white">TEAM RADIO</h3>
+      <div className="border-b border-metrik-turquoise/30 px-4 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Radio size={16} className="text-metrik-turquoise" />
+          <h3 className="font-rajdhani font-black text-white">TEAM RADIO</h3>
+        </div>
+        {recent.length > 0 && (
+          <span className="text-xs text-metrik-silver font-mono">{recent.length} msg</span>
+        )}
       </div>
 
       {/* Messages */}
-      <div className="max-h-72 overflow-y-auto divide-y divide-white/5">
+      {recent.length === 0 ? (
+        <div className="flex items-center justify-center h-16 text-xs text-metrik-silver/50">
+          No radio messages yet…
+        </div>
+      ) : (
+      <div className="max-h-80 overflow-y-auto divide-y divide-white/5">
         {recent.map((capture, idx) => {
           const driver = drivers.find(d => d.driver_number === capture.driver_number);
           const color = teamColor(driver?.team_name);
@@ -148,6 +157,7 @@ export default function TeamRadioWidget({ captures, drivers }: Props) {
           );
         })}
       </div>
+      )}
 
       {/* CSS for waveform animation */}
       <style>{`

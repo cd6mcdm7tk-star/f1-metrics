@@ -38,6 +38,7 @@ const COMPOUND_COLORS: Record<string, string> = {
 };
 function CompoundBadge({ compound }: { compound?: string }) {
   const c = (compound || '').toUpperCase();
+  if (!c || c === 'NONE') return <span className="text-gray-600 text-xs font-mono">—</span>;
   const color = COMPOUND_COLORS[c] || '#888';
   const letter = c[0] || '?';
   return (
@@ -281,26 +282,21 @@ export default function LiveTimingPage() {
           <div className="container mx-auto px-3 sm:px-6 py-4">
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
 
-              {/* LEFT — timing table (2 cols) */}
+              {/* LEFT — timing table (2 cols) — telemetry inline dans les rows */}
               <div className="xl:col-span-2 space-y-4">
                 <TimingTable
                   drivers={drivers} positions={positions} timing={timing}
                   timingStats={timingStats} carData={carData} stints={stints}
                   selectedDriver={selectedDriver} onSelect={setSelectedDriver}
                 />
-
-                {/* Car telemetry for selected driver */}
-                {selectedCarData && selectedDriver_ && (
-                  <CarTelemetryWidget driver={selectedDriver_} carData={selectedCarData} />
-                )}
               </div>
 
               {/* RIGHT — sidebar (1 col) */}
               <div className="space-y-4">
                 <TrackMapWidget gpsPositions={gpsPositions} trackHistory={trackHistory} drivers={drivers} circuitPoints={circuitPoints} circuitName={session?.circuit_short_name} />
-                {weather && <WeatherWidget weather={weather} />}
-                <RaceControlWidget messages={raceControl} />
                 <TeamRadioWidget captures={teamRadio.captures} drivers={drivers} />
+                <RaceControlWidget messages={raceControl} />
+                {weather && <WeatherWidget weather={weather} />}
                 <TyreStrategyWidget drivers={drivers} positions={positions} stints={stints} />
               </div>
             </div>
@@ -407,15 +403,20 @@ function TimingTable({ drivers, positions, timing, timingStats, carData, stints,
               const driverStints = stints.filter((s: any) => s.driver_number === pos.driver_number);
               const currentStint = driverStints[driverStints.length - 1];
               const isSelected = selectedDriver === pos.driver_number;
-              const color = driver ? teamColor(driver.team_name) : '#00D2BE';
-              const drsActive = cd?.drs !== undefined && cd.drs > 10;
+              const color      = driver ? teamColor(driver.team_name) : '#00D2BE';
+              const gear       = cd?.gear ?? 0;
+              const speed      = cd?.speed ?? 0;
+              const throttle   = cd?.throttle ?? 0;
+              const brake      = cd?.brake ?? 0;
+              const rpm        = cd?.rpm ?? 0;
+              const drsOn      = cd?.drs !== undefined && cd.drs > 10;
 
               return (
+                <React.Fragment key={pos.driver_number}>
                 <tr
-                  key={pos.driver_number}
                   onClick={() => onSelect(isSelected ? null : pos.driver_number)}
                   className={`border-b border-metrik-turquoise/10 cursor-pointer transition-colors
-                    ${isSelected ? 'bg-metrik-turquoise/10' : 'hover:bg-white/5'}`}
+                    ${isSelected ? 'bg-metrik-turquoise/5' : 'hover:bg-white/5'}`}
                 >
                   <td className="px-3 py-3">
                     <div className="flex items-center gap-1">
@@ -466,9 +467,56 @@ function TimingTable({ drivers, positions, timing, timingStats, carData, stints,
                     <CompoundBadge compound={currentStint?.compound} />
                   </td>
                   <td className="hidden xl:table-cell px-2 py-3 text-center">
-                    <DRSBadge active={drsActive} />
+                    <DRSBadge active={drsOn} />
                   </td>
                 </tr>
+                {isSelected && cd && (
+                  <tr className="border-b border-metrik-turquoise/20 bg-metrik-turquoise/5">
+                    <td colSpan={11} className="px-4 py-3">
+                      <div className="flex items-center gap-4 flex-wrap">
+                        {/* Team color accent */}
+                        <div className="w-1 h-10 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+                        {/* Speed */}
+                        <div className="text-center min-w-[48px]">
+                          <div className="text-xl font-rajdhani font-black text-white">{speed}</div>
+                          <div className="text-[9px] text-metrik-silver font-bold">km/h</div>
+                        </div>
+                        {/* Gear */}
+                        <div className="text-center min-w-[36px]">
+                          <div className="text-xl font-rajdhani font-black" style={{ color }}>{gear || 'N'}</div>
+                          <div className="text-[9px] text-metrik-silver font-bold">GEAR</div>
+                        </div>
+                        {/* RPM */}
+                        <div className="text-center min-w-[48px]">
+                          <div className="text-xl font-rajdhani font-black text-white">{(rpm / 1000).toFixed(1)}k</div>
+                          <div className="text-[9px] text-metrik-silver font-bold">RPM</div>
+                        </div>
+                        {/* Throttle + Brake bars */}
+                        <div className="flex-1 min-w-[120px] max-w-[180px] space-y-1.5">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[9px] text-metrik-silver w-12">THROTTLE</span>
+                            <div className="flex-1 h-2 bg-gray-800 rounded-full overflow-hidden">
+                              <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${throttle}%` }} />
+                            </div>
+                            <span className="text-[9px] text-green-400 font-mono w-6">{throttle}%</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[9px] text-metrik-silver w-12">BRAKE</span>
+                            <div className="flex-1 h-2 bg-gray-800 rounded-full overflow-hidden">
+                              <div className="h-full bg-red-500 rounded-full transition-all" style={{ width: `${brake}%` }} />
+                            </div>
+                            <span className="text-[9px] text-red-400 font-mono w-6">{brake}%</span>
+                          </div>
+                        </div>
+                        {/* DRS */}
+                        {drsOn && (
+                          <span className="text-[10px] font-black bg-green-500 text-black px-2 py-0.5 rounded">DRS</span>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                </React.Fragment>
               );
             })}
           </tbody>
