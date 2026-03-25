@@ -66,45 +66,64 @@ async def get_circuit_map(circuit_short_name: str = "", session_key: int = 0):
     """
     Fetch track outline coordinates from OpenF1 API.
     Accepts either a session_key directly or a circuit_short_name to look up the latest session.
+    Tries the current year first, then falls back to the previous year.
     Results are cached in memory for the lifetime of the process.
     """
+    import datetime
+    current_year = datetime.datetime.utcnow().year
+
     cache_key = f"{circuit_short_name}:{session_key}"
     if cache_key in _circuit_map_cache:
         return _circuit_map_cache[cache_key]
 
     try:
         async with httpx.AsyncClient(timeout=20.0) as client:
-            # Resolve session_key if not provided
             resolved_key = session_key
+
             if not resolved_key and circuit_short_name:
-                sessions_resp = await client.get(
-                    "https://api.openf1.org/v1/sessions",
-                    params={"circuit_short_name": circuit_short_name, "year": 2026},
-                )
-                sessions_resp.raise_for_status()
-                sessions = sessions_resp.json()
-                if not sessions:
-                    raise HTTPException(status_code=404, detail="No sessions found for this circuit")
-                # Take the most recent session
-                resolved_key = sessions[-1].get("session_key")
+                # Try current year, then previous year as fallback
+                for year in [current_year, current_year - 1]:
+                    try:
+                        sessions_resp = await client.get(
+                            "https://api.openf1.org/v1/sessions",
+                            params={"circuit_short_name": circuit_short_name, "year": year},
+                        )
+                        sessions_resp.raise_for_status()
+                        sessions = sessions_resp.json()
+                        if sessions:
+                            resolved_key = sessions[-1].get("session_key")
+                            logger.info(f"✅ Found circuit '{circuit_short_name}' in year {year}, session_key={resolved_key}")
+                            break
+                    except Exception as e:
+                        logger.warning(f"⚠️ Could not fetch sessions for year {year}: {e}")
+                        continue
 
             if not resolved_key:
-                raise HTTPException(status_code=404, detail="No session_key available")
+                raise HTTPException(status_code=404, detail=f"No session found for circuit '{circuit_short_name}'")
 
-            # Fetch location data for driver_number=1
-            loc_resp = await client.get(
-                "https://api.openf1.org/v1/location",
-                params={"session_key": resolved_key, "driver_number": 1},
-            )
-            loc_resp.raise_for_status()
-            points_raw = loc_resp.json()
+            # Fetch location data — try driver 1, fallback to driver 44, then first available
+            points_raw = []
+            for driver_num in [1, 44, 16, 4, 63]:
+                try:
+                    loc_resp = await client.get(
+                        "https://api.openf1.org/v1/location",
+                        params={"session_key": resolved_key, "driver_number": driver_num},
+                    )
+                    loc_resp.raise_for_status()
+                    data = loc_resp.json()
+                    if data:
+                        points_raw = data
+                        logger.info(f"✅ Got {len(data)} location points for driver {driver_num}")
+                        break
+                except Exception:
+                    continue
 
         if not points_raw:
-            raise HTTPException(status_code=404, detail="No location data for this session")
+            raise HTTPException(status_code=404, detail="No location data found for this circuit")
 
-        # Downsample to ~400 points
+        # Downsample to ~400 points for a clean outline
         total = len(points_raw)
-        step = max(1, total // 400)
+        step  = max(1, total // 400)
         points = [{"x": p["x"], "y": p["y"]} for p in points_raw[::step]]
 
         result = {"points": points, "session_key": resolved_key}

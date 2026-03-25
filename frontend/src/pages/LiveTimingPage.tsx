@@ -10,9 +10,10 @@ import { useLiveTiming } from '../hooks/useLiveTiming';
 import CountdownShowcase from '../components/CountdownShowcase';
 import { useSubscription } from '../hooks/useSubscription';
 import UpgradeModal from '../components/UpgradeModal';
-import { Lock, Radio, Cloud, Activity, Timer, Gauge, Flag, Zap } from 'lucide-react';
+import { Lock, Radio, Cloud, Activity, Timer, Gauge, Flag, Zap, Thermometer, CloudRain } from 'lucide-react';
 import TrackMapWidget from '../components/livetiming/TrackMapWidget';
 import TeamRadioWidget from '../components/livetiming/TeamRadioWidget';
+import { getEmbeddedCircuit } from '../services/livetiming/circuitCoords';
 
 // ─── Team colours ────────────────────────────────────────────────────────────
 const TEAM_COLORS: Record<string, string> = {
@@ -111,10 +112,16 @@ export default function LiveTimingPage() {
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [circuitPoints, setCircuitPoints] = useState<{ x: number; y: number }[] | undefined>(undefined);
 
-  // Fetch static circuit map from backend when session changes
+  // Hybrid circuit map: use pre-embedded data instantly, then let backend override
   useEffect(() => {
     const shortName = session?.circuit_short_name;
     if (!shortName) return;
+
+    // 1. Load embedded coordinates immediately (zero latency)
+    const embedded = getEmbeddedCircuit(shortName);
+    if (embedded) setCircuitPoints(embedded);
+
+    // 2. Fetch from backend in background — overrides if it returns fresher data
     let cancelled = false;
     fetch(`/api/livetiming/circuit-map?circuit_short_name=${encodeURIComponent(shortName)}`)
       .then(res => res.ok ? res.json() : null)
@@ -123,7 +130,7 @@ export default function LiveTimingPage() {
           setCircuitPoints(data.points);
         }
       })
-      .catch(() => { /* ignore errors, fall back to trackHistory */ });
+      .catch(() => { /* keep embedded data on error */ });
     return () => { cancelled = true; };
   }, [session?.circuit_short_name]);
 
@@ -248,7 +255,7 @@ export default function LiveTimingPage() {
             )}
             {mobileTab === 'Map' && (
               <div className="space-y-4">
-                <TrackMapWidget gpsPositions={gpsPositions} trackHistory={trackHistory} drivers={drivers} circuitPoints={circuitPoints} />
+                <TrackMapWidget gpsPositions={gpsPositions} trackHistory={trackHistory} drivers={drivers} circuitPoints={circuitPoints} circuitName={session?.circuit_short_name} />
                 {selectedCarData && selectedDriver_ && (
                   <CarTelemetryWidget driver={selectedDriver_} carData={selectedCarData} />
                 )}
@@ -290,7 +297,7 @@ export default function LiveTimingPage() {
 
               {/* RIGHT — sidebar (1 col) */}
               <div className="space-y-4">
-                <TrackMapWidget gpsPositions={gpsPositions} trackHistory={trackHistory} drivers={drivers} circuitPoints={circuitPoints} />
+                <TrackMapWidget gpsPositions={gpsPositions} trackHistory={trackHistory} drivers={drivers} circuitPoints={circuitPoints} circuitName={session?.circuit_short_name} />
                 {weather && <WeatherWidget weather={weather} />}
                 <RaceControlWidget messages={raceControl} />
                 <TeamRadioWidget captures={teamRadio.captures} drivers={drivers} />
@@ -338,9 +345,19 @@ function SessionHeader({ session, connected, weather }: any) {
           </div>
           {weather && (
             <div className="flex items-center gap-4 text-xs text-metrik-silver">
-              <span>🌡️ Air <b className="text-white">{weather.air_temperature}°C</b></span>
-              <span>🏁 Track <b className="text-white">{weather.track_temperature}°C</b></span>
-              {weather.rainfall ? <span>🌧️ Rain</span> : null}
+              <span className="flex items-center gap-1">
+                <Thermometer size={12} className="text-orange-400" />
+                Air <b className="text-white ml-1">{weather.air_temperature}°C</b>
+              </span>
+              <span className="flex items-center gap-1">
+                <Thermometer size={12} className="text-red-400" />
+                Track <b className="text-white ml-1">{weather.track_temperature}°C</b>
+              </span>
+              {weather.rainfall ? (
+                <span className="flex items-center gap-1 text-blue-400">
+                  <CloudRain size={12} /> Rain
+                </span>
+              ) : null}
             </div>
           )}
         </div>
@@ -533,7 +550,7 @@ function WeatherWidget({ weather }: { weather: any }) {
       <div className="flex items-center gap-2 mb-3">
         <Cloud size={16} className="text-metrik-turquoise" />
         <h3 className="font-rajdhani font-black text-white">WEATHER</h3>
-        {weather.rainfall ? <span className="ml-auto text-xs text-blue-400">🌧️ Rain</span> : null}
+        {weather.rainfall ? <span className="ml-auto text-xs text-blue-400 flex items-center gap-1"><CloudRain size={12} /> Rain</span> : null}
       </div>
       <div className="grid grid-cols-2 gap-3 text-sm">
         <div><p className="text-metrik-silver text-xs mb-0.5">Air Temp</p>
