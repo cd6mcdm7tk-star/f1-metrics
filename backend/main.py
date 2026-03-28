@@ -377,10 +377,16 @@ OPENF1_SESSION_TYPE_MAP = {
 }
 
 
+OPENF1_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Accept": "application/json",
+    "Referer": "https://openf1.org/",
+}
+
 async def _openf1_request(path: str, params: dict) -> list:
     """GET OpenF1 avec retry exponentiel sur 429."""
     delays = [1, 3, 7]
-    async with httpx.AsyncClient(timeout=20.0) as client:
+    async with httpx.AsyncClient(timeout=20.0, headers=OPENF1_HEADERS) as client:
         for attempt in range(len(delays) + 1):
             if attempt > 0:
                 await asyncio.sleep(delays[attempt - 1])
