@@ -527,7 +527,7 @@ async def _openf1_fetch_tel_df(
         return pd.DataFrame()
 
     df_car = pd.DataFrame(car_raw)
-    df_car["date"] = pd.to_datetime(df_car["date"], utc=True)
+    df_car["date"] = pd.to_datetime(df_car["date"], utc=True, format='ISO8601')
     df_car = df_car[(df_car["date"] >= lap_start_dt) & (df_car["date"] <= lap_end_dt)]
     df_car = df_car.sort_values("date").reset_index(drop=True)
 
@@ -536,7 +536,7 @@ async def _openf1_fetch_tel_df(
 
     if loc_raw:
         df_loc = pd.DataFrame(loc_raw)
-        df_loc["date"] = pd.to_datetime(df_loc["date"], utc=True)
+        df_loc["date"] = pd.to_datetime(df_loc["date"], utc=True, format='ISO8601')
         df_loc = df_loc[(df_loc["date"] >= lap_start_dt) & (df_loc["date"] <= lap_end_dt)]
         df_loc = df_loc.sort_values("date").reset_index(drop=True)
         df = pd.merge_asof(df_car, df_loc[["date", "x", "y"]], on="date", direction="nearest")
