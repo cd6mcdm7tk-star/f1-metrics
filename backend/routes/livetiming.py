@@ -202,6 +202,7 @@ async def livetiming_ws_relay(websocket: WebSocket):
             additional_headers=F1_HEADERS,
             ping_interval=None,
             open_timeout=30,
+            compression=None,
         ) as f1_ws:
             logger.info("✅ Connected to F1 SignalR WebSocket")
 

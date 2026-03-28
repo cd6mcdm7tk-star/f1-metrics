@@ -82,13 +82,11 @@ export class WebSocketManager {
     const out: Record<string, any> = {};
     for (const [key, value] of Object.entries(obj)) {
       if (key.endsWith('.z') && typeof value === 'string') {
-        try {
-          out[key.slice(0, -2)] = JSON.parse(
-            pako.inflate(Uint8Array.from(atob(value), c => c.charCodeAt(0)), { to: 'string' })
-          );
-        } catch {
-          out[key] = value;
+        const decompressed = WebSocketManager.decompress(value);
+        if (decompressed !== null) {
+          out[key.slice(0, -2)] = decompressed;
         }
+        // If decompression fails, skip the key entirely (don't pass corrupt data)
       } else {
         out[key] = value;
       }
@@ -96,12 +94,12 @@ export class WebSocketManager {
     return out;
   }
 
-  /** Decompress a single .z string (M feed). */
+  /** Decompress a single .z string (M feed).
+   *  F1 uses raw deflate (no zlib header) — must use inflateRaw, not inflate. */
   static decompress(value: string): any {
     try {
-      return JSON.parse(
-        pako.inflate(Uint8Array.from(atob(value), c => c.charCodeAt(0)), { to: 'string' })
-      );
+      const bytes = Uint8Array.from(atob(value), c => c.charCodeAt(0));
+      return JSON.parse(pako.inflateRaw(bytes, { to: 'string' }));
     } catch {
       return null;
     }
