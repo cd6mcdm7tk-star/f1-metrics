@@ -414,28 +414,23 @@ async def _openf1_get_session_key(year: int, gp_round: int, session_type: str) -
     if cached:
         return cached["session_key"]
 
-    meetings = await _openf1_request("meetings", {"year": year})
-    race_meetings = sorted(
-        [m for m in meetings if "test" not in m.get("meeting_name", "").lower()],
-        key=lambda m: m["date_start"],
-    )
-    if gp_round < 1 or gp_round > len(race_meetings):
-        raise HTTPException(
-            status_code=404,
-            detail=f"Round {gp_round} not found for {year} ({len(race_meetings)} meetings found)"
-        )
-    meeting_key = race_meetings[gp_round - 1]["meeting_key"]
-
-    sessions = await _openf1_request("sessions", {
-        "meeting_key": meeting_key,
+    # Bypass /meetings (blocked on Railway) — query /sessions directly by year + session_name
+    # Each GP has exactly one session of each type; sort by date to determine round order.
+    all_sessions = await _openf1_request("sessions", {
+        "year": year,
         "session_name": session_name,
     })
-    if not sessions:
+    # Filter out pre-season tests (no meeting_name field or name contains "test")
+    race_sessions = sorted(
+        [s for s in all_sessions if "test" not in s.get("meeting_name", "").lower()],
+        key=lambda s: s.get("date_start", ""),
+    )
+    if gp_round < 1 or gp_round > len(race_sessions):
         raise HTTPException(
             status_code=404,
-            detail=f"Session '{session_name}' not found for round {gp_round} ({year})"
+            detail=f"Round {gp_round} not found for {year} {session_name} ({len(race_sessions)} sessions found)"
         )
-    session_key = sessions[0]["session_key"]
+    session_key = race_sessions[gp_round - 1]["session_key"]
     redis_cache.set(redis_key, {"session_key": session_key}, ttl=86400)
     return session_key
 
