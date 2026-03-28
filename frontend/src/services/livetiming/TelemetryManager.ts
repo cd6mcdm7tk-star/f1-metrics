@@ -209,8 +209,12 @@ export class TelemetryManager {
 
   private _processGpsPositions(data: any) {
     // Position.z: {Entries: [{Utc, Cars: {num: {Status, X, Y, Z}}}]}
-    const entries: any[] = Array.isArray(data.Entries) ? data.Entries : [];
-    const last = entries[entries.length - 1];
+    // Entries may be an array OR an object keyed by index
+    const entries: any[] = Array.isArray(data.Entries)
+      ? data.Entries
+      : data.Entries != null ? Object.values(data.Entries) : [];
+    // Also support bare entry (no Entries wrapper): {Cars: {...}}
+    const last = entries.length > 0 ? entries[entries.length - 1] : (data.Cars ? data : null);
     if (!last?.Cars) return;
 
     for (const [num, car] of Object.entries(last.Cars as Record<string, any>)) {
@@ -236,8 +240,11 @@ export class TelemetryManager {
 
   private _processCarData(data: any) {
     // CarData format: {Entries: [{Utc, Cars: {driverNum: {Channels: {0:rpm, 2:speed, 3:gear, 4:throttle, 5:brake, 45:drs}}}}]}
-    const entries: any[] = Array.isArray(data.Entries) ? data.Entries : [];
-    const last = entries[entries.length - 1];
+    // Entries may be an array OR an object keyed by index
+    const entries: any[] = Array.isArray(data.Entries)
+      ? data.Entries
+      : data.Entries != null ? Object.values(data.Entries) : [];
+    const last = entries.length > 0 ? entries[entries.length - 1] : (data.Cars ? data : null);
     if (!last?.Cars) return;
 
     for (const [num, car] of Object.entries(last.Cars as Record<string, any>)) {
@@ -321,9 +328,18 @@ export class TelemetryManager {
   }
 
   private _processTeamRadio(data: any) {
-    const captures: any[] = Array.isArray(data.Captures)
-      ? data.Captures
-      : Object.values(data.Captures || {});
+    // data can be: {Captures: [...]} | {Captures: {"0":{...}}} | bare capture {Utc, Path, RacingNumber}
+    let captures: any[];
+    if (data.Captures != null) {
+      captures = Array.isArray(data.Captures)
+        ? data.Captures
+        : Object.values(data.Captures);
+    } else if (data.Path) {
+      // Bare single capture (incremental M message format)
+      captures = [data];
+    } else {
+      captures = [];
+    }
     for (const cap of captures) {
       const exists = this.teamRadio.captures.find(c => c.utc === cap.Utc);
       if (!exists && cap.Path) {
