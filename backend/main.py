@@ -377,28 +377,51 @@ OPENF1_SESSION_TYPE_MAP = {
 }
 
 
-def _build_openf1_headers() -> dict:
-    import base64, os
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-        "Accept": "application/json, text/plain, */*",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Referer": "https://openf1.org/",
-        "Origin": "https://openf1.org",
-    }
-    email = os.getenv("OPENF1_EMAIL")
-    password = os.getenv("OPENF1_PASSWORD")
-    if email and password:
-        token = base64.b64encode(f"{email}:{password}".encode()).decode()
-        headers["Authorization"] = f"Basic {token}"
-    return headers
+OPENF1_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Accept": "application/json, text/plain, */*",
+}
 
-OPENF1_HEADERS = _build_openf1_headers()
+# JWT token cache — refreshed automatically every ~55 min
+_openf1_jwt: dict = {"token": None, "expires_at": 0}
+
+async def _get_openf1_token() -> str | None:
+    """Fetch or refresh the OpenF1 JWT token using email/password OAuth2."""
+    import time, os
+    email    = os.getenv("OPENF1_EMAIL")
+    password = os.getenv("OPENF1_PASSWORD")
+    if not email or not password:
+        return None
+
+    now = time.time()
+    if _openf1_jwt["token"] and now < _openf1_jwt["expires_at"]:
+        return _openf1_jwt["token"]
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                "https://api.openf1.org/token",
+                data={"username": email, "password": password},
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            _openf1_jwt["token"]      = data["access_token"]
+            _openf1_jwt["expires_at"] = now + int(data.get("expires_in", 3600)) - 300  # refresh 5 min early
+            logger.info("✅ OpenF1 JWT token refreshed")
+            return _openf1_jwt["token"]
+    except Exception as e:
+        logger.warning(f"⚠️  OpenF1 token fetch failed: {e}")
+        return None
 
 async def _openf1_request(path: str, params: dict) -> list:
-    """GET OpenF1 avec retry exponentiel sur 429."""
+    """GET OpenF1 avec JWT Bearer auth + retry exponentiel sur 429."""
     delays = [1, 3, 7]
-    async with httpx.AsyncClient(timeout=20.0, headers=OPENF1_HEADERS) as client:
+    token = await _get_openf1_token()
+    headers = {**OPENF1_HEADERS}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    async with httpx.AsyncClient(timeout=20.0, headers=headers) as client:
         for attempt in range(len(delays) + 1):
             if attempt > 0:
                 await asyncio.sleep(delays[attempt - 1])
