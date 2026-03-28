@@ -379,8 +379,10 @@ OPENF1_SESSION_TYPE_MAP = {
 
 OPENF1_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-    "Accept": "application/json",
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "en-US,en;q=0.9",
     "Referer": "https://openf1.org/",
+    "Origin": "https://openf1.org",
 }
 
 async def _openf1_request(path: str, params: dict) -> list:
