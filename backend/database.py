@@ -71,6 +71,15 @@ class PostgresDB:
     # ------------------------------------------------------------------
     def create_tables(self):
         sql = """
+        CREATE TABLE IF NOT EXISTS session_keys (
+            year         INT          NOT NULL,
+            gp_round     INT          NOT NULL,
+            session_type VARCHAR(10)  NOT NULL,
+            session_key  INT          NOT NULL,
+            created_at   TIMESTAMP    DEFAULT NOW(),
+            PRIMARY KEY (year, gp_round, session_type)
+        );
+
         CREATE TABLE IF NOT EXISTS telemetry (
             id SERIAL PRIMARY KEY,
             year INT NOT NULL,
@@ -109,6 +118,28 @@ class PostgresDB:
         """
         self._execute(sql)
         logger.info("Tables created / verified")
+
+    # ------------------------------------------------------------------
+    # Session keys
+    # ------------------------------------------------------------------
+    def get_session_key(self, year: int, gp_round: int, session_type: str) -> Optional[int]:
+        row = self._execute(
+            "SELECT session_key FROM session_keys WHERE year=%s AND gp_round=%s AND session_type=%s",
+            (year, gp_round, session_type),
+            fetch="one",
+        )
+        return row[0] if row else None
+
+    def save_session_key(self, year: int, gp_round: int, session_type: str, session_key: int):
+        self._execute(
+            """
+            INSERT INTO session_keys (year, gp_round, session_type, session_key)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (year, gp_round, session_type) DO UPDATE
+                SET session_key = EXCLUDED.session_key
+            """,
+            (year, gp_round, session_type, session_key),
+        )
 
     # ------------------------------------------------------------------
     # Telemetry

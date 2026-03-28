@@ -408,19 +408,23 @@ async def _openf1_request(path: str, params: dict) -> list:
 async def _openf1_get_session_key(year: int, gp_round: int, session_type: str) -> int:
     session_name = OPENF1_SESSION_TYPE_MAP.get(session_type.upper(), session_type)
 
-    # Cache Redis : session_key est stable toute la saison, TTL 24h
-    redis_key = f"openf1:session_key:{year}:{gp_round}:{session_type}"
-    cached = redis_cache.get(redis_key)
-    if cached:
-        return cached["session_key"]
+    # 1. PostgreSQL — permanent (session keys never change)
+    if db.available:
+        cached = await asyncio.to_thread(db.get_session_key, year, gp_round, session_type)
+        if cached:
+            return cached
 
-    # Bypass /meetings (blocked on Railway) — query /sessions directly by year + session_name
-    # Each GP has exactly one session of each type; sort by date to determine round order.
+    # 2. Redis — fallback when PostgreSQL unavailable
+    redis_key = f"openf1:session_key:{year}:{gp_round}:{session_type}"
+    cached_redis = redis_cache.get(redis_key)
+    if cached_redis:
+        return cached_redis["session_key"]
+
+    # 3. Fetch from OpenF1 — bypass /meetings (blocked on Railway), use /sessions directly
     all_sessions = await _openf1_request("sessions", {
         "year": year,
         "session_name": session_name,
     })
-    # Filter out pre-season tests (no meeting_name field or name contains "test")
     race_sessions = sorted(
         [s for s in all_sessions if "test" not in s.get("meeting_name", "").lower()],
         key=lambda s: s.get("date_start", ""),
@@ -431,6 +435,10 @@ async def _openf1_get_session_key(year: int, gp_round: int, session_type: str) -
             detail=f"Round {gp_round} not found for {year} {session_name} ({len(race_sessions)} sessions found)"
         )
     session_key = race_sessions[gp_round - 1]["session_key"]
+
+    # Save to both PostgreSQL (permanent) and Redis (TTL fallback)
+    if db.available:
+        await asyncio.to_thread(db.save_session_key, year, gp_round, session_type, session_key)
     redis_cache.set(redis_key, {"session_key": session_key}, ttl=86400)
     return session_key
 
