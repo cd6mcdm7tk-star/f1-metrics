@@ -378,7 +378,7 @@ OPENF1_SESSION_TYPE_MAP = {
 
 
 def _build_openf1_headers() -> dict:
-    import base64
+    import base64, os
     headers = {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
         "Accept": "application/json, text/plain, */*",
