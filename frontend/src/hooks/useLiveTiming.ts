@@ -1,6 +1,6 @@
 /**
  * METRIK DELTA - useLiveTiming Hook
- * Connects to the backend WebSocket relay and exposes live F1 telemetry.
+ * Negotiates via backend proxy, then connects browser directly to F1 SignalR.
  */
 
 import { useState, useEffect, useRef } from 'react';
@@ -21,7 +21,7 @@ export function useLiveTiming() {
     managerRef.current = manager;
 
     try {
-      const url = SignalRClient.getWebSocketUrl();
+      const url = SignalRClient.getNegotiateUrl();
 
       manager.connect(
         url,

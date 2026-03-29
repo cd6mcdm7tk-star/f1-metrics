@@ -217,8 +217,6 @@ export class TelemetryManager {
   }
 
   private _processGpsPositions(data: any) {
-    // DEBUG — remove after identifying 2026 format
-    console.log('[METRIK Position.z]', JSON.stringify(data).slice(0, 400));
     // Position.z: {Entries: [{Utc, Cars: {num: {Status, X, Y, Z}}}]}
     // Entries may be an array OR an object keyed by index
     const entries: any[] = Array.isArray(data.Entries)
@@ -250,8 +248,6 @@ export class TelemetryManager {
   }
 
   private _processCarData(data: any) {
-    // DEBUG — remove after identifying 2026 format
-    console.log('[METRIK CarData.z]', JSON.stringify(data).slice(0, 400));
     // CarData format: {Entries: [{Utc, Cars: {driverNum: {Channels: {0:rpm, 2:speed, 3:gear, 4:throttle, 5:brake, 45:drs}}}}]}
     // Entries may be an array OR an object keyed by index
     const entries: any[] = Array.isArray(data.Entries)
