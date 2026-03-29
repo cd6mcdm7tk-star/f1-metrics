@@ -200,7 +200,10 @@ async def livetiming_ws_relay(websocket: WebSocket):
         async with aiohttp.ClientSession() as aio_session:
             async with aio_session.ws_connect(
                 f1_url,
-                headers={"User-Agent": "BestHTTP"},
+                headers={
+                    "User-Agent": "BestHTTP",
+                    "Accept-Encoding": "gzip, identity",
+                },
                 heartbeat=None,
                 compress=False,
                 max_msg_size=0,
