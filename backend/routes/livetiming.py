@@ -9,7 +9,7 @@ METRIK DELTA - F1 Live Timing Proxy
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
 import httpx
-import websockets
+import aiohttp
 import asyncio
 import json
 import logging
@@ -196,55 +196,61 @@ async def livetiming_ws_relay(websocket: WebSocket):
         })
         f1_url = f"{F1_WS}/connect?{qs}"
 
-        # ── Step 3 : open F1 WebSocket ────────────────────────────────────
-        async with websockets.connect(
-            f1_url,
-            additional_headers=F1_HEADERS,
-            ping_interval=None,
-            open_timeout=30,
-            compression=None,
-        ) as f1_ws:
-            logger.info("✅ Connected to F1 SignalR WebSocket")
+        # ── Step 3 : open F1 WebSocket via aiohttp (tolerates non-standard headers) ──
+        async with aiohttp.ClientSession() as aio_session:
+            async with aio_session.ws_connect(
+                f1_url,
+                headers={"User-Agent": "BestHTTP"},
+                heartbeat=None,
+                compress=False,
+                max_msg_size=0,
+                timeout=aiohttp.ClientTimeout(total=30),
+            ) as f1_ws:
+                logger.info("✅ Connected to F1 SignalR WebSocket (aiohttp)")
 
-            # ── Step 4 : subscribe ────────────────────────────────────────
-            await f1_ws.send(json.dumps({
-                "H": "Streaming",
-                "M": "Subscribe",
-                "A": [F1_TOPICS],
-                "I": 1,
-            }))
-            logger.info(f"✅ Subscribed to {len(F1_TOPICS)} F1 topics")
+                # ── Step 4 : subscribe ────────────────────────────────────────
+                await f1_ws.send_str(json.dumps({
+                    "H": "Streaming",
+                    "M": "Subscribe",
+                    "A": [F1_TOPICS],
+                    "I": 1,
+                }))
+                logger.info(f"✅ Subscribed to {len(F1_TOPICS)} F1 topics")
 
-            # ── Step 5 : relay ────────────────────────────────────────────
-            async def f1_to_client():
-                try:
-                    async for msg in f1_ws:
-                        text = msg.decode("utf-8") if isinstance(msg, bytes) else msg
-                        await websocket.send_text(text)
-                except Exception as e:
-                    logger.debug(f"F1→client relay ended: {e}")
+                # ── Step 5 : relay ────────────────────────────────────────────
+                async def f1_to_client():
+                    try:
+                        async for msg in f1_ws:
+                            if msg.type == aiohttp.WSMsgType.TEXT:
+                                await websocket.send_text(msg.data)
+                            elif msg.type == aiohttp.WSMsgType.BINARY:
+                                await websocket.send_text(msg.data.decode("utf-8"))
+                            elif msg.type in (aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.ERROR):
+                                break
+                    except Exception as e:
+                        logger.debug(f"F1→client relay ended: {e}")
 
-            async def client_to_f1():
-                try:
-                    while True:
-                        data = await websocket.receive_text()
-                        await f1_ws.send(data)
-                except WebSocketDisconnect:
-                    pass
-                except Exception as e:
-                    logger.debug(f"Client→F1 relay ended: {e}")
+                async def client_to_f1():
+                    try:
+                        while True:
+                            data = await websocket.receive_text()
+                            await f1_ws.send_str(data)
+                    except WebSocketDisconnect:
+                        pass
+                    except Exception as e:
+                        logger.debug(f"Client→F1 relay ended: {e}")
 
-            tasks = [
-                asyncio.create_task(f1_to_client()),
-                asyncio.create_task(client_to_f1()),
-            ]
-            _done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
-            for t in pending:
-                t.cancel()
-                try:
-                    await t
-                except asyncio.CancelledError:
-                    pass
+                tasks = [
+                    asyncio.create_task(f1_to_client()),
+                    asyncio.create_task(client_to_f1()),
+                ]
+                _done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+                for t in pending:
+                    t.cancel()
+                    try:
+                        await t
+                    except asyncio.CancelledError:
+                        pass
 
     except WebSocketDisconnect:
         logger.info("🔌 Client disconnected from live timing relay")

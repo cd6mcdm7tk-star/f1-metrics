@@ -100,7 +100,8 @@ export class WebSocketManager {
     try {
       const bytes = Uint8Array.from(atob(value), c => c.charCodeAt(0));
       return JSON.parse(pako.inflateRaw(bytes, { to: 'string' }));
-    } catch {
+    } catch (e) {
+      console.warn('[METRIK] decompress failed:', e instanceof Error ? e.message : e);
       return null;
     }
   }

@@ -101,8 +101,14 @@ export class TelemetryManager {
           }
         } else if (first && typeof first === 'object') {
           // Object: A = [{Topic: data, ...}, timestamp?]
+          // Some topics (e.g. CarData.z) may appear with .z suffix here too
           for (const [topic, data] of Object.entries(first)) {
-            this._dispatch(topic, data);
+            if (topic.endsWith('.z') && typeof data === 'string') {
+              const decompressed = WebSocketManager.decompress(data);
+              if (decompressed) this._dispatch(topic.slice(0, -2), decompressed);
+            } else {
+              this._dispatch(topic, data);
+            }
           }
         }
       }
@@ -119,7 +125,10 @@ export class TelemetryManager {
         this.timingProcessor.processTimingData(data);
         this.positionProcessor.processTimingDataPositions(data);
         break;
-      case 'TimingAppData':     this.driverProcessor.processGridPositions(data); break;
+      case 'TimingAppData':
+        this.driverProcessor.processGridPositions(data);
+        this._processTyreStintsFromAppData(data);
+        break;
       case 'TimingStats':       this._processTimingStats(data); break;
       case 'Position':          this._processGpsPositions(data); break;
       case 'CarData':           this._processCarData(data); break;
@@ -208,6 +217,8 @@ export class TelemetryManager {
   }
 
   private _processGpsPositions(data: any) {
+    // DEBUG — remove after identifying 2026 format
+    console.log('[METRIK Position.z]', JSON.stringify(data).slice(0, 400));
     // Position.z: {Entries: [{Utc, Cars: {num: {Status, X, Y, Z}}}]}
     // Entries may be an array OR an object keyed by index
     const entries: any[] = Array.isArray(data.Entries)
@@ -239,6 +250,8 @@ export class TelemetryManager {
   }
 
   private _processCarData(data: any) {
+    // DEBUG — remove after identifying 2026 format
+    console.log('[METRIK CarData.z]', JSON.stringify(data).slice(0, 400));
     // CarData format: {Entries: [{Utc, Cars: {driverNum: {Channels: {0:rpm, 2:speed, 3:gear, 4:throttle, 5:brake, 45:drs}}}}]}
     // Entries may be an array OR an object keyed by index
     const entries: any[] = Array.isArray(data.Entries)
@@ -300,6 +313,32 @@ export class TelemetryManager {
       });
     }
     // Merge — replace driver stints
+    const existing = this.stints.filter(
+      s => !result.find(r => r.driver_number === s.driver_number)
+    );
+    this.stints = [...existing, ...result];
+  }
+
+  private _processTyreStintsFromAppData(data: any) {
+    if (!data?.Lines) return;
+    const result: ProcessedStint[] = [];
+    for (const [num, line] of Object.entries(data.Lines as Record<string, any>)) {
+      const driverNum = parseInt(num);
+      if (isNaN(driverNum) || !line?.Stints) continue;
+      const stints = Array.isArray(line.Stints) ? line.Stints : Object.values(line.Stints);
+      (stints as any[]).forEach((stint: any, idx: number) => {
+        if (!stint?.Compound) return;
+        result.push({
+          driver_number:     driverNum,
+          stint_number:      idx + 1,
+          compound:          stint.Compound,
+          lap_start:         stint.LapNumber || stint.StartLaps || 0,
+          tyre_age_at_start: stint.TotalLaps || 0,
+          new:               stint.New === 'true' || stint.New === true,
+        });
+      });
+    }
+    if (result.length === 0) return;
     const existing = this.stints.filter(
       s => !result.find(r => r.driver_number === s.driver_number)
     );

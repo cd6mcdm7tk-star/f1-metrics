@@ -32,21 +32,29 @@ function teamColor(teamName?: string): string {
 }
 
 // ─── Compound badge ───────────────────────────────────────────────────────────
-const COMPOUND_COLORS: Record<string, string> = {
-  SOFT: '#E8002D', MEDIUM: '#FFD700', HARD: '#FFFFFF',
-  INTERMEDIATE: '#39B54A', WET: '#0067FF',
+const COMPOUND_RING: Record<string, { color: string; glow: string }> = {
+  SOFT:         { color: '#FF3333', glow: 'rgba(255,51,51,0.25)' },
+  MEDIUM:       { color: '#FFD700', glow: 'rgba(255,215,0,0.25)' },
+  HARD:         { color: '#D8D8D8', glow: 'rgba(216,216,216,0.15)' },
+  INTERMEDIATE: { color: '#39B54A', glow: 'rgba(57,181,74,0.25)' },
+  WET:          { color: '#0080FF', glow: 'rgba(0,128,255,0.25)' },
 };
 function CompoundBadge({ compound }: { compound?: string }) {
   const c = (compound || '').toUpperCase();
-  if (!c || c === 'NONE') return <span className="text-gray-600 text-xs font-mono">—</span>;
-  const color = COMPOUND_COLORS[c] || '#888';
-  const letter = c[0] || '?';
+  if (!c || c === 'NONE' || c === 'UNKNOWN') return <span className="text-gray-600 text-[10px]">—</span>;
+  const cfg = COMPOUND_RING[c];
+  if (!cfg) return <span className="text-gray-400 text-[10px]">{c[0]}</span>;
   return (
     <span
-      className="inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-black"
-      style={{ backgroundColor: color, color: c === 'HARD' || c === 'MEDIUM' ? '#000' : '#fff' }}
+      className="inline-flex items-center justify-center w-[17px] h-[17px] rounded-full text-[9px] font-black tracking-tight"
+      style={{
+        border: `1.5px solid ${cfg.color}`,
+        color: cfg.color,
+        backgroundColor: cfg.glow,
+        boxShadow: `0 0 4px ${cfg.glow}`,
+      }}
     >
-      {letter}
+      {c[0]}
     </span>
   );
 }
@@ -57,6 +65,28 @@ function DRSBadge({ active }: { active: boolean }) {
     <span className={`text-[10px] font-black px-1 rounded ${active ? 'bg-green-500 text-black' : 'text-gray-600'}`}>
       DRS
     </span>
+  );
+}
+
+// ─── Track status banner (SC / VSC / Red Flag) ────────────────────────────────
+function TrackStatusBanner({ status }: { status?: string }) {
+  if (!status || status === '1' || status === '3') return null;
+  const configs: Record<string, { label: string; badge: string; bg: string; text: string }> = {
+    '2': { badge: 'YEL', label: 'YELLOW FLAG',              bg: 'bg-yellow-400', text: 'text-black' },
+    '4': { badge: 'SC',  label: 'SAFETY CAR DEPLOYED',      bg: 'bg-yellow-400', text: 'text-black' },
+    '5': { badge: 'RED', label: 'RED FLAG — RACE SUSPENDED', bg: 'bg-red-600',    text: 'text-white' },
+    '6': { badge: 'VSC', label: 'VIRTUAL SAFETY CAR',       bg: 'bg-yellow-500', text: 'text-black' },
+    '7': { badge: 'VSC', label: 'VSC ENDING',               bg: 'bg-yellow-400', text: 'text-black' },
+  };
+  const cfg = configs[status];
+  if (!cfg) return null;
+  return (
+    <div className={`${cfg.bg} ${cfg.text} flex items-center justify-center gap-3 py-2 px-4 animate-pulse`}>
+      <span className={`text-[10px] font-black px-2 py-0.5 rounded border ${cfg.text === 'text-black' ? 'border-black/30 bg-black/10' : 'border-white/30 bg-white/10'}`}>
+        {cfg.badge}
+      </span>
+      <span className="font-rajdhani font-black text-sm tracking-widest">{cfg.label}</span>
+    </div>
   );
 }
 
@@ -222,6 +252,7 @@ export default function LiveTimingPage() {
       <div className="min-h-screen bg-metrik-black text-white">
         {/* ── Session header ─────────────────────────────────────────────── */}
         <SessionHeader session={session} connected={connected} weather={weather} />
+        <TrackStatusBanner status={session?.track_status} />
 
         {/* ── Mobile tabs (< lg) ─────────────────────────────────────────── */}
         <div className="lg:hidden">
@@ -247,6 +278,7 @@ export default function LiveTimingPage() {
                 <TimingTable
                   drivers={drivers} positions={positions} timing={timing}
                   timingStats={timingStats} carData={carData} stints={stints}
+                  gpsPositions={gpsPositions}
                   selectedDriver={selectedDriver} onSelect={setSelectedDriver}
                 />
                 {selectedCarData && selectedDriver_ && (
@@ -287,6 +319,7 @@ export default function LiveTimingPage() {
                 <TimingTable
                   drivers={drivers} positions={positions} timing={timing}
                   timingStats={timingStats} carData={carData} stints={stints}
+                  gpsPositions={gpsPositions}
                   selectedDriver={selectedDriver} onSelect={setSelectedDriver}
                 />
               </div>
@@ -365,7 +398,7 @@ function SessionHeader({ session, connected, weather }: any) {
 // ============================================================================
 // TIMING TABLE
 // ============================================================================
-function TimingTable({ drivers, positions, timing, timingStats, carData, stints, selectedDriver, onSelect }: any) {
+function TimingTable({ drivers, positions, timing, timingStats, carData, stints, gpsPositions, selectedDriver, onSelect }: any) {
   return (
     <div className="bg-metrik-card border border-metrik-turquoise/30 rounded-lg overflow-hidden">
       <div className="border-b border-metrik-turquoise/30 px-4 py-3 flex items-center gap-2">
@@ -385,14 +418,15 @@ function TimingTable({ drivers, positions, timing, timingStats, carData, stints,
               <th className="hidden lg:table-cell px-2 py-2 text-center">S1</th>
               <th className="hidden lg:table-cell px-2 py-2 text-center">S2</th>
               <th className="hidden lg:table-cell px-2 py-2 text-center">S3</th>
-              <th className="hidden xl:table-cell px-2 py-2 text-center">TYRE</th>
-              <th className="hidden xl:table-cell px-2 py-2 text-center">DRS</th>
+              <th className="hidden md:table-cell px-2 py-2 text-center">SPD</th>
+              <th className="hidden lg:table-cell px-2 py-2 text-center">TYRE</th>
+              <th className="hidden lg:table-cell px-2 py-2 text-center">DRS</th>
             </tr>
           </thead>
           <tbody>
             {positions.length === 0 ? (
               <tr>
-                <td colSpan={11} className="px-4 py-10 text-center text-metrik-silver text-sm">
+                <td colSpan={12} className="px-4 py-10 text-center text-metrik-silver text-sm">
                   Waiting for session data…
                 </td>
               </tr>
@@ -404,6 +438,8 @@ function TimingTable({ drivers, positions, timing, timingStats, carData, stints,
               const currentStint = driverStints[driverStints.length - 1];
               const isSelected = selectedDriver === pos.driver_number;
               const color      = driver ? teamColor(driver.team_name) : '#00D2BE';
+              const gpsPos     = (gpsPositions ?? []).find((g: any) => g.driver_number === pos.driver_number);
+              const isInPit    = gpsPos?.status === 3 || gpsPos?.status === '3';
               const gear       = cd?.gear ?? 0;
               const speed      = cd?.speed ?? 0;
               const throttle   = cd?.throttle ?? 0;
@@ -445,6 +481,9 @@ function TimingTable({ drivers, positions, timing, timingStats, carData, stints,
                       <span className="font-rajdhani font-bold text-white text-base">
                         {driver?.name_acronym || pos.driver_number}
                       </span>
+                      {isInPit && (
+                        <span className="text-[9px] font-black bg-yellow-400 text-black px-1 rounded leading-tight">PIT</span>
+                      )}
                       <span className="hidden sm:inline text-xs text-metrik-silver">{driver?.team_name}</span>
                     </div>
                   </td>
@@ -463,16 +502,26 @@ function TimingTable({ drivers, positions, timing, timingStats, carData, stints,
                   <SectorCell value={t?.sector1} fastest={t?.sector1_fastest} personal={t?.sector1_personal} segments={t?.sector1_segments} />
                   <SectorCell value={t?.sector2} fastest={t?.sector2_fastest} personal={t?.sector2_personal} segments={t?.sector2_segments} />
                   <SectorCell value={t?.sector3} fastest={t?.sector3_fastest} personal={t?.sector3_personal} segments={t?.sector3_segments} />
-                  <td className="hidden xl:table-cell px-2 py-3 text-center">
-                    <CompoundBadge compound={currentStint?.compound} />
+                  <td className="hidden md:table-cell px-2 py-3 text-center text-xs font-mono">
+                    {cd?.speed != null
+                      ? <span className="text-white">{cd.speed}</span>
+                      : <span className="text-gray-600">—</span>}
                   </td>
-                  <td className="hidden xl:table-cell px-2 py-3 text-center">
+                  <td className="hidden lg:table-cell px-2 py-3 text-center">
+                    <div className="flex items-center justify-center gap-1">
+                      <CompoundBadge compound={currentStint?.compound} />
+                      {currentStint?.tyre_age_at_start > 0 && (
+                        <span className="text-[9px] text-metrik-silver font-mono">{currentStint.tyre_age_at_start}</span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="hidden lg:table-cell px-2 py-3 text-center">
                     <DRSBadge active={drsOn} />
                   </td>
                 </tr>
                 {isSelected && cd && (
                   <tr className="border-b border-metrik-turquoise/20 bg-metrik-turquoise/5">
-                    <td colSpan={11} className="px-4 py-3">
+                    <td colSpan={12} className="px-4 py-3">
                       <div className="flex items-center gap-4 flex-wrap">
                         {/* Team color accent */}
                         <div className="w-1 h-10 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
