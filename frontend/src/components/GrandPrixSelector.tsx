@@ -120,7 +120,7 @@ export default function GrandPrixSelector({ year, selectedRound, onSelect }: Gra
               </div>
             </div>
           ) : (
-            <span className="text-metrik-silver font-rajdhani">Sélectionnez un Grand Prix</span>
+            <span className="text-metrik-silver font-rajdhani">Select a Grand Prix</span>
           )}
           <ChevronDown
             size={20}

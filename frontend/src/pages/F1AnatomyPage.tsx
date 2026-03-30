@@ -19,97 +19,97 @@ interface CarPart {
 const carParts: CarPart[] = [
   {
     id: 'front-wing',
-    name: 'Aileron Avant',
-    description: 'Génère 25-30% de l\'appui aérodynamique total. Composé de 5 éléments ajustables permettant d\'optimiser l\'équilibre aérodynamique. Le design influence directement le flux d\'air vers le reste de la voiture.',
-    specs: ['Largeur: 1800mm', 'Matériau: Carbone', 'Poids: ~10kg', 'Downforce: 25-30%', 'Éléments: 5 flaps ajustables', 'Pression max: 5 tonnes'],
+    name: 'Front Wing',
+    description: 'Generates 25-30% of total aerodynamic downforce. Composed of 5 adjustable elements to optimise aerodynamic balance. The design directly influences airflow to the rest of the car.',
+    specs: ['Width: 1800mm', 'Material: Carbon fibre', 'Weight: ~10kg', 'Downforce: 25-30%', 'Elements: 5 adjustable flaps', 'Max load: 5 tonnes'],
     position: [0, 0.3, 2.5],
     color: '#00E5CC'
   },
   {
     id: 'rear-wing',
-    name: 'Aileron Arrière + DRS',
-    description: 'Aileron mobile avec système DRS (Drag Reduction System). S\'ouvre pour réduire la traînée aérodynamique et gagner 10-15 km/h en ligne droite. Contrôlé électroniquement depuis le cockpit.',
-    specs: ['Largeur: 950mm', 'DRS: +10-15 km/h', 'Downforce: 35-40%', 'Angle: Variable', 'Ouverture: 85mm max', 'Activation: <1 seconde'],
+    name: 'Rear Wing + DRS',
+    description: 'Mobile wing with DRS (Drag Reduction System). Opens to reduce aerodynamic drag and gain 10-15 km/h on straights. Electronically controlled from the cockpit.',
+    specs: ['Width: 950mm', 'DRS: +10-15 km/h', 'Downforce: 35-40%', 'Angle: Variable', 'Opening: 85mm max', 'Activation: <1 second'],
     position: [0, 1.2, -2.5],
     color: '#00E5CC'
   },
   {
     id: 'cockpit',
     name: 'Cockpit + Halo',
-    description: 'Protection en titane introduite en 2018. Le Halo résiste à 12 tonnes de force et a déjà sauvé plusieurs vies. Le cockpit intègre tous les contrôles vitaux accessibles au pilote.',
-    specs: ['Halo: 7kg titanium', 'Force: 125kN résistance', 'Obligatoire depuis 2018', 'Épaisseur: 3.5mm', 'Visibilité: 98% maintenue', 'Température cockpit: 50-60°C'],
+    description: 'Titanium protection introduced in 2018. The Halo withstands 12 tonnes of force and has already saved several lives. The cockpit integrates all vital controls accessible to the driver.',
+    specs: ['Halo: 7kg titanium', 'Strength: 125kN resistance', 'Mandatory since 2018', 'Thickness: 3.5mm', 'Visibility: 98% maintained', 'Cockpit temp: 50-60°C'],
     position: [0, 0.8, 0.2],
     color: '#FFD700'
   },
   {
     id: 'wheels',
-    name: 'Roues (x4)',
-    description: 'Pneus Pirelli 18 pouces avec jantes en magnésium. Les équipes peuvent changer les 4 roues en moins de 2 secondes lors d\'un arrêt au stand. La température optimale est cruciale pour la performance.',
-    specs: ['Diamètre: 720mm (18")', 'Largeur avant: 305mm', 'Largeur arrière: 405mm', 'Température optimale: 100-110°C', 'Pression: 19-21 PSI', 'Poids jante: 8.5kg', 'Matériau: Magnésium', 'Pit stop: <2.0 secondes'],
+    name: 'Wheels (x4)',
+    description: '18-inch Pirelli tyres with magnesium rims. Teams can change all 4 wheels in under 2 seconds during a pit stop. Optimal temperature is crucial for performance.',
+    specs: ['Diameter: 720mm (18")', 'Front width: 305mm', 'Rear width: 405mm', 'Optimal temp: 100-110°C', 'Pressure: 19-21 PSI', 'Rim weight: 8.5kg', 'Material: Magnesium', 'Pit stop: <2.0 seconds'],
     position: [0, 0.4, 0],
     color: '#E5E5E5'
   },
   {
     id: 'sidepods',
-    name: 'Pontons',
-    description: 'Éléments aérodynamiques cruciaux qui refroidissent le moteur via 4 radiateurs. Leur design crée également l\'effet Venturi qui génère de l\'appui. Zone d\'innovation majeure entre équipes.',
-    specs: ['Radiateurs: 4x (eau, huile, turbo)', 'Flux d\'air: 150+ kg/s', 'Effet Venturi optimisé', 'Matériau: Carbone sandwich', 'Température gestion: 100-120°C', 'Design: Spécifique par équipe'],
+    name: 'Sidepods',
+    description: 'Crucial aerodynamic elements that cool the engine via 4 radiators. Their design also creates the Venturi effect that generates downforce. Major innovation area between teams.',
+    specs: ['Radiators: 4x (water, oil, turbo)', 'Airflow: 150+ kg/s', 'Venturi effect optimised', 'Material: Carbon sandwich', 'Thermal management: 100-120°C', 'Design: Team-specific'],
     position: [0, 0.6, 0],
     color: '#FF3366'
   },
   {
     id: 'floor',
-    name: 'Fond Plat',
-    description: 'Surface qui génère l\'effet de sol (ground effect). Responsable de 40-45% de l\'appui total grâce au Venturi créé sous la voiture. La hauteur de roulage est critique (5-10mm du sol).',
-    specs: ['Longueur: 3400mm', 'Effet Venturi principal', 'Ground effect moderne', 'Hauteur critique: 5-10mm', 'Downforce: 40-45% du total', 'Matériau: Carbone renforcé', 'Plancher strié (règlement 2022)'],
+    name: 'Floor',
+    description: 'Surface generating the ground effect. Responsible for 40-45% of total downforce via the Venturi created under the car. Ride height is critical (5-10mm from ground).',
+    specs: ['Length: 3400mm', 'Main Venturi effect', 'Modern ground effect', 'Critical height: 5-10mm', 'Downforce: 40-45% of total', 'Material: Reinforced carbon', '2022 regulation floor'],
     position: [0, 0.05, 0],
     color: '#1A1A1A'
   },
   {
     id: 'engine',
-    name: 'Moteur V6 Hybride',
-    description: 'Groupe propulseur hybride combinant un V6 1.6L Turbo avec deux systèmes de récupération d\'énergie (MGU-K et MGU-H). Développe environ 1000 chevaux au total avec une efficacité thermique record de 50%.',
-    specs: ['Cylindrée: 1600cc', 'ICE: ~750ch (moteur thermique)', 'MGU-K: ~160ch (cinétique)', 'MGU-H: ~120ch (thermique)', 'RPM max: 15,000', 'Efficacité: ~50%', 'Consommation: 110kg/course', 'Déploiement ERS: 33s/tour'],
+    name: 'V6 Hybrid Engine',
+    description: 'Hybrid power unit combining a 1.6L Turbo V6 with two energy recovery systems (MGU-K and MGU-H). Develops around 1000 horsepower total with a record 50% thermal efficiency.',
+    specs: ['Displacement: 1600cc', 'ICE: ~750hp', 'MGU-K: ~160hp (kinetic)', 'MGU-H: ~120hp (thermal)', 'Max RPM: 15,000', 'Efficiency: ~50%', 'Fuel consumption: 110kg/race', 'ERS deployment: 33s/lap'],
     position: [0, 0.6, -0.8],
     color: '#FFD700'
   },
   {
     id: 'suspension',
     name: 'Suspension',
-    description: 'Système push-rod/pull-rod ultra-sophistiqué qui maintient la voiture à hauteur optimale. Ajustable en permanence pour s\'adapter au niveau de carburant et à l\'usure des pneus.',
-    specs: ['Type: Push-rod (avant) / Pull-rod (arr)', 'Amortisseurs: Réglables dynamiquement', 'Débattement: ~100mm', 'Fréquence: 2-3 Hz', 'Matériau: Titane et carbone', 'Poids: ~15kg total'],
+    description: 'Ultra-sophisticated push-rod/pull-rod system that maintains the car at optimal ride height. Continuously adjustable to adapt to fuel level and tyre wear.',
+    specs: ['Type: Push-rod (front) / Pull-rod (rear)', 'Dampers: Dynamically adjustable', 'Travel: ~100mm', 'Frequency: 2-3 Hz', 'Material: Titanium and carbon', 'Weight: ~15kg total'],
     position: [0, 0.4, 1],
     color: '#C0C0C0'
   },
   {
     id: 'gearbox',
-    name: 'Boîte de Vitesses',
-    description: 'Transmission séquentielle 8 rapports + marche arrière. Les changements de vitesse s\'effectuent en moins de 50 millisecondes via des palettes au volant. Structure porteuse en carbone.',
-    specs: ['Rapports: 8 + marche arrière', 'Changement: <50ms', 'Matériau: Carbone titane', 'Poids: ~40kg', 'Durabilité: 6 courses minimum', 'Type: Séquentielle'],
+    name: 'Gearbox',
+    description: '8-speed sequential transmission + reverse. Gear changes occur in less than 50 milliseconds via steering wheel paddles. Load-bearing carbon structure.',
+    specs: ['Gears: 8 + reverse', 'Shift time: <50ms', 'Material: Carbon titanium', 'Weight: ~40kg', 'Durability: 6 races minimum', 'Type: Sequential'],
     position: [0, 0.5, -1.2],
     color: '#808080'
   },
   {
     id: 'steering',
-    name: 'Volant',
-    description: 'Centre névralgique avec plus de 25 boutons et réglages. Le pilote contrôle freinage, différentiel, ERS, radio, boissons et stratégie depuis le volant. Coût: ~50,000€.',
-    specs: ['Boutons: 25+ fonctions', 'Écran: LCD haute définition', 'Matériau: Carbone', 'Poids: ~1.3kg', 'Palettes: Changement vitesse', 'Prix unitaire: ~€50,000'],
+    name: 'Steering Wheel',
+    description: 'Control centre with over 25 buttons and settings. The driver controls braking bias, differential, ERS, radio, drinks and strategy from the wheel. Cost: ~€50,000.',
+    specs: ['Buttons: 25+ functions', 'Screen: High-definition LCD', 'Material: Carbon fibre', 'Weight: ~1.3kg', 'Paddles: Gear shift', 'Unit price: ~€50,000'],
     position: [0, 0.9, 0.5],
     color: '#FFD700'
   },
   {
     id: 'battery',
-    name: 'Batterie ES',
-    description: 'Système de stockage d\'énergie (Energy Store) de 4 MJ. Alimente le MGU-K qui délivre 160 chevaux supplémentaires pendant 33 secondes par tour maximum.',
-    specs: ['Capacité: 4 MJ', 'Poids: ~25kg', 'Puissance: 120 kW', 'Déploiement: 33s/tour max', 'Voltage: ~800V', 'Chimie: Lithium-ion'],
+    name: 'ES Battery',
+    description: '4 MJ Energy Store system. Powers the MGU-K which delivers 160 extra horsepower for a maximum of 33 seconds per lap.',
+    specs: ['Capacity: 4 MJ', 'Weight: ~25kg', 'Power: 120 kW', 'Deployment: 33s/lap max', 'Voltage: ~800V', 'Chemistry: Lithium-ion'],
     position: [0, 0.5, 0.3],
     color: '#00FF00'
   },
   {
     id: 'diffuser',
-    name: 'Diffuseur',
-    description: 'Élément aérodynamique arrière qui accélère le flux d\'air sortant sous la voiture. Crée un effet de succion qui plaque la voiture au sol. Design complexe avec canaux multiples.',
-    specs: ['Angle: 15° maximum', 'Downforce: 15-20%', 'Hauteur: Variable', 'Canaux: Multiples', 'Interaction: Fond plat', 'Règlement: Strict 2022'],
+    name: 'Diffuser',
+    description: 'Rear aerodynamic element that accelerates airflow exiting under the car. Creates a suction effect that pins the car to the ground. Complex design with multiple channels.',
+    specs: ['Angle: 15° maximum', 'Downforce: 15-20%', 'Height: Variable', 'Channels: Multiple', 'Interaction: Floor', 'Regulation: Strict 2022'],
     position: [0, 0.1, -2],
     color: '#00E5CC'
   }
@@ -118,97 +118,97 @@ const carParts: CarPart[] = [
 const carParts2026: CarPart[] = [
   {
     id: 'front-wing',
-    name: 'Aileron Avant Actif',
-    description: 'Aileron avant à géométrie variable. S\'aplatit en ligne droite pour réduire la traînée (mode "highway"), se redresse dans les virages pour maximiser l\'appui. Remplace partiellement le rôle du DRS.',
-    specs: ['Largeur: 1800mm', 'Matériau: Carbone', 'Mode: Actif (variable)', 'Downforce: 20-25%', 'Position: Automatique', 'Gain ligne droite: ~6 km/h'],
+    name: 'Active Front Wing',
+    description: 'Variable geometry front wing. Flattens on straights to reduce drag ("highway mode"), rises in corners to maximise downforce. Partially replaces the role of DRS.',
+    specs: ['Width: 1800mm', 'Material: Carbon fibre', 'Mode: Active (variable)', 'Downforce: 20-25%', 'Position: Automatic', 'Straight-line gain: ~6 km/h'],
     position: [0, 0.3, 2.5],
     color: '#00E5CC'
   },
   {
     id: 'rear-wing',
-    name: 'Aileron Arrière Actif (Lazy Wing)',
-    description: 'Surnommé "Lazy Wing", cet aileron actif remplace le DRS. Se couche automatiquement à haute vitesse pour réduire la traînée et se redresse dans les courbes. Contrôlé en continu par l\'électronique.',
-    specs: ['Largeur: 1000mm', 'Mode: Continu (pas binaire)', 'Gain traînée: -25-35%', 'Angle: Variable en temps réel', 'Contrôle: Électronique FIA', 'Standardisé entre équipes'],
+    name: 'Active Rear Wing (Lazy Wing)',
+    description: 'Nicknamed "Lazy Wing", this active wing replaces DRS. Automatically lays flat at high speed to reduce drag and rises in corners. Continuously controlled by electronics.',
+    specs: ['Width: 1000mm', 'Mode: Continuous (not binary)', 'Drag reduction: -25-35%', 'Angle: Real-time variable', 'Control: FIA electronics', 'Standardised across teams'],
     position: [0, 1.2, -2.5],
     color: '#00E5CC'
   },
   {
     id: 'cockpit',
     name: 'Cockpit + Halo',
-    description: 'Protection Halo conservée et renforcée. Le cockpit intègre les nouveaux contrôles d\'aérodynamique active. Le pilote peut ajuster manuellement la carte d\'aéro dans certaines conditions.',
-    specs: ['Halo: 7kg titanium (inchangé)', 'Force: 125kN résistance', 'Contrôle aéro actif: Oui', 'Température cockpit: 45-55°C', 'Visibilité: 98% maintenue', 'Nouveau: Contrôle Lazy Wing'],
+    description: 'Halo protection retained and reinforced. The cockpit integrates new active aerodynamic controls. The driver can manually adjust the aero map under certain permitted conditions.',
+    specs: ['Halo: 7kg titanium (unchanged)', 'Strength: 125kN resistance', 'Active aero control: Yes', 'Cockpit temp: 45-55°C', 'Visibility: 98% maintained', 'New: Lazy Wing control'],
     position: [0, 0.8, 0.2],
     color: '#FFD700'
   },
   {
     id: 'wheels',
-    name: 'Roues (x4)',
-    description: 'Pneus Pirelli 18 pouces conservés. Légère évolution des composés pour s\'adapter aux voitures plus légères et plus rapides de 2026. Les arrêts au stand restent une arme stratégique majeure.',
-    specs: ['Diamètre: 720mm (18")', 'Largeur avant: 305mm', 'Largeur arrière: 405mm', 'Température optimale: 95-110°C', 'Pression: 19-21 PSI', 'Pit stop cible: <2.0s'],
+    name: 'Wheels (x4)',
+    description: '18-inch Pirelli tyres retained. Slight compound evolution to suit the lighter, faster 2026 cars. Pit stops remain a key strategic weapon.',
+    specs: ['Diameter: 720mm (18")', 'Front width: 305mm', 'Rear width: 405mm', 'Optimal temp: 95-110°C', 'Pressure: 19-21 PSI', 'Pit stop target: <2.0s'],
     position: [0, 0.4, 0],
     color: '#E5E5E5'
   },
   {
     id: 'sidepods',
-    name: 'Pontons',
-    description: 'Pontons considérablement simplifiés. La réglementation 2026 réduit les tunnels sous les pontons, limitant l\'effet Venturi latéral. Design plus clean, moins de surface de carbone complexe.',
-    specs: ['Aérodynamique: Simplifiée', 'Radiateurs: 3x (moteur thermique réduit)', 'Flux d\'air: 120+ kg/s', 'Underfloor: Limité règlement', 'Matériau: Carbone sandwich', 'Zone innovation: Réduite'],
+    name: 'Sidepods',
+    description: 'Significantly simplified sidepods. The 2026 regulations reduce underfloor tunnels, limiting the lateral Venturi effect. Cleaner design with less complex carbon surface area.',
+    specs: ['Aerodynamics: Simplified', 'Radiators: 3x (reduced ICE)', 'Airflow: 120+ kg/s', 'Underfloor: Regulation limited', 'Material: Carbon sandwich', 'Innovation zone: Reduced'],
     position: [0, 0.6, 0],
     color: '#FF3366'
   },
   {
     id: 'floor',
-    name: 'Fond Plat',
-    description: 'Fond plat revisité pour 2026. Les tunnels Venturi sous le plancher sont simplifiés par rapport à la réglementation 2022. L\'effet de sol est maintenu mais via une géométrie moins complexe.',
-    specs: ['Longueur: 3200mm', 'Venturi: Simplifié vs 2022-2025', 'Ground effect: Maintenu', 'Hauteur critique: 5-12mm', 'Downforce: 35-40% du total', 'Règlement: Nouveau 2026'],
+    name: 'Floor',
+    description: 'Revised floor for 2026. Venturi tunnels under the floor are simplified compared to 2022 regulations. Ground effect is maintained but via less complex geometry.',
+    specs: ['Length: 3200mm', 'Venturi: Simplified vs 2022-2025', 'Ground effect: Maintained', 'Critical height: 5-12mm', 'Downforce: 35-40% of total', 'Regulation: New 2026'],
     position: [0, 0.05, 0],
     color: '#1A1A1A'
   },
   {
     id: 'engine',
-    name: 'Power Unit V6 Hybride 2026',
-    description: 'Révolution majeure : 50% de la puissance vient du moteur électrique (MGU-E). Plus de MGU-H. Le V6 1.6L Turbo développe ~550ch, le MGU-E en apporte ~550 supplémentaires. Efficacité thermique record de 55%.',
-    specs: ['ICE: ~550ch (V6 Turbo)', 'MGU-E: ~550ch électrique', 'Total: ~1100ch', 'Ratio électrique: 50%', 'Plus de MGU-H', 'Efficacité: ~55%', 'RPM max: 15,000', 'Déploiement ERS: Sans limite de temps'],
+    name: '2026 V6 Hybrid Power Unit',
+    description: 'Major revolution: 50% of power comes from the electric motor (MGU-E). No more MGU-H. The 1.6L Turbo V6 develops ~550hp, the MGU-E adds ~550 more. Record 55% thermal efficiency.',
+    specs: ['ICE: ~550hp (V6 Turbo)', 'MGU-E: ~550hp electric', 'Total: ~1100hp', 'Electric ratio: 50%', 'No MGU-H', 'Efficiency: ~55%', 'Max RPM: 15,000', 'ERS deployment: No time limit'],
     position: [0, 0.6, -0.8],
     color: '#00FF88'
   },
   {
     id: 'suspension',
     name: 'Suspension',
-    description: 'Suspension active autorisée en 2026 pour la première fois depuis les années 90. Permet d\'ajuster la hauteur de caisse dynamiquement pour optimiser l\'aérodynamique active.',
-    specs: ['Type: Push-rod/Pull-rod + Actif', 'Hauteur: Ajustable dynamiquement', 'Débattement: ~100mm', 'Fréquence: 2-5 Hz', 'Matériau: Titane et carbone', 'Nouveau: Suspension active'],
+    description: 'Active suspension permitted in 2026 for the first time since the 1990s. Allows dynamic ride height adjustment to optimise active aerodynamics.',
+    specs: ['Type: Push-rod/Pull-rod + Active', 'Height: Dynamically adjustable', 'Travel: ~100mm', 'Frequency: 2-5 Hz', 'Material: Titanium and carbon', 'New: Active suspension'],
     position: [0, 0.4, 1],
     color: '#C0C0C0'
   },
   {
     id: 'gearbox',
-    name: 'Boîte de Vitesses',
-    description: 'Transmission séquentielle 8 rapports conservée. Désormais intégrée au système de gestion hybride pour optimiser le déploiement du MGU-E. La boîte gère la récupération d\'énergie au freinage.',
-    specs: ['Rapports: 8 + marche arrière', 'Changement: <50ms', 'Intégration: MGU-E', 'Récupération: Au freinage', 'Durabilité: 6 courses minimum', 'Type: Séquentielle'],
+    name: 'Gearbox',
+    description: '8-speed sequential transmission retained. Now integrated with the hybrid management system to optimise MGU-E deployment. Manages energy recovery under braking.',
+    specs: ['Gears: 8 + reverse', 'Shift time: <50ms', 'Integration: MGU-E', 'Recovery: Under braking', 'Durability: 6 races minimum', 'Type: Sequential'],
     position: [0, 0.5, -1.2],
     color: '#808080'
   },
   {
     id: 'steering',
-    name: 'Volant',
-    description: 'Volant enrichi de nouvelles commandes pour gérer l\'aérodynamique active. Le pilote peut moduler la position du Lazy Wing dans certains contextes autorisés. Toujours plus de 25 fonctions.',
-    specs: ['Boutons: 30+ fonctions', 'Aéro active: Contrôle direct', 'Écran: LCD haute définition', 'Matériau: Carbone', 'Poids: ~1.4kg', 'Prix unitaire: ~€60,000'],
+    name: 'Steering Wheel',
+    description: 'Steering wheel enriched with new controls to manage active aerodynamics. The driver can modulate the Lazy Wing position in certain permitted situations. Still over 25 functions.',
+    specs: ['Buttons: 30+ functions', 'Active aero: Direct control', 'Screen: High-definition LCD', 'Material: Carbon fibre', 'Weight: ~1.4kg', 'Unit price: ~€60,000'],
     position: [0, 0.9, 0.5],
     color: '#FFD700'
   },
   {
     id: 'battery',
-    name: 'Batterie ES (Energy Store)',
-    description: 'Batterie plus que doublée pour absorber la puissance du MGU-E. Passe de 4 MJ à 9 MJ. Le déploiement n\'est plus limité à 33 secondes par tour — le MGU-E peut être utilisé en continu si la batterie le permet.',
-    specs: ['Capacité: 9 MJ (vs 4 MJ en 2025)', 'Poids: ~50kg', 'Puissance: 350 kW', 'Déploiement: Continu (sans limite 33s)', 'Voltage: ~900V', 'Chimie: Lithium-ion avancé'],
+    name: 'ES Battery (Energy Store)',
+    description: 'Battery more than doubled to absorb MGU-E power. Goes from 4 MJ to 9 MJ. Deployment is no longer limited to 33 seconds per lap — the MGU-E can be used continuously if battery allows.',
+    specs: ['Capacity: 9 MJ (vs 4 MJ in 2025)', 'Weight: ~50kg', 'Power: 350 kW', 'Deployment: Continuous (no 33s limit)', 'Voltage: ~900V', 'Chemistry: Advanced lithium-ion'],
     position: [0, 0.5, 0.3],
     color: '#00FF88'
   },
   {
     id: 'diffuser',
-    name: 'Diffuseur',
-    description: 'Diffuseur simplifié en cohérence avec le fond plat 2026. Toujours essentiel pour l\'appui arrière, mais avec moins de canaux complexes. Interaction réduite avec les tunnels Venturi.',
-    specs: ['Angle: 15° maximum', 'Downforce: 12-18%', 'Hauteur: Variable', 'Canaux: Réduits vs 2022-2025', 'Interaction: Fond plat simplifié', 'Règlement: Nouveau 2026'],
+    name: 'Diffuser',
+    description: 'Simplified diffuser in line with the 2026 floor. Still essential for rear downforce, but with fewer complex channels. Reduced interaction with Venturi tunnels.',
+    specs: ['Angle: 15° maximum', 'Downforce: 12-18%', 'Height: Variable', 'Channels: Reduced vs 2022-2025', 'Interaction: Simplified floor', 'Regulation: New 2026'],
     position: [0, 0.1, -2],
     color: '#00E5CC'
   }
@@ -1578,7 +1578,7 @@ export default function F1AnatomyPage() {
             </button>
             <div>
               <h1 className="text-2xl md:text-4xl font-black font-rajdhani text-metrik-turquoise">F1 ANATOMY</h1>
-              <p className="text-xs md:text-base text-metrik-text-secondary mt-1 hidden sm:block">Voiture 3D Interactive • 12 Composants • CFD Simulation</p>
+              <p className="text-xs md:text-base text-metrik-text-secondary mt-1 hidden sm:block">Interactive 3D Car • 12 Components • CFD Simulation</p>
             </div>
           </div>
 
@@ -1609,8 +1609,8 @@ export default function F1AnatomyPage() {
 
         {regulation === '2026' && (
           <div className="mb-4 px-4 py-2.5 bg-metrik-turquoise/10 border border-metrik-turquoise/40 rounded-lg flex items-center gap-3">
-            <span className="text-metrik-turquoise font-bold font-rajdhani text-sm">NOUVEAU RÈGLEMENT 2026</span>
-            <span className="text-metrik-text-secondary text-xs font-inter">Aéro active · Power Unit 50/50 · Suspension active · Batterie 9 MJ</span>
+            <span className="text-metrik-turquoise font-bold font-rajdhani text-sm">NEW 2026 REGULATIONS</span>
+            <span className="text-metrik-text-secondary text-xs font-inter">Active Aero · 50/50 Power Unit · Active Suspension · 9 MJ Battery</span>
           </div>
         )}
 
@@ -1625,7 +1625,7 @@ export default function F1AnatomyPage() {
               }`}
             >
               {animateRotation ? <Pause className="w-3.5 h-3.5 md:w-4 md:h-4" /> : <Play className="w-3.5 h-3.5 md:w-4 md:h-4" />}
-              <span className="hidden sm:inline">Rotation</span>
+              <span className="hidden sm:inline">Rotate</span>
             </button>
 
             <button
@@ -1637,7 +1637,7 @@ export default function F1AnatomyPage() {
               }`}
             >
               <RotateCcw className="w-3.5 h-3.5 md:w-4 md:h-4" />
-              <span className="hidden sm:inline">Roues</span>
+              <span className="hidden sm:inline">Wheels</span>
             </button>
 
             <button
@@ -1673,8 +1673,8 @@ export default function F1AnatomyPage() {
               }`}
             >
               {explodedView ? <Minimize2 className="w-3.5 h-3.5 md:w-4 md:h-4" /> : <Maximize2 className="w-3.5 h-3.5 md:w-4 md:h-4" />}
-              <span className="hidden lg:inline">Vue éclatée</span>
-              <span className="hidden sm:inline lg:hidden">Vue</span>
+              <span className="hidden lg:inline">Exploded</span>
+              <span className="hidden sm:inline lg:hidden">Expl.</span>
             </button>
 
             <button
@@ -1797,7 +1797,7 @@ export default function F1AnatomyPage() {
                   </div>
                   <div className="flex items-center gap-1 md:gap-1.5">
                     <Maximize2 className="w-3 h-3 md:w-4 md:h-4" />
-                    <span className="hidden lg:inline">Vue éclatée</span>
+                    <span className="hidden lg:inline">Exploded</span>
                   </div>
                 </div>
               </div>
@@ -1811,15 +1811,15 @@ export default function F1AnatomyPage() {
                   <h3 className="text-xl md:text-2xl font-black font-rajdhani text-metrik-turquoise mb-3 md:mb-4">
                     {selectedPart.name}
                   </h3>
-                  
+
                   <p className="text-sm md:text-base text-metrik-text-secondary font-inter mb-4 md:mb-6">
                     {selectedPart.description}
                   </p>
 
                   <h4 className="text-base md:text-lg font-bold font-rajdhani text-metrik-turquoise mb-2 md:mb-3">
-                    Spécifications
+                    Specifications
                   </h4>
-                  
+
                   <ul className="space-y-2 mb-4 md:mb-6 font-inter">
                     {selectedPart.specs.map((spec, index) => (
                       <li key={index} className="flex items-start gap-2">
@@ -1833,60 +1833,60 @@ export default function F1AnatomyPage() {
                     onClick={() => setSelectedPart(null)}
                     className="w-full py-2 bg-metrik-turquoise hover:bg-metrik-turquoise/80 text-metrik-black font-bold font-rajdhani rounded-lg transition-colors text-sm md:text-base"
                   >
-                    Fermer
+                    Close
                   </button>
                 </div>
               ) : (
                 <div>
                   <h3 className="text-lg md:text-xl font-black font-rajdhani text-metrik-turquoise mb-3 md:mb-4">
-                    Fonctionnalités
+                    Features
                   </h3>
-                  
+
                   <div className="space-y-3 md:space-y-4 mb-4 md:mb-6">
                     <div className="p-3 bg-metrik-turquoise/10 rounded-lg border border-metrik-turquoise/30">
                       <h4 className="text-metrik-turquoise font-bold font-rajdhani mb-2 flex items-center gap-2 text-sm md:text-base">
                         <Wind className="w-4 h-4" />
-                        Soufflerie CFD
+                        CFD Wind Tunnel
                       </h4>
                       <p className="text-xs md:text-sm text-metrik-text-secondary font-inter">
-                        Lignes de flux animées montrant l'aérodynamique réelle. Effet aileron, sol, et DRS visible.
+                        Animated flow lines showing real aerodynamics. Wing, ground effect, and DRS impact visible.
                       </p>
                     </div>
 
                     <div className="p-3 bg-metrik-error/10 rounded-lg border border-metrik-error/30">
                       <h4 className="text-metrik-error font-bold font-rajdhani mb-2 flex items-center gap-2 text-sm md:text-base">
                         <Zap className="w-4 h-4" />
-                        DRS Actif
+                        Active DRS
                       </h4>
                       <p className="text-xs md:text-sm text-metrik-text-secondary font-inter">
-                        L'aileron s'ouvre progressivement. Impact visible sur le flux d'air (moins de turbulences).
+                        The wing opens progressively. Visible impact on airflow (reduced turbulence).
                       </p>
                     </div>
 
                     <div className="p-3 bg-white/5 rounded-lg border border-white/10">
                       <h4 className="text-metrik-turquoise font-bold font-rajdhani mb-2 flex items-center gap-2 text-sm md:text-base">
                         <Play className="w-4 h-4" />
-                        Roues Réalistes
+                        Realistic Wheels
                       </h4>
                       <p className="text-xs md:text-sm text-metrik-text-secondary font-inter">
-                        Les 4 roues tournent sur place avec jantes détaillées et rayons.
+                        All 4 wheels rotate on the spot with detailed rims and spokes.
                       </p>
                     </div>
 
                     <div className="p-3 bg-white/5 rounded-lg border border-white/10">
                       <h4 className="text-metrik-turquoise font-bold font-rajdhani mb-2 flex items-center gap-2 text-sm md:text-base">
                         <Maximize2 className="w-4 h-4" />
-                        Vue Éclatée
+                        Exploded View
                       </h4>
                       <p className="text-xs md:text-sm text-metrik-text-secondary font-inter">
-                        Chaque composant s'éloigne précisément de son axe pour voir l'intérieur.
+                        Each component moves precisely away from its axis to see inside.
                       </p>
                     </div>
                   </div>
 
                   <div className="pt-4 border-t border-metrik-dark">
                     <h4 className="text-base md:text-lg font-bold font-rajdhani text-metrik-turquoise mb-3">
-                      Composants
+                      Components
                     </h4>
                     <div className="space-y-2 font-inter">
                       {activeCarParts.map((part) => (
@@ -1915,7 +1915,7 @@ export default function F1AnatomyPage() {
         <div className="mt-6 md:mt-8 backdrop-blur-xl bg-metrik-card/80 border border-metrik-turquoise/30 rounded-lg p-4 md:p-6">
           <h3 className="text-xl md:text-2xl font-black font-rajdhani text-metrik-turquoise mb-4 md:mb-6 flex items-center gap-2">
             <Wind className="w-5 h-5 md:w-6 md:h-6" />
-            {regulation === '2026' ? 'Nouvelles Technologies 2026 Expliquées' : 'Aérodynamique CFD & Technologies Expliquées'}
+            {regulation === '2026' ? 'New 2026 Technologies Explained' : 'CFD Aerodynamics & Technologies Explained'}
           </h3>
 
           {regulation === '2026' ? (
@@ -1926,69 +1926,69 @@ export default function F1AnatomyPage() {
                   Power Unit 50/50
                 </h4>
                 <p className="text-xs md:text-sm text-metrik-text-secondary font-inter">
-                  Première fois dans l'histoire : 50% de la puissance vient du moteur électrique (MGU-E, ~550ch).
-                  Le V6 Turbo fournit les 550ch restants. Le MGU-H est supprimé.
-                  Total : ~1100ch pour des voitures plus légères de 30kg.
+                  For the first time in history: 50% of power comes from the electric motor (MGU-E, ~550hp).
+                  The Turbo V6 provides the remaining 550hp. The MGU-H is eliminated.
+                  Total: ~1100hp in cars 30kg lighter.
                 </p>
               </div>
 
               <div className="p-3 md:p-4 bg-metrik-turquoise/10 rounded-lg border border-metrik-turquoise/30">
                 <h4 className="text-metrik-turquoise font-bold font-rajdhani mb-2 md:mb-3 flex items-center gap-2 text-sm md:text-base">
                   <Wind className="w-4 h-4 md:w-5 md:h-5" />
-                  Aérodynamique Active
+                  Active Aerodynamics
                 </h4>
                 <p className="text-xs md:text-sm text-metrik-text-secondary font-inter">
-                  Le "Lazy Wing" arrière et l'aileron avant actif remplacent le DRS binaire.
-                  Les surfaces aérodynamiques s'ajustent en continu : plates en ligne droite,
-                  relevées en courbes. Gain estimé : 15-20 km/h en ligne droite.
+                  The rear "Lazy Wing" and active front wing replace the binary DRS.
+                  Aerodynamic surfaces adjust continuously: flat on straights,
+                  raised in corners. Estimated gain: 15-20 km/h on straights.
                 </p>
               </div>
 
               <div className="p-3 md:p-4 bg-white/5 rounded-lg border border-white/10">
                 <h4 className="text-metrik-turquoise font-bold font-rajdhani mb-2 md:mb-3 flex items-center gap-2 text-sm md:text-base">
                   <BatteryIcon className="w-4 h-4 md:w-5 md:h-5" />
-                  Batterie 9 MJ
+                  9 MJ Battery
                 </h4>
                 <p className="text-xs md:text-sm text-metrik-text-secondary font-inter">
-                  La batterie passe de 4 MJ à 9 MJ (+125%). Le déploiement du MGU-E n'est plus limité à
-                  33 secondes — il peut être utilisé en continu. Révolution stratégique :
-                  la gestion de la charge batterie devient primordiale en course.
+                  Battery capacity increases from 4 MJ to 9 MJ (+125%). MGU-E deployment is no longer
+                  limited to 33 seconds — it can be used continuously. Strategic revolution:
+                  battery charge management becomes paramount in races.
                 </p>
               </div>
 
               <div className="p-3 md:p-4 bg-white/5 rounded-lg border border-white/10">
                 <h4 className="text-metrik-turquoise font-bold font-rajdhani mb-2 md:mb-3 flex items-center gap-2 text-sm md:text-base">
                   <ArrowDown className="w-4 h-4 md:w-5 md:h-5" />
-                  Effet de Sol Simplifié
+                  Simplified Ground Effect
                 </h4>
                 <p className="text-xs md:text-sm text-metrik-text-secondary font-inter">
-                  Les tunnels Venturi sous le fond plat sont simplifiés par rapport à 2022-2025.
-                  L'effet de sol est maintenu (35-40% de l'appui) mais via une géométrie moins
-                  complexe, pour réduire la sensibilité au porpoising et améliorer les suivis.
+                  Venturi tunnels under the floor are simplified compared to 2022-2025.
+                  Ground effect is maintained (35-40% of downforce) but with less complex
+                  geometry, reducing porpoising sensitivity and improving close racing.
                 </p>
               </div>
 
               <div className="p-3 md:p-4 bg-white/5 rounded-lg border border-white/10">
                 <h4 className="text-metrik-turquoise font-bold font-rajdhani mb-2 md:mb-3 flex items-center gap-2 text-sm md:text-base">
                   <Disc className="w-4 h-4 md:w-5 md:h-5" />
-                  Gestion Pneumatiques
+                  Tyre Management
                 </h4>
                 <p className="text-xs md:text-sm text-metrik-text-secondary font-inter">
-                  Pneus Pirelli 18 pouces conservés. Les voitures plus légères (~768 kg) et
-                  plus puissantes changent la dégradation. La récupération d'énergie au freinage
-                  modifie le comportement des pneus sur les phases de décélération.
+                  Pirelli 18-inch tyres retained. Lighter (~768 kg) and more powerful
+                  cars change degradation patterns. Brake energy recovery alters
+                  tyre behaviour during deceleration phases.
                 </p>
               </div>
 
               <div className="p-3 md:p-4 bg-white/5 rounded-lg border border-white/10">
                 <h4 className="text-metrik-turquoise font-bold font-rajdhani mb-2 md:mb-3 flex items-center gap-2 text-sm md:text-base">
                   <Settings className="w-4 h-4 md:w-5 md:h-5" />
-                  Suspension Active
+                  Active Suspension
                 </h4>
                 <p className="text-xs md:text-sm text-metrik-text-secondary font-inter">
-                  Autorisée pour la première fois depuis 1994, la suspension active permet
-                  d'ajuster la hauteur de caisse dynamiquement. Couplée à l'aéro active,
-                  elle optimise l'appui en courbe et la traînée en ligne droite en temps réel.
+                  Permitted for the first time since 1994, active suspension allows
+                  dynamic ride height adjustment. Combined with active aero,
+                  it optimises downforce in corners and drag on straights in real time.
                 </p>
               </div>
             </div>
@@ -1997,72 +1997,72 @@ export default function F1AnatomyPage() {
               <div className="p-3 md:p-4 bg-white/5 rounded-lg border border-white/10">
                 <h4 className="text-metrik-turquoise font-bold font-rajdhani mb-2 md:mb-3 flex items-center gap-2 text-sm md:text-base">
                   <Waves className="w-4 h-4 md:w-5 md:h-5" />
-                  Flux Laminaire
+                  Laminar Flow
                 </h4>
                 <p className="text-xs md:text-sm text-metrik-text-secondary font-inter">
-                  Les lignes bleues montrent le flux d'air. L'aileron avant divise le flux,
-                  l'air accélère sous le fond plat (effet Venturi), et l'aileron arrière crée de l'appui
-                  tout en générant des turbulences.
+                  The blue lines show airflow. The front wing splits the flow,
+                  air accelerates under the flat floor (Venturi effect), and the rear wing generates downforce
+                  while producing turbulence.
                 </p>
               </div>
 
               <div className="p-3 md:p-4 bg-white/5 rounded-lg border border-white/10">
                 <h4 className="text-metrik-turquoise font-bold font-rajdhani mb-2 md:mb-3 flex items-center gap-2 text-sm md:text-base">
                   <Zap className="w-4 h-4 md:w-5 md:h-5" />
-                  Impact DRS
+                  DRS Impact
                 </h4>
                 <p className="text-xs md:text-sm text-metrik-text-secondary font-inter">
-                  DRS fermé: Grande turbulence arrière créant une haute traînée.
-                  DRS ouvert: Flux lisse, traînée réduite de 20-30%, gain de vitesse de 10-15 km/h
-                  en ligne droite. Utilisable uniquement en course et sous conditions.
+                  DRS closed: Large rear turbulence creating high drag.
+                  DRS open: Smooth flow, drag reduced by 20-30%, speed gain of 10-15 km/h
+                  on straights. Usable in race conditions only, within designated zones.
                 </p>
               </div>
 
               <div className="p-3 md:p-4 bg-white/5 rounded-lg border border-white/10">
                 <h4 className="text-metrik-turquoise font-bold font-rajdhani mb-2 md:mb-3 flex items-center gap-2 text-sm md:text-base">
                   <ArrowDown className="w-4 h-4 md:w-5 md:h-5" />
-                  Effet de Sol
+                  Ground Effect
                 </h4>
                 <p className="text-xs md:text-sm text-metrik-text-secondary font-inter">
-                  Les lignes de flux descendent sous la voiture et s'accélèrent (Venturi).
-                  Crée 40-45% de l'appui total. Hauteur critique de 5-10mm du sol.
-                  Le règlement 2022 a réintroduit cet effet pour améliorer les courses.
+                  Flow lines descend under the car and accelerate (Venturi).
+                  Generates 40-45% of total downforce. Critical ride height of 5-10mm from the ground.
+                  The 2022 regulations reintroduced this effect to improve racing.
                 </p>
               </div>
 
               <div className="p-3 md:p-4 bg-white/5 rounded-lg border border-white/10">
                 <h4 className="text-metrik-turquoise font-bold font-rajdhani mb-2 md:mb-3 flex items-center gap-2 text-sm md:text-base">
                   <BatteryIcon className="w-4 h-4 md:w-5 md:h-5" />
-                  Système Hybride
+                  Hybrid System
                 </h4>
                 <p className="text-xs md:text-sm text-metrik-text-secondary font-inter">
-                  Le MGU-K récupère l'énergie au freinage (jusqu'à 2 MJ par tour) et la redéploie
-                  pour 160ch supplémentaires pendant 33 secondes par tour maximum.
-                  Le MGU-H récupère l'énergie du turbo sans limite de temps.
+                  The MGU-K recovers braking energy (up to 2 MJ per lap) and redeploys it
+                  for an extra 160hp for a maximum of 33 seconds per lap.
+                  The MGU-H harvests turbo energy with no time limit.
                 </p>
               </div>
 
               <div className="p-3 md:p-4 bg-white/5 rounded-lg border border-white/10">
                 <h4 className="text-metrik-turquoise font-bold font-rajdhani mb-2 md:mb-3 flex items-center gap-2 text-sm md:text-base">
                   <Disc className="w-4 h-4 md:w-5 md:h-5" />
-                  Gestion Pneumatiques
+                  Tyre Management
                 </h4>
                 <p className="text-xs md:text-sm text-metrik-text-secondary font-inter">
-                  5 composés Pirelli (C0-C5). Fenêtre optimale: 100-110°C. Stratégie cruciale
-                  avec gestion thermique, dégradation et graining. Les équipes doivent utiliser
-                  au minimum 2 composés différents en course.
+                  5 Pirelli compounds (C0-C5). Optimal window: 100-110°C. Strategy is crucial
+                  with thermal management, degradation and graining. Teams must use
+                  at least 2 different compounds during the race.
                 </p>
               </div>
 
               <div className="p-3 md:p-4 bg-white/5 rounded-lg border border-white/10">
                 <h4 className="text-metrik-turquoise font-bold font-rajdhani mb-2 md:mb-3 flex items-center gap-2 text-sm md:text-base">
                   <Settings className="w-4 h-4 md:w-5 md:h-5" />
-                  Électronique Embarquée
+                  Onboard Electronics
                 </h4>
                 <p className="text-xs md:text-sm text-metrik-text-secondary font-inter">
-                  Plus de 300 capteurs sur la voiture. Transmission de données en temps réel
-                  vers les stands. Analyse de la température des freins, pression des pneus,
-                  usure, consommation carburant, et paramètres moteur pour optimiser la stratégie.
+                  Over 300 sensors on the car. Real-time data transmission to the pit wall.
+                  Brake temperature, tyre pressure, wear, fuel consumption,
+                  and engine parameters all monitored to optimise strategy.
                 </p>
               </div>
             </div>

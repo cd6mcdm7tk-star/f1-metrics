@@ -51,9 +51,9 @@ export default function Toast({ id, type, message, onClose, duration = 5000 }: T
         </div>
         <div className="flex-1">
           <p className="font-rajdhani font-bold text-sm tracking-wide mb-1 uppercase">
-            {type === 'error' && 'ERREUR SYSTÈME'}
-            {type === 'success' && 'OPÉRATION RÉUSSIE'}
-            {type === 'warning' && 'ATTENTION'}
+            {type === 'error' && 'SYSTEM ERROR'}
+            {type === 'success' && 'SUCCESS'}
+            {type === 'warning' && 'WARNING'}
             {type === 'info' && 'INFORMATION'}
           </p>
           <p className="text-metrik-text font-inter text-sm">

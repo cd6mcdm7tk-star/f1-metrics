@@ -22,19 +22,19 @@ export default function CancelPage() {
 
         {/* Title */}
         <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">
-          Paiement annulé
+          Payment cancelled
         </h1>
 
         {/* Description */}
         <p className="text-gray-300 text-lg mb-8">
-          Votre paiement n'a pas été effectué. Aucun montant n'a été débité.
+          Your payment was not processed. No amount has been charged.
         </p>
 
         {/* Info Box */}
         <div className="bg-metrik-black/50 rounded-xl p-6 mb-8 border border-turquoise-500/20">
           <p className="text-gray-300 text-left">
-            Vous pouvez continuer à utiliser METRIK DELTA avec <span className="text-turquoise-500 font-semibold">12 requêtes gratuites par jour</span>, 
-            ou souscrire à METRIK+ à tout moment pour profiter d'un accès illimité.
+            You can continue using METRIK DELTA with <span className="text-turquoise-500 font-semibold">12 free requests per day</span>,
+            or subscribe to METRIK+ at any time for unlimited access.
           </p>
         </div>
 
@@ -45,21 +45,21 @@ export default function CancelPage() {
             className="px-8 py-4 bg-turquoise-500 hover:bg-[#00d4bb] text-black font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
           >
             <RotateCcw className="w-5 h-5" />
-            Réessayer
+            Try again
           </button>
-          
+
           <button
             onClick={() => navigate('/')}
             className="px-8 py-4 bg-metrik-card hover:bg-gray-800 text-white font-bold rounded-lg transition-colors border border-turquoise-500/30 flex items-center justify-center gap-2"
           >
             <Home className="w-5 h-5" />
-            Retour à l'accueil
+            Back to home
           </button>
         </div>
 
         {/* Help */}
         <p className="text-sm text-gray-500 mt-6">
-          Besoin d'aide ? Contactez-nous sur{' '}
+          Need help? Contact us on{' '}
           <a href="https://twitter.com/metrikdelta" className="text-turquoise-500 hover:underline">
             Twitter
           </a>
