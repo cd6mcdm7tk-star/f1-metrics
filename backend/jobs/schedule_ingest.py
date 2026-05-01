@@ -181,8 +181,34 @@ def get_sessions_fastf1(year: int) -> list:
     return sessions
 
 
+_ff1_schedule_cache: dict = {}
+
+
+def get_round_from_fastf1(year: int, session_date_str: str) -> Optional[int]:
+    """Retourne le round number FastF1 en matchant la date de session.
+    FastF1 est la source de vérité — il exclut les GP annulés contrairement à OpenF1.
+    """
+    if year not in _ff1_schedule_cache:
+        try:
+            _ff1_schedule_cache[year] = fastf1.get_event_schedule(year, include_testing=False)
+        except Exception as e:
+            logger.warning(f"FastF1 schedule fetch failed: {e}")
+            return None
+
+    schedule = _ff1_schedule_cache[year]
+    try:
+        session_date = datetime.fromisoformat(session_date_str[:10]).date()
+        for _, row in schedule.iterrows():
+            event_date = row["EventDate"].date()
+            if abs((session_date - event_date).days) <= 4:
+                return int(row["RoundNumber"])
+    except Exception as e:
+        logger.warning(f"FastF1 round lookup failed: {e}")
+    return None
+
+
 def get_round_number(meetings: list, meeting_key: int) -> Optional[int]:
-    """Retourne le numéro de round (1-based) à partir du meeting_key."""
+    """Fallback: round number depuis la liste OpenF1 triée par date."""
     race_meetings = sorted(
         [m for m in meetings if "test" not in m.get("meeting_name", "").lower()],
         key=lambda m: m["date_start"],
@@ -259,7 +285,9 @@ def run():
             continue
 
         meeting_key = session.get("meeting_key")
-        gp_round    = get_round_number(meetings, meeting_key)
+        gp_round    = get_round_from_fastf1(current_year, date_start_str)
+        if gp_round is None:
+            gp_round = get_round_number(meetings, meeting_key)
         if gp_round is None:
             logger.warning(f"Round introuvable pour meeting_key={meeting_key}, session={session_name}")
             continue
