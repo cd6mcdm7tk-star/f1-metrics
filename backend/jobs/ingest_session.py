@@ -106,8 +106,13 @@ def _openf1_get(endpoint: str, params: dict, retries: int = 5) -> list:
 def _openf1_session_key(year: int, gp_round: int, session_type: str) -> int:
     """
     Resolve OpenF1 session_key from year + round number + session abbreviation.
+    Uses FastF1's event date to find the correct OpenF1 meeting — OpenF1 may
+    include cancelled GPs that shift round indices vs FastF1's numbering.
     session_type: 'Q' | 'R' | 'FP1' | 'FP2' | 'FP3' | 'S' | 'SQ' | 'SS'
     """
+    import fastf1
+    from datetime import datetime as _dt
+
     name_map = {
         "Q":   "Qualifying",
         "R":   "Race",
@@ -120,15 +125,33 @@ def _openf1_session_key(year: int, gp_round: int, session_type: str) -> int:
     }
     session_name = name_map.get(session_type.upper(), session_type)
 
-    # Resolve the correct meeting_key for this gp_round
+    # Use FastF1 as source of truth for the event date of this round
+    try:
+        ff1_schedule = fastf1.get_event_schedule(year, include_testing=False)
+        ff1_event = ff1_schedule[ff1_schedule["RoundNumber"] == gp_round]
+        if ff1_event.empty:
+            raise ValueError(f"FastF1: round {gp_round} not found for {year}")
+        event_date_str = str(ff1_event.iloc[0]["EventDate"].date())
+        event_date = _dt.strptime(event_date_str, "%Y-%m-%d").date()
+    except Exception as e:
+        raise RuntimeError(f"FastF1 schedule lookup failed: {e}")
+
+    # Find the OpenF1 meeting whose date is within ±4 days of the FastF1 event date
     meetings = _openf1_get("meetings", {"year": year})
-    race_meetings = sorted(
-        [m for m in meetings if "test" not in m.get("meeting_name", "").lower()],
-        key=lambda m: m["date_start"],
-    )
-    if gp_round > len(race_meetings):
-        raise ValueError(f"OpenF1: round {gp_round} not found for {year}")
-    meeting_key = race_meetings[gp_round - 1]["meeting_key"]
+    meeting_key = None
+    for m in sorted(meetings, key=lambda m: m.get("date_start", "")):
+        if "test" in m.get("meeting_name", "").lower():
+            continue
+        try:
+            m_date = _dt.strptime(m["date_start"][:10], "%Y-%m-%d").date()
+            if abs((m_date - event_date).days) <= 4:
+                meeting_key = m["meeting_key"]
+                break
+        except Exception:
+            continue
+
+    if meeting_key is None:
+        raise RuntimeError(f"OpenF1: no meeting found for {year} R{gp_round} (event_date={event_date_str})")
 
     sessions = _openf1_get("sessions", {"year": year, "meeting_key": meeting_key, "session_name": session_name})
     if not sessions:
@@ -143,7 +166,7 @@ def ingest_openf1(year: int, gp_round: int, session_type: str):
 
     try:
         session_key = _openf1_session_key(year, gp_round, session_type)
-    except RuntimeError as e:
+    except (RuntimeError, ValueError) as e:
         logger.warning(f"  OpenF1 indisponible ({e}) — fallback FastF1")
         ingest_fastf1(year, gp_round, session_type)
         return
