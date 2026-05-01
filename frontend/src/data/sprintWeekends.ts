@@ -5,7 +5,7 @@ export const SPRINT_WEEKENDS: { [year: number]: number[] } = {
   2023: [4, 10, 13, 18, 19, 21], // Azerbaijan, Austria, Belgium, Qatar, USA, São Paulo
   2024: [5, 6, 11, 19, 21, 23], // China, Miami, Austria, USA, Brazil, Qatar
   2025: [2, 6, 13, 19, 21, 23], // China, Miami, Belgium, USA, Brazil, Qatar
-  2026: [2, 6, 7, 11, 14, 18], // China, Miami, Canada, Britain, Netherlands, Singapore
+  2026: [2, 4, 5, 9, 12, 16], // China, Miami, Canada, Britain, Netherlands, Singapore
 };
 
 // Fonction helper pour vérifier si un GP a un Sprint
