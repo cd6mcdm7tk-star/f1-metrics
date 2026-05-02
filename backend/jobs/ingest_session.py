@@ -39,6 +39,39 @@ logger = logging.getLogger(__name__)
 
 OPENF1_BASE = "https://api.openf1.org/v1"
 
+# ---------------------------------------------------------------------------
+# OpenF1 JWT authentication
+# ---------------------------------------------------------------------------
+
+_openf1_jwt: dict = {"token": None, "expires_at": 0}
+
+
+def _get_openf1_token() -> str | None:
+    """Fetch or refresh the OpenF1 JWT token using email/password."""
+    import time
+    now = time.time()
+    if _openf1_jwt["token"] and now < _openf1_jwt["expires_at"]:
+        return _openf1_jwt["token"]
+    email    = os.getenv("OPENF1_EMAIL")
+    password = os.getenv("OPENF1_PASSWORD")
+    if not email or not password:
+        return None
+    try:
+        r = requests.post(
+            "https://api.openf1.org/token",
+            data={"username": email, "password": password, "grant_type": "password"},
+            timeout=10,
+        )
+        r.raise_for_status()
+        data = r.json()
+        _openf1_jwt["token"]      = data["access_token"]
+        _openf1_jwt["expires_at"] = now + int(data.get("expires_in", 3600)) - 300
+        logger.info("✅ OpenF1 JWT token refreshed")
+        return _openf1_jwt["token"]
+    except Exception as e:
+        logger.warning(f"⚠️  OpenF1 token fetch failed: {e}")
+        return None
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -87,9 +120,13 @@ def _distance_from_xy(x: list, y: list) -> list:
 
 def _openf1_get(endpoint: str, params: dict, retries: int = 5) -> list:
     url = f"{OPENF1_BASE}/{endpoint}"
+    headers = {"Accept": "application/json"}
+    token = _get_openf1_token()
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
     for attempt in range(retries):
         try:
-            r = requests.get(url, params=params, timeout=60)
+            r = requests.get(url, params=params, headers=headers, timeout=60)
             if r.status_code == 429:
                 wait = 30 * (attempt + 1)
                 logger.warning(f"OpenF1 /{endpoint} attempt {attempt+1} failed: 429, retry in {wait}s")
