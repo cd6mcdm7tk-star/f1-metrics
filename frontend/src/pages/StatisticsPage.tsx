@@ -104,6 +104,9 @@ export default function StatisticsPage() {
   const [driver1Data, setDriver1Data] = useState<DriverInfo | null>(null);
   const [driver2Data, setDriver2Data] = useState<DriverInfo | null>(null);
 
+  // Official points map (driverId → points, includes sprint) — populated once per year
+  const [standingsMap, setStandingsMap] = useState<Record<string, number>>({});
+
   // Couleurs par écurie (pas par pilote)
   const teamColors: { [key: string]: string } = {
     'Red Bull': '#3671C6',
@@ -267,6 +270,15 @@ export default function StatisticsPage() {
         }
       }
 
+      // Fetch official standings (includes sprint points) — one call per year change
+      const standingsData = await fetchErgastAPI(`${jolpica_base}/${year}/driverStandings.json`);
+      const standingsList = standingsData?.MRData?.StandingsTable?.StandingsLists?.[0]?.DriverStandings ?? [];
+      const newStandingsMap: Record<string, number> = {};
+      standingsList.forEach((s: any) => {
+        newStandingsMap[s.Driver.driverId] = parseFloat(s.points);
+      });
+      setStandingsMap(newStandingsMap);
+
       const formattedDrivers = Array.from(driverInfoMap.values()).sort((a, b) =>
         a.abbreviation.localeCompare(b.abbreviation)
       );
@@ -349,6 +361,8 @@ export default function StatisticsPage() {
         if (position === 1) stats.poles += 1;
       });
       
+      if (standingsMap[driverId] !== undefined) stats.points = standingsMap[driverId];
+
       stats.avgRacePosition = (stats.raceFinishes as any).length > 0
         ? parseFloat(((stats.raceFinishes as any).reduce((a: number, b: number) => a + b, 0) / (stats.raceFinishes as any).length).toFixed(1))
         : 20.0;
@@ -520,6 +534,9 @@ export default function StatisticsPage() {
         if (position === 1) driver2Stats.poles += 1;
       });
       
+      if (standingsMap[driver1Id] !== undefined) driver1Stats.points = standingsMap[driver1Id];
+      if (standingsMap[driver2Id] !== undefined) driver2Stats.points = standingsMap[driver2Id];
+
       driver1Stats.avgRacePosition = driver1Stats.raceFinishes.length > 0
         ? parseFloat((driver1Stats.raceFinishes.reduce((a: number, b: number) => a + b, 0) / driver1Stats.raceFinishes.length).toFixed(1))
         : 20.0;
