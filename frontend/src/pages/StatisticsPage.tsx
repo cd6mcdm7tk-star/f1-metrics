@@ -299,16 +299,11 @@ export default function StatisticsPage() {
       
       const driverId = driverInfo.driverId;
       
-      const [racesData, qualiData, standingsData] = await Promise.all([
-        fetchErgastAPI(`${jolpica_base}/${year}/drivers/${driverId}/results.json?limit=100`),
-        fetchErgastAPI(`${jolpica_base}/${year}/drivers/${driverId}/qualifying.json?limit=100`),
-        fetchErgastAPI(`${jolpica_base}/${year}/drivers/${driverId}/driverStandings.json`),
-      ]);
+      const racesData = await fetchErgastAPI(`${jolpica_base}/${year}/drivers/${driverId}/results.json?limit=100`);
       const races = racesData?.MRData?.RaceTable?.Races || [];
+      
+      const qualiData = await fetchErgastAPI(`${jolpica_base}/${year}/drivers/${driverId}/qualifying.json?limit=100`);
       const qualiRaces = qualiData?.MRData?.RaceTable?.Races || [];
-      const officialPoints = parseFloat(
-        standingsData?.MRData?.StandingsTable?.StandingsLists?.[0]?.DriverStandings?.[0]?.points ?? '-1'
-      );
       
       const stats: DriverStats = {
         wins: 0,
@@ -354,8 +349,6 @@ export default function StatisticsPage() {
         if (position === 1) stats.poles += 1;
       });
       
-      if (officialPoints >= 0) stats.points = officialPoints;
-
       stats.avgRacePosition = (stats.raceFinishes as any).length > 0
         ? parseFloat(((stats.raceFinishes as any).reduce((a: number, b: number) => a + b, 0) / (stats.raceFinishes as any).length).toFixed(1))
         : 20.0;
@@ -408,20 +401,12 @@ export default function StatisticsPage() {
       const driver1Id = driver1Info.driverId;
       const driver2Id = driver2Info.driverId;
       
-      const [driver1RacesData, driver2RacesData, driver1QualiData, driver2QualiData, driver1StandingsData, driver2StandingsData] = await Promise.all([
+      const [driver1RacesData, driver2RacesData, driver1QualiData, driver2QualiData] = await Promise.all([
         fetchErgastAPI(`${jolpica_base}/${year}/drivers/${driver1Id}/results.json?limit=100`),
         fetchErgastAPI(`${jolpica_base}/${year}/drivers/${driver2Id}/results.json?limit=100`),
         fetchErgastAPI(`${jolpica_base}/${year}/drivers/${driver1Id}/qualifying.json?limit=100`),
-        fetchErgastAPI(`${jolpica_base}/${year}/drivers/${driver2Id}/qualifying.json?limit=100`),
-        fetchErgastAPI(`${jolpica_base}/${year}/drivers/${driver1Id}/driverStandings.json`),
-        fetchErgastAPI(`${jolpica_base}/${year}/drivers/${driver2Id}/driverStandings.json`),
+        fetchErgastAPI(`${jolpica_base}/${year}/drivers/${driver2Id}/qualifying.json?limit=100`)
       ]);
-      const driver1OfficialPoints = parseFloat(
-        driver1StandingsData?.MRData?.StandingsTable?.StandingsLists?.[0]?.DriverStandings?.[0]?.points ?? '-1'
-      );
-      const driver2OfficialPoints = parseFloat(
-        driver2StandingsData?.MRData?.StandingsTable?.StandingsLists?.[0]?.DriverStandings?.[0]?.points ?? '-1'
-      );
       
       const driver1Races = driver1RacesData?.MRData?.RaceTable?.Races || [];
       const driver2Races = driver2RacesData?.MRData?.RaceTable?.Races || [];
@@ -535,9 +520,6 @@ export default function StatisticsPage() {
         if (position === 1) driver2Stats.poles += 1;
       });
       
-      if (driver1OfficialPoints >= 0) driver1Stats.points = driver1OfficialPoints;
-      if (driver2OfficialPoints >= 0) driver2Stats.points = driver2OfficialPoints;
-
       driver1Stats.avgRacePosition = driver1Stats.raceFinishes.length > 0
         ? parseFloat((driver1Stats.raceFinishes.reduce((a: number, b: number) => a + b, 0) / driver1Stats.raceFinishes.length).toFixed(1))
         : 20.0;
