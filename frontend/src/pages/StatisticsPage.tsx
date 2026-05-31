@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Trophy, Target, Award, Flag, BarChart3, Users } from 'lucide-react';
+import { ArrowLeft, Trophy, Target, Award, Zap, Flag, BarChart3, Users } from 'lucide-react';
 import SEO from '../components/SEO';
+import { useNavigate } from 'react-router-dom';
 import { useSubscription } from '../hooks/useSubscription';
 import UpgradeModal from '../components/UpgradeModal';
-import { useTranslation } from 'react-i18next';
 
 interface DriverStats {
   wins: number;
@@ -85,8 +85,8 @@ const fetchErgastAPI = async (url: string, retries = 3): Promise<any> => {
 };
 
 export default function StatisticsPage() {
-  const { t } = useTranslation();
-  const { canAccessYear } = useSubscription();
+  const navigate = useNavigate();
+  const { canAccessYear, isPremium, canMakeRequest, incrementRequest } = useSubscription();
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   
   // Selection states
@@ -651,72 +651,80 @@ export default function StatisticsPage() {
   const renderDriverCard = (driverData: DriverInfo | null, placeholder: string, isSecondDriver: boolean = false) => {
     if (!driverData) {
       return (
-        <div className="border border-sector-border bg-sector-cream flex flex-col items-center justify-center p-16">
-          <Users className="text-sector-muted/30 mb-4" size={32} />
-          <p className="font-space-mono text-[11px] tracking-[0.4em] text-sector-muted uppercase">{placeholder}</p>
+        <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-xl p-12 sm:p-20 flex flex-col items-center justify-center transition-all duration-300 ease-in-out">
+          <Users className="text-metrik-silver/50 mb-4 transition-all duration-300" size={48} />
+          <p className="text-metrik-silver font-rajdhani text-lg text-center transition-all duration-300">{placeholder}</p>
         </div>
       );
     }
 
     const baseColor = getDriverColor(driverData.team);
     const displayColor = isSecondDriver && h2hData && areTeammates(h2hData.driver1.team, h2hData.driver2.team)
-      ? '#888888'
+      ? '#FFFFFF'
       : baseColor;
 
-    const totalRaces = h2hData?.totalRaces || 24;
-
     return (
-      <div className="border border-sector-border overflow-hidden" style={{ borderTopColor: displayColor, borderTopWidth: 3 }}>
-        {/* Driver header */}
-        <div className="flex items-start justify-between p-4 border-b border-sector-border bg-sector-cream">
+      <div 
+        className="backdrop-blur-xl bg-gradient-to-br from-black/40 to-metrik-card/95 border-2 rounded-xl p-3 sm:p-4 transition-all duration-300 ease-in-out animate-fadeIn"
+        style={{ borderColor: `${displayColor}80` }}
+      >
+        <div className="flex items-center justify-between mb-3 sm:mb-4">
           <div>
-            <h2 className="font-ibm-mono text-2xl leading-none mb-1" style={{ fontWeight: 300, color: displayColor }}>
+            <h2 className="text-xl sm:text-2xl font-rajdhani font-black mb-1" style={{ color: displayColor }}>
               {driverData.code}
             </h2>
-            <p className="font-space-mono text-[11px] tracking-[0.2em] text-sector-dark">{driverData.name}</p>
-            <p className="font-space-mono text-[10px] tracking-[0.2em] text-sector-muted mt-0.5">{driverData.team}</p>
+            <p className="text-xs text-metrik-silver">{driverData.name}</p>
+            <p className="text-[10px] text-metrik-silver/70">{driverData.team}</p>
           </div>
           <div className="text-right">
-            <div className="font-ibm-mono text-3xl leading-none" style={{ fontWeight: 300, color: displayColor }}>
+            <div className="text-3xl sm:text-4xl font-rajdhani font-black" style={{ color: displayColor }}>
               {driverData.stats.points}
             </div>
-            <div className="font-space-mono text-[10px] tracking-[0.4em] text-sector-dark uppercase mt-1">{t('statistics.points')}</div>
+            <div className="text-[10px] text-metrik-silver uppercase">Points</div>
           </div>
         </div>
 
-        {/* Key stats grid */}
-        <div className="grid grid-cols-2 gap-px bg-sector-border">
+        <div className="grid grid-cols-2 gap-2 sm:gap-3 mb-3 sm:mb-4">
           {[
-            { icon: Trophy, label: t('statistics.wins'),    value: driverData.stats.wins },
-            { icon: Target, label: t('statistics.poles'),   value: driverData.stats.poles },
-            { icon: Award,  label: t('statistics.podiums'), value: driverData.stats.podiums },
-            { icon: Flag,   label: t('statistics.fastest'), value: driverData.stats.fastestLaps },
+            { icon: Trophy, label: 'Wins', value: driverData.stats.wins },
+            { icon: Target, label: 'Poles', value: driverData.stats.poles },
+            { icon: Award, label: 'Podiums', value: driverData.stats.podiums },
+            { icon: Zap, label: 'Fastest', value: driverData.stats.fastestLaps }
           ].map(({ icon: Icon, label, value }) => (
-            <div key={label} className="bg-sector-bg p-3">
-              <div className="flex items-center gap-1.5 mb-1">
-                <Icon size={10} style={{ color: displayColor }} />
-                <span className="font-space-mono text-[10px] tracking-[0.3em] text-sector-dark uppercase">{label}</span>
+            <div key={label} className="bg-metrik-black/40 rounded-lg p-2 sm:p-3 border border-white/10">
+              <div className="flex items-center gap-2 mb-1">
+                <Icon size={14} style={{ color: displayColor }} />
+                <span className="text-[10px] text-metrik-silver uppercase">{label}</span>
               </div>
-              <div className="font-ibm-mono text-xl leading-none" style={{ fontWeight: 300, color: displayColor }}>{value}</div>
+              <div className="text-xl sm:text-2xl font-rajdhani font-black" style={{ color: displayColor }}>
+                {value}
+              </div>
             </div>
           ))}
         </div>
 
-        {/* Detailed stats */}
-        <div className="divide-y divide-sector-border">
-          {([
-            [t('statistics.avgRacePos'),  `P${driverData.stats.avgRacePosition}`],
-            [t('statistics.avgQualiPos'), `P${driverData.stats.avgQualiPosition}`],
-            [t('statistics.dnfs'),        driverData.stats.dnfs],
-            [t('statistics.ptsPerRace'),  (driverData.stats.points / totalRaces).toFixed(1)],
-            [t('statistics.winRate'),     `${((driverData.stats.wins / totalRaces) * 100).toFixed(1)}%`],
-            [t('statistics.podiumRate'),  `${((driverData.stats.podiums / totalRaces) * 100).toFixed(1)}%`],
-            [t('statistics.poleConv'),    driverData.stats.poles > 0 ? `${((driverData.stats.wins / driverData.stats.poles) * 100).toFixed(1)}%` : '—'],
-            [t('statistics.qualiToRace'), (() => { const d = driverData.stats.avgRacePosition - driverData.stats.avgQualiPosition; return d > 0 ? `-${Math.abs(d).toFixed(1)}` : `+${Math.abs(d).toFixed(1)}`; })()],
-          ] as [string, string | number][]).map(([label, value]) => (
-            <div key={label} className="flex justify-between items-center px-4 py-2">
-              <span className="font-space-mono text-[11px] tracking-[0.2em] text-sector-dark uppercase">{label}</span>
-              <span className="font-ibm-mono text-sm" style={{ fontWeight: 300, color: displayColor }}>{value}</span>
+        <div className="space-y-2">
+          {[
+            ['Avg Race Position', `P${driverData.stats.avgRacePosition}`],
+            ['Avg Quali Position', `P${driverData.stats.avgQualiPosition}`],
+            ['DNFs', driverData.stats.dnfs],
+            ['Points per Race', (driverData.stats.points / (h2hData?.totalRaces || 24)).toFixed(1), true],
+            ['Win Rate', `${((driverData.stats.wins / (h2hData?.totalRaces || 24)) * 100).toFixed(1)}%`],
+            ['Podium Rate', `${((driverData.stats.podiums / (h2hData?.totalRaces || 24)) * 100).toFixed(1)}%`],
+            ['Pole Conversion', driverData.stats.poles > 0 ? `${((driverData.stats.wins / driverData.stats.poles) * 100).toFixed(1)}%` : 'N/A'],
+            ['Quali → Race', (() => {
+              const change = driverData.stats.avgRacePosition - driverData.stats.avgQualiPosition;
+              return change > 0 ? `-${Math.abs(change).toFixed(1)}` : `+${Math.abs(change).toFixed(1)}`;
+            })()]
+          ].map(([label, value, separator], index) => (
+            <div 
+              key={index}
+              className={`flex justify-between items-center py-2 border-t ${separator ? 'border-metrik-turquoise/20' : 'border-metrik-turquoise/10'}`}
+            >
+              <span className="text-xs text-metrik-silver uppercase">{label}</span>
+              <span className="text-base sm:text-lg font-rajdhani font-black" style={{ color: displayColor }}>
+                {value}
+              </span>
             </div>
           ))}
         </div>
@@ -726,188 +734,233 @@ export default function StatisticsPage() {
 
   return (
     <>
-      <SEO
-        path="/statistics"
-        title="Driver Statistics H2H — SECTOR F4R"
-        description="Compare Formula 1 drivers head-to-head: wins, podiums, qualifying performance and race analysis."
-        keywords="f1 driver statistics, formula 1 h2h, f1 driver comparison, f1 qualifying stats"
-      />
-      <div className="min-h-screen bg-sector-bg text-sector-black">
+    <SEO path="/statistics" title="F1 Driver Statistics - METRIK DELTA" description="Compare Formula 1 drivers with head-to-head statistics: wins, podiums, qualifying performance and race analysis." keywords="f1 driver statistics, formula 1 h2h, f1 driver comparison, f1 qualifying stats, f1 race stats" />
+    <div className="min-h-screen bg-metrik-black text-white">
+      <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-6 max-w-[1600px]">
+        {/* 🔥 HEADER RESPONSIVE */}
+        <div className="flex flex-col sm:flex-row items-center justify-between mb-4 sm:mb-6 gap-4">
+          <button
+            onClick={() => navigate('/')}
+            className="flex items-center gap-2 text-metrik-silver hover:text-metrik-turquoise transition-all duration-300 font-rajdhani hover:translate-x-[-4px] self-start sm:self-center"
+          >
+            <ArrowLeft size={20} />
+            <span className="text-sm sm:text-base font-bold uppercase">Back</span>
+          </button>
 
-        {/* ── Editorial header ── */}
-        <div className="border-b border-sector-border px-6 md:px-10 py-5">
-          <div className="flex items-end justify-between gap-4">
-            <div>
-              <p className="font-space-mono text-[11px] tracking-[0.45em] text-sector-muted uppercase mb-1">
-                {t('statistics.subtitle')}
-              </p>
-              <h1
-                className="font-ibm-mono uppercase tracking-[0.18em] text-sector-black leading-none"
-                style={{ fontSize: 'clamp(1.1rem, 2.4vw, 2.1rem)', fontWeight: 300 }}
-              >
-                {t('statistics.title')}
-              </h1>
-            </div>
-            <div className="hidden sm:flex items-center gap-2 pb-1">
-              <BarChart3 size={13} className="text-sector-red" />
-              <span className="font-space-mono text-[11px] tracking-[0.35em] text-sector-muted uppercase">2003 — 2026</span>
-            </div>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <BarChart3 className="text-metrik-turquoise" size={24} />
+            <h1 className="text-2xl sm:text-3xl font-rajdhani font-black text-transparent bg-clip-text bg-gradient-to-r from-metrik-turquoise to-cyan-300 tracking-wider uppercase">
+              Statistics H2H
+            </h1>
           </div>
+
+          <div className="hidden sm:block w-24"></div>
         </div>
 
-        <div className="px-6 md:px-10 py-6">
+        {/* 🔥 CONTROLS RESPONSIVE */}
+        <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-xl p-4 sm:p-6 mb-4">
+          <div className="grid grid-cols-1 lg:grid-cols-[200px_1fr] gap-4 sm:gap-6">
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-1 h-6 bg-metrik-turquoise rounded" />
+                <h3 className="text-sm font-rajdhani font-bold text-white uppercase tracking-wide">Season</h3>
+              </div>
 
-          {/* ── Controls ── */}
-          <div className="border border-sector-border mb-6 overflow-hidden">
-            <div className="flex flex-col lg:flex-row">
-
-              {/* Year selector */}
-              <div className="px-4 py-4 border-b lg:border-b-0 lg:border-r border-sector-border bg-sector-cream lg:w-44 shrink-0">
-                <p className="font-space-mono text-[10px] tracking-[0.4em] text-sector-dark uppercase mb-2">{t('statistics.season')}</p>
+              <div>
+                <label className="block text-xs font-rajdhani font-bold text-metrik-silver uppercase tracking-wide mb-2">Year</label>
                 <select
-                  value={year}
-                  onChange={(e) => {
-                    const newYear = Number(e.target.value);
-                    if (newYear >= 2026 && !canAccessYear(newYear)) { setShowUpgradeModal(true); return; }
-                    setYear(newYear);
+                value={year}
+               onChange={(e) => {
+               const newYear = Number(e.target.value);
+    
+                // Bloquer 2026 pour FREE users
+               if (newYear >= 2026 && !canAccessYear(newYear)) {
+              setShowUpgradeModal(true);
+                return;
+               }
+    
+               setYear(newYear);
                   }}
-                  className="w-full bg-transparent font-space-mono text-[12px] tracking-[0.25em] text-sector-red uppercase focus:outline-none cursor-pointer appearance-none"
+                  className="w-full h-11 px-4 bg-metrik-black/50 border border-metrik-turquoise/20 rounded-lg text-white text-sm font-rajdhani font-bold focus:border-metrik-turquoise focus:outline-none hover:border-metrik-turquoise/50 transition-all appearance-none cursor-pointer"
                 >
                   {Array.from({ length: 2026 - 2003 + 1 }, (_, i) => 2026 - i).map((y) => (
                     <option key={y} value={y}>{y}</option>
                   ))}
                 </select>
               </div>
+            </div>
 
-              {/* Driver grid */}
-              <div className="p-4 flex-1">
-                <div className="flex items-center justify-between mb-3">
-                  <p className="font-space-mono text-[10px] tracking-[0.4em] text-sector-dark uppercase">{t('statistics.driverSelection')}</p>
-                  {(driver1 || driver2) && (
-                    <button
-                      onClick={() => { setDriver1(''); setDriver2(''); }}
-                      className="font-space-mono text-[10px] tracking-[0.3em] text-sector-muted hover:text-sector-red uppercase transition-colors"
-                    >
-                      {t('statistics.clear')}
-                    </button>
-                  )}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-1 h-6 bg-metrik-turquoise rounded" />
+                  <h3 className="text-sm font-rajdhani font-bold text-white uppercase tracking-wide">Driver Selection</h3>
                 </div>
-                <div className="grid grid-cols-5 sm:grid-cols-8 lg:grid-cols-11 gap-1.5">
-                  {drivers.map((driver) => {
-                    const isD1 = driver1 === driver.abbreviation;
-                    const isD2 = driver2 === driver.abbreviation;
-                    const isSelected = isD1 || isD2;
-                    const color = getDriverColor(driver.team || 'Unknown');
-
-                    return (
-                      <button
-                        key={driver.abbreviation}
-                        onClick={() => {
-                          if (isD1) setDriver1('');
-                          else if (isD2) setDriver2('');
-                          else if (!driver1) setDriver1(driver.abbreviation);
-                          else if (!driver2) setDriver2(driver.abbreviation);
-                          else setDriver1(driver.abbreviation);
-                        }}
-                        disabled={loading}
-                        className={`relative h-8 font-space-mono text-[10px] tracking-[0.1em] uppercase transition-all ${
-                          isSelected ? '' : 'border border-sector-border text-sector-dark hover:text-sector-black hover:border-sector-black'
-                        } ${loading ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
-                        style={isSelected ? {
-                          border: `2px solid ${color}`,
-                          color,
-                          backgroundColor: `${color}10`,
-                        } : {}}
-                      >
-                        {isSelected && (
-                          <span
-                            className="absolute -top-1.5 -right-1.5 w-4 h-4 flex items-center justify-center font-space-mono text-[10px] text-white"
-                            style={{ backgroundColor: color }}
-                          >
-                            {isD1 ? '1' : '2'}
-                          </span>
-                        )}
-                        {driver.abbreviation}
-                      </button>
-                    );
-                  })}
-                </div>
+                {(driver1 || driver2) && (
+                  <button
+                    onClick={() => { setDriver1(''); setDriver2(''); }}
+                    className="text-xs font-rajdhani font-bold text-metrik-silver hover:text-metrik-turquoise uppercase tracking-wide transition-colors"
+                  >
+                    Clear
+                  </button>
+                )}
               </div>
-            </div>
-          </div>
 
-          {/* ── Error ── */}
-          {error && (
-            <div className="border border-sector-red bg-sector-red/5 px-4 py-3 mb-6">
-              <p className="font-space-mono text-[11px] tracking-[0.3em] text-sector-red uppercase">{error}</p>
-            </div>
-          )}
-
-          {/* ── Main 3-col grid ── */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {renderDriverCard(driver1Data, t('statistics.selectFirstDriver'), false)}
-
-            {/* Centre H2H */}
-            {h2hData ? (
-              <div className="space-y-4">
-                {/* Season badge */}
-                <div className="border border-sector-border bg-sector-cream p-4 text-center">
-                  <p className="font-space-mono text-[10px] tracking-[0.45em] text-sector-dark uppercase mb-1">{t('statistics.season')}</p>
-                  <p className="font-ibm-mono text-2xl text-sector-black" style={{ fontWeight: 300 }}>{h2hData.year}</p>
-                  <p className="font-space-mono text-[10px] tracking-[0.3em] text-sector-dark uppercase mt-1">{h2hData.totalRaces} {t('statistics.races')}</p>
-                </div>
-
-                {/* H2H bars */}
-                {(['Qualifying', 'Race'] as const).map((type) => {
-                  const isQuali = type === 'Qualifying';
-                  const wins1: number = isQuali ? h2hData.driver1.stats.qualiWins : getCorrectedRaceH2H(h2hData).wins1;
-                  const wins2: number = isQuali ? h2hData.driver2.stats.qualiWins : getCorrectedRaceH2H(h2hData).wins2;
-                  const { percent1, percent2 } = getPercentage(wins1, wins2);
-                  const color1 = getDriverColor(h2hData.driver1.team);
-                  const color2 = areTeammates(h2hData.driver1.team, h2hData.driver2.team) ? '#888888' : getDriverColor(h2hData.driver2.team);
+              {/* 🔥 DRIVER GRID RESPONSIVE - 5 colonnes mobile, 10 desktop */}
+              <div className="grid grid-cols-5 sm:grid-cols-8 lg:grid-cols-10 gap-2">
+                {drivers.map((driver) => {
+                  const isDriver1Selected = driver1 === driver.abbreviation;
+                  const isDriver2Selected = driver2 === driver.abbreviation;
+                  const isSelected = isDriver1Selected || isDriver2Selected;
+                  const driverColor = getDriverColor(driver.team || 'Unknown');
+                  
+                  let displayColor = driverColor;
+                  if (isDriver2Selected && driver1) {
+                    const driver1Team = drivers.find(d => d.abbreviation === driver1)?.team;
+                    if (driver1Team && areTeammates(driver.team, driver1Team)) {
+                      displayColor = '#FFFFFF';
+                    }
+                  }
 
                   return (
-                    <div key={type} className="border border-sector-border overflow-hidden">
-                      <div className="flex items-center gap-2 px-4 py-3 border-b border-sector-border bg-sector-cream">
-                        {isQuali ? <Target size={11} className="text-sector-red" /> : <Flag size={11} className="text-sector-red" />}
-                        <h3 className="font-space-mono text-[10px] tracking-[0.35em] text-sector-black uppercase">{isQuali ? t('statistics.h2hQualifying') : t('statistics.h2hRace')}</h3>
-                      </div>
-                      <div className="px-4 py-3">
-                        <div className="flex items-center justify-between mb-3">
-                          <span className="font-ibm-mono text-2xl" style={{ fontWeight: 300, color: color1 }}>{wins1}</span>
-                          <span className="font-space-mono text-[10px] tracking-[0.4em] text-sector-dark uppercase">vs</span>
-                          <span className="font-ibm-mono text-2xl" style={{ fontWeight: 300, color: color2 }}>{wins2}</span>
+                    <button
+                      key={driver.abbreviation}
+                      onClick={() => {
+                        if (isDriver1Selected) {
+                          setDriver1('');
+                        } else if (isDriver2Selected) {
+                          setDriver2('');
+                        } else if (!driver1) {
+                          setDriver1(driver.abbreviation);
+                        } else if (!driver2) {
+                          setDriver2(driver.abbreviation);
+                        } else {
+                          setDriver1(driver.abbreviation);
+                        }
+                      }}
+                      disabled={loading}
+                      className={`
+                        relative h-9 sm:h-10 rounded-lg font-rajdhani font-black text-xs sm:text-sm uppercase tracking-wide
+                        transition-all duration-200 flex items-center justify-center
+                        ${isSelected ? 'shadow-lg scale-105' : 'bg-metrik-black/40 border border-metrik-silver/20 text-metrik-silver/60 hover:text-metrik-silver hover:border-metrik-silver/40 hover:scale-105'}
+                        ${loading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+                      `}
+                      style={isSelected ? {
+                        backgroundColor: `${displayColor}20`,
+                        borderWidth: '2px',
+                        borderColor: displayColor,
+                        color: displayColor,
+                        boxShadow: `0 0 15px ${displayColor}30`,
+                      } : {}}
+                    >
+                      {isSelected && (
+                        <div
+                          className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black"
+                          style={{
+                            backgroundColor: displayColor,
+                            color: '#000',
+                            boxShadow: `0 0 8px ${displayColor}50`,
+                          }}
+                        >
+                          {isDriver1Selected ? '1' : '2'}
                         </div>
-                        <div className="h-4 overflow-hidden flex border border-sector-border">
-                          <div className="flex items-center justify-center transition-all duration-500"
-                            style={{ width: `${percent1}%`, backgroundColor: color1 }}>
-                            {percent1 > 15 && <span className="font-space-mono text-[10px] text-white">{percent1.toFixed(0)}%</span>}
-                          </div>
-                          <div className="flex items-center justify-center transition-all duration-500"
-                            style={{ width: `${percent2}%`, backgroundColor: color2 }}>
-                            {percent2 > 15 && <span className="font-space-mono text-[10px] text-white">{percent2.toFixed(0)}%</span>}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+                      )}
+                      {driver.abbreviation}
+                    </button>
                   );
                 })}
               </div>
-            ) : (
-              <div className="border border-sector-border bg-sector-cream flex flex-col items-center justify-center p-16">
-                <BarChart3 className="text-sector-muted/30 mb-4" size={32} />
-                <p className="font-space-mono text-[11px] tracking-[0.4em] text-sector-muted uppercase text-center">
-                  {loading ? t('common.loading') : t('statistics.selectTwoDrivers')}
-                </p>
-              </div>
-            )}
-
-            {renderDriverCard(driver2Data, t('statistics.selectSecondDriver'), true)}
+            </div>
           </div>
         </div>
 
-        <UpgradeModal isOpen={showUpgradeModal} onClose={() => setShowUpgradeModal(false)} reason="current_season" />
+        {error && (
+          <div className="mb-4 backdrop-blur-xl bg-red-500/10 border border-red-500/50 rounded-xl p-4 transition-all duration-300">
+            <p className="text-red-400 font-rajdhani font-bold text-center">{error}</p>
+          </div>
+        )}
+
+        {/* 🔥 MAIN CONTENT GRID RESPONSIVE */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
+          {renderDriverCard(driver1Data, 'Select first driver', false)}
+
+          {h2hData ? (
+            <div className="space-y-4">
+              <div className="backdrop-blur-xl bg-gradient-to-r from-metrik-turquoise/10 to-cyan-500/10 border border-metrik-turquoise/50 rounded-xl p-3 sm:p-4 text-center">
+                <h3 className="text-lg font-rajdhani font-black text-metrik-turquoise uppercase mb-1">{h2hData.year} Season</h3>
+                <p className="text-sm text-metrik-silver">{h2hData.totalRaces} Races</p>
+              </div>
+
+              {['Qualifying', 'Race'].map((type) => {
+                const isQuali = type === 'Qualifying';
+                
+                let wins1, wins2;
+                
+                if (isQuali) {
+                  wins1 = h2hData.driver1.stats.qualiWins;
+                  wins2 = h2hData.driver2.stats.qualiWins;
+                } else {
+                  const correctedRace = getCorrectedRaceH2H(h2hData);
+                  wins1 = correctedRace.wins1;
+                  wins2 = correctedRace.wins2;
+                }
+                
+                const { percent1, percent2 } = getPercentage(wins1, wins2);
+
+                return (
+                  <div key={type} className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-xl p-3 sm:p-4">
+                    <div className="flex items-center justify-center gap-2 mb-4">
+                      {isQuali ? <Target className="text-metrik-turquoise" size={18} /> : <Flag className="text-metrik-turquoise" size={18} />}
+                      <h3 className="text-sm font-rajdhani font-black text-metrik-turquoise uppercase">{type} H2H</h3>
+                    </div>
+
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-3xl font-rajdhani font-black" style={{ color: getDriverColor(h2hData.driver1.team) }}>
+                        {wins1}
+                      </span>
+                      <span className="text-3xl font-rajdhani font-black" 
+                        style={{ color: areTeammates(h2hData.driver1.team, h2hData.driver2.team) ? '#FFFFFF' : getDriverColor(h2hData.driver2.team) }}>
+                        {wins2}
+                      </span>
+                    </div>
+
+                    <div className="h-6 bg-metrik-black/50 rounded-full overflow-hidden border border-metrik-turquoise/30 flex">
+                      <div className="flex items-center justify-center transition-all duration-500" 
+                        style={{ width: `${percent1}%`, backgroundColor: getDriverColor(h2hData.driver1.team) }}>
+                        <span className="text-xs font-rajdhani font-bold text-white">{percent1.toFixed(0)}%</span>
+                      </div>
+                      <div className="flex items-center justify-center transition-all duration-500" 
+                        style={{ 
+                          width: `${percent2}%`, 
+                          backgroundColor: areTeammates(h2hData.driver1.team, h2hData.driver2.team) ? '#FFFFFF' : getDriverColor(h2hData.driver2.team) 
+                        }}>
+                        <span className="text-xs font-rajdhani font-bold text-black">{percent2.toFixed(0)}%</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-xl p-12 sm:p-20 flex flex-col items-center justify-center">
+              <BarChart3 className="text-metrik-silver/50 mb-4" size={48} />
+              <p className="text-metrik-silver font-rajdhani text-lg text-center">
+                {loading ? 'Loading H2H...' : driver1 && driver2 ? 'Loading...' : 'Select two drivers'}
+              </p>
+            </div>
+          )}
+
+          {renderDriverCard(driver2Data, 'Select second driver', true)}
+        </div>
       </div>
+
+      {/* 🔥 UPGRADE MODAL */}
+      <UpgradeModal
+        isOpen={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        reason="current_season"
+      />
+    </div>
     </>
   );
 }
