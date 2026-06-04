@@ -428,100 +428,72 @@ function GlobeD3({ selectedRound, onCircuitSelect }: { selectedRound: number | n
   );
 }
 
-// ─── Circuit SVG (replaces Three.js Circuit3D) ────────────────────────────────
-function CircuitSVG({ gpsData, round }: { gpsData: { x: number; y: number }[]; round: number }) {
-  if (gpsData.length === 0) return null;
+// 🔥 CIRCUIT 3D - h-72 (288px) optimal
+function Circuit3D({ gpsData, round }: { gpsData: { x: number; y: number }[]; round: number }) {
+  const meshRef = useRef<THREE.Mesh>(null);
+  
 
-  const W = 400, H = 280, margin = 28;
-
-  const xs = gpsData.map(p => p.x);
-  const ys = gpsData.map(p => p.y);
-  const minX = Math.min(...xs), maxX = Math.max(...xs);
-  const minY = Math.min(...ys), maxY = Math.max(...ys);
-  const rangeX = maxX - minX, rangeY = maxY - minY;
-  const scale = Math.min((W - 2 * margin) / rangeX, (H - 2 * margin) / rangeY);
-  const offX = margin + ((W - 2 * margin) - rangeX * scale) / 2;
-  const offY = margin + ((H - 2 * margin) - rangeY * scale) / 2;
-
-  const toSVG = (p: { x: number; y: number }) => ({
-    x: offX + (p.x - minX) * scale,
-    y: offY + (p.y - minY) * scale,
+  useFrame((state) => {
+    if (meshRef.current) {
+      meshRef.current.rotation.y = state.clock.elapsedTime * 0.1;
+    }
   });
 
-  const step = Math.max(1, Math.floor(gpsData.length / 400));
-  const pts = gpsData.filter((_, i) => i % step === 0).map(toSVG);
-  const pathD = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ') + ' Z';
+  if (gpsData.length === 0) return null;
 
-  // Corner detection (same algorithm as CornerMarkers)
-  const cornerData = (circuitsData as any)['2024']?.[round.toString()]?.corners;
-  const cornerPts: { x: number; y: number; num: number }[] = [];
+  const xCoords = gpsData.map(p => p.x);
+  const yCoords = gpsData.map(p => p.y);
+  const minX = Math.min(...xCoords);
+  const maxX = Math.max(...xCoords);
+  const minY = Math.min(...yCoords);
+  const maxY = Math.max(...yCoords);
+  const rangeX = maxX - minX;
+  const rangeY = maxY - minY;
+  const scale = 2 / Math.max(rangeX, rangeY);
 
-  if (cornerData?.length > 0) {
-    const n = gpsData.length;
-    const arcLen = [0];
-    for (let i = 1; i < n; i++) {
-      const dx = gpsData[i].x - gpsData[i-1].x;
-      const dy = gpsData[i].y - gpsData[i-1].y;
-      arcLen.push(arcLen[i-1] + Math.sqrt(dx*dx + dy*dy));
-    }
-    const total = arcLen[n-1];
-    const angles = new Array(n).fill(0);
-    for (let i = 1; i < n-1; i++) angles[i] = Math.atan2(gpsData[i+1].y - gpsData[i-1].y, gpsData[i+1].x - gpsData[i-1].x);
-    angles[0] = angles[1]; angles[n-1] = angles[n-2];
-    const curv = new Array(n).fill(0);
-    for (let i = 1; i < n-1; i++) {
-      let da = angles[i+1] - angles[i];
-      while (da > Math.PI) da -= 2*Math.PI;
-      while (da < -Math.PI) da += 2*Math.PI;
-      curv[i] = Math.abs(da);
-    }
-    const Ww = Math.max(8, Math.floor(n / 150));
-    const smooth = new Array(n).fill(0);
-    for (let i = 0; i < n; i++) {
-      let sum = 0, cnt = 0;
-      for (let j = Math.max(0, i-Ww); j <= Math.min(n-1, i+Ww); j++) { sum += curv[j]; cnt++; }
-      smooth[i] = sum / cnt;
-    }
-    const minGap = Math.max(5, Math.floor(n / (cornerData.length * 3)));
-    const peaks: { idx: number; val: number }[] = [];
-    for (let i = 1; i < n-1; i++) {
-      if (smooth[i] > smooth[i-1] && smooth[i] >= smooth[i+1] && smooth[i] > 0.001) {
-        const last = peaks[peaks.length-1];
-        if (!last || i - last.idx >= minGap) peaks.push({ idx: i, val: smooth[i] });
-        else if (smooth[i] > last.val) peaks[peaks.length-1] = { idx: i, val: smooth[i] };
-      }
-    }
-    peaks.sort((a, b) => b.val - a.val).slice(0, cornerData.length).sort((a, b) => a.idx - b.idx)
-      .forEach((p, i) => {
-        const target = (arcLen[p.idx] / total) * total;
-        let lo = 0, hi = n-1;
-        while (lo < hi) { const mid = (lo+hi)>>1; if (arcLen[mid] < target) lo = mid+1; else hi = mid; }
-        cornerPts.push({ ...toSVG(gpsData[lo]), num: cornerData[i].number });
-      });
-  }
+  const points = gpsData
+    .filter((_, i) => i % 3 === 0)
+    .map(p => 
+      new THREE.Vector3(
+        (p.x - minX - rangeX / 2) * scale,
+        0,
+        (p.y - minY - rangeY / 2) * scale
+      )
+    );
 
-  const start = toSVG(gpsData[0]);
+  const curve = new THREE.CatmullRomCurve3(points, true);
+  const tubeGeometry = new THREE.TubeGeometry(curve, 200, 0.015, 8, true);
+  const cornerData = circuitsData['2024'][round.toString()]?.corners;
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-full" style={{ background: '#080810' }}>
-      {/* Glow */}
-      <path d={pathD} fill="none" stroke="#00D2BE" strokeWidth={5} opacity={0.12} strokeLinecap="round" strokeLinejoin="round" />
-      {/* Track */}
-      <path d={pathD} fill="none" stroke="#00D2BE" strokeWidth={2} opacity={0.9} strokeLinecap="round" strokeLinejoin="round" />
+    <group ref={meshRef}>
+      <mesh geometry={tubeGeometry}>
+        <meshStandardMaterial
+          color="#00D2BE"
+          emissive="#00D2BE"
+          emissiveIntensity={0.6}
+          transparent
+          opacity={0.95}
+          roughness={0.3}
+          metalness={0.7}
+        />
+      </mesh>
+      <mesh position={points[0]}>
+        <sphereGeometry args={[0.03, 16, 16]} />
+        <meshStandardMaterial
+          color="#FFFFFF"
+          emissive="#00D2BE"
+          emissiveIntensity={1}
+        />
+      </mesh>
       {/* Corner markers */}
-      {cornerPts.map(pt => (
-        <g key={pt.num} transform={`translate(${pt.x.toFixed(1)},${pt.y.toFixed(1)})`}>
-          <circle r={4.5} fill="#0A0A14" stroke="#00D2BE" strokeWidth={0.8} opacity={0.85} />
-          <text y={0.5} textAnchor="middle" dominantBaseline="middle" fontSize={3.5} fill="#00D2BE"
-            fontFamily="IBM Plex Mono, monospace" opacity={0.95} style={{ pointerEvents: 'none' }}>
-            {pt.num}
-          </text>
-        </g>
-      ))}
-      {/* Start/Finish */}
-      <circle cx={start.x} cy={start.y} r={4} fill="#fff" opacity={0.9} />
-      <circle cx={start.x} cy={start.y} r={7} fill="none" stroke="#fff" strokeWidth={0.7} opacity={0.4} />
-    </svg>
+      {cornerData && (
+        <CornerMarkers 
+          gpsData={gpsData} 
+          corners={cornerData} 
+        />
+      )}
+    </group>
   );
 }
 
@@ -577,7 +549,12 @@ function CircuitDetailsCompact({ round }: { round: number }) {
             </div>
           </div>
         ) : (
-          <CircuitSVG gpsData={gpsData} round={round} />
+          <Canvas camera={{ position: [0, 2, 2], fov: 50 }}>
+            <ambientLight intensity={0.3} />
+            <pointLight position={[5, 5, 5]} intensity={0.8} />
+            <Circuit3D gpsData={gpsData} round={round} />
+            <OrbitControls enableDamping dampingFactor={0.05} enableZoom={true} enablePan={false} />
+          </Canvas>
         )}
       </div>
 
