@@ -1,8 +1,10 @@
-import { useState, useRef, useEffect, Fragment } from 'react';
+import { useState, useRef, useEffect, useCallback, Fragment } from 'react';
 import SEO from '../components/SEO';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Sphere } from '@react-three/drei';
 import * as THREE from 'three';
+import * as d3 from 'd3';
+import * as topojson from 'topojson-client';
 import { Globe as GlobeIcon, MapPin, X } from 'lucide-react';
 import circuitsData from '../data/circuits.json';
 import { CornerMarkers } from '../components/CornerMarkers';
@@ -193,64 +195,236 @@ function CalendarLines() {
   return <>{lines}</>;
 }
 
-function Globe({ selectedRound, onCircuitSelect }: { selectedRound: number | null; onCircuitSelect: (round: number | null) => void }) {
-  const globeRef = useRef<THREE.Mesh>(null);
-  const controlsRef = useRef<any>(null);
-  const [autoRotate, setAutoRotate] = useState(true);
+function GlobeD3({ selectedRound, onCircuitSelect }: { selectedRound: number | null; onCircuitSelect: (round: number | null) => void }) {
+  const svgRef = useRef<SVGSVGElement>(null);
+  const worldRef = useRef<any>(null);
+  const rotRef = useRef<[number, number, number]>([-20, -25, 0]);
+  const autoRef = useRef(true);
+  const dragging = useRef(false);
+  const dragStart = useRef<{ x: number; y: number; rot: [number, number, number] } | null>(null);
+  const rafRef = useRef(0);
+  const prevT = useRef(0);
+  const selRef = useRef(selectedRound);
+  const W = 360, H = 480, R = 162;
+  const zoomRef = useRef(R);
+  const MIN_ZOOM = R, MAX_ZOOM = R * 4;
+  const touchDistRef = useRef<number | null>(null);
+  const resumeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => { selRef.current = selectedRound; }, [selectedRound]);
 
   useEffect(() => {
-    if (selectedRound !== null && controlsRef.current) {
-      setAutoRotate(false);
-      const circuit = calendar2025.find(r => r.round === selectedRound)?.circuit;
-      if (!circuit) return;
-      const targetPosition = latLngToVector3(circuit.lat, circuit.lng, 2.02);
-      const currentTarget = controlsRef.current.target.clone();
-      const targetLookAt = targetPosition.clone().normalize().multiplyScalar(0.5);
-      const startTarget = currentTarget.clone();
-      const startDistance = controlsRef.current.object.position.length();
-      const targetDistance = 4;
-      let progress = 0;
-      const duration = 1000;
-      const startTime = Date.now();
-      const animate = () => {
-        const elapsed = Date.now() - startTime;
-        progress = Math.min(elapsed / duration, 1);
-        const eased = 1 - Math.pow(1 - progress, 3);
-        controlsRef.current.target.lerpVectors(startTarget, targetLookAt, eased);
-        const newDistance = startDistance + (targetDistance - startDistance) * eased;
-        const direction = controlsRef.current.object.position.clone().normalize();
-        controlsRef.current.object.position.copy(direction.multiplyScalar(newDistance));
-        controlsRef.current.update();
-        if (progress < 1) requestAnimationFrame(animate);
-      };
-      animate();
-    }
+    fetch('/world-110m.json')
+      .then(r => r.json())
+      .then(data => {
+        worldRef.current = data;
+        if (!svgRef.current) return;
+        const svg = d3.select(svgRef.current);
+        const countries = topojson.feature(data, data.objects.countries) as unknown as GeoJSON.FeatureCollection;
+        svg.select('#globe-countries')
+          .selectAll<SVGPathElement, GeoJSON.Feature>('path')
+          .data(countries.features)
+          .enter()
+          .append('path')
+          .attr('fill', '#141420')
+          .attr('stroke', '#2a2a38')
+          .attr('stroke-width', 0.45)
+          .attr('stroke-linejoin', 'round');
+      });
+  }, []);
+
+  useEffect(() => {
+    if (selectedRound === null) return;
+    const circuit = calendar2025.find(r => r.round === selectedRound)?.circuit;
+    if (!circuit) return;
+    autoRef.current = false;
+    const start: [number, number, number] = [...rotRef.current];
+    const target: [number, number, number] = [-circuit.lng, Math.max(-60, Math.min(60, -circuit.lat * 0.6)), 0];
+    const t0 = performance.now();
+    const dur = 900;
+    const ease = (t: number) => 1 - Math.pow(1 - t, 3);
+    const pan = (now: number) => {
+      const e = ease(Math.min((now - t0) / dur, 1));
+      rotRef.current = [
+        start[0] + (target[0] - start[0]) * e,
+        start[1] + (target[1] - start[1]) * e,
+        0,
+      ];
+      if (e < 1) requestAnimationFrame(pan);
+    };
+    requestAnimationFrame(pan);
   }, [selectedRound]);
 
+  const draw = useCallback((now: number) => {
+    const dt = now - prevT.current;
+    prevT.current = now;
+    if (autoRef.current) rotRef.current = [rotRef.current[0] + dt * 0.012, rotRef.current[1], 0];
+
+    const svg = svgRef.current;
+    if (!svg || !worldRef.current) { rafRef.current = requestAnimationFrame(draw); return; }
+
+    const projection = d3.geoOrthographic()
+      .scale(zoomRef.current).translate([W / 2, H / 2])
+      .rotate(rotRef.current).clipAngle(90);
+    const pathGen = d3.geoPath().projection(projection);
+
+    const grat = svg.querySelector<SVGPathElement>('#globe-grat');
+    if (grat) grat.setAttribute('d', pathGen(d3.geoGraticule().step([20, 20])()) || '');
+
+    d3.select(svg).select('#globe-countries')
+      .selectAll<SVGPathElement, GeoJSON.Feature>('path')
+      .attr('d', d => pathGen(d) || '');
+
+    const sorted = [...calendar2025].sort((a, b) => a.round - b.round);
+    d3.select(svg).select('#globe-seqlines')
+      .selectAll<SVGPathElement, typeof sorted[number]>('path')
+      .data(sorted)
+      .join('path')
+      .attr('fill', 'none')
+      .attr('stroke', '#00D2BE')
+      .attr('stroke-width', 0.9)
+      .attr('stroke-opacity', 0.35)
+      .attr('stroke-dasharray', '3,4')
+      .attr('d', (race, i) => {
+        const next = sorted[(i + 1) % sorted.length];
+        const line: GeoJSON.Feature<GeoJSON.LineString> = {
+          type: 'Feature', properties: {},
+          geometry: { type: 'LineString', coordinates: [
+            [race.circuit.lng, race.circuit.lat],
+            [next.circuit.lng, next.circuit.lat],
+          ]},
+        };
+        return pathGen(line) || '';
+      });
+
+    calendar2025.forEach(race => {
+      const pos = projection([race.circuit.lng, race.circuit.lat]);
+      const dist = d3.geoDistance(
+        [race.circuit.lng, race.circuit.lat],
+        [-rotRef.current[0], -rotRef.current[1]]
+      );
+      const visible = dist < Math.PI / 2 - 0.05;
+      const isSel = selRef.current === race.round;
+      const g = svg.querySelector<SVGGElement>(`#mk-${race.round}`);
+      if (!g || !pos) return;
+      g.setAttribute('transform', `translate(${pos[0].toFixed(1)},${pos[1].toFixed(1)})`);
+      g.setAttribute('visibility', visible ? 'visible' : 'hidden');
+      const glow = g.querySelector<SVGCircleElement>('.mk-glow');
+      const dot  = g.querySelector<SVGCircleElement>('.mk-dot');
+      const lbl  = g.querySelector<SVGTextElement>('.mk-label');
+      if (glow) { glow.setAttribute('r', isSel ? '9' : '5'); glow.setAttribute('opacity', isSel ? '0.3' : '0.15'); }
+      if (dot)  { dot.setAttribute('r', isSel ? '5' : '3.5'); }
+      if (lbl)  { lbl.setAttribute('font-size', isSel ? '10' : '8'); lbl.setAttribute('opacity', isSel ? '1' : '0.8'); }
+    });
+
+    rafRef.current = requestAnimationFrame(draw);
+  }, []);
+
+  useEffect(() => {
+    prevT.current = performance.now();
+    rafRef.current = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [draw]);
+
+  const scheduleResume = () => {
+    if (resumeTimerRef.current) clearTimeout(resumeTimerRef.current);
+    resumeTimerRef.current = setTimeout(() => { autoRef.current = true; }, 2000);
+  };
+
+  const onWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? 1.08 : 0.926;
+    zoomRef.current = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoomRef.current * factor));
+    scheduleResume();
+  };
+
+  const onDown = (e: React.MouseEvent | React.TouchEvent) => {
+    if ('touches' in e && e.touches.length === 2) return;
+    dragging.current = true;
+    autoRef.current = false;
+    if (resumeTimerRef.current) clearTimeout(resumeTimerRef.current);
+    const { clientX, clientY } = 'touches' in e ? e.touches[0] : e;
+    dragStart.current = { x: clientX, y: clientY, rot: [...rotRef.current] as [number, number, number] };
+  };
+  const onMove = (e: React.MouseEvent | React.TouchEvent) => {
+    if ('touches' in e && e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (touchDistRef.current !== null) {
+        const factor = dist / touchDistRef.current;
+        zoomRef.current = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoomRef.current * factor));
+      }
+      touchDistRef.current = dist;
+      return;
+    }
+    if (!dragging.current || !dragStart.current) return;
+    const { clientX, clientY } = 'touches' in e ? e.touches[0] : e;
+    const dx = clientX - dragStart.current.x;
+    const dy = clientY - dragStart.current.y;
+    rotRef.current = [
+      dragStart.current.rot[0] + dx * 0.38,
+      Math.max(-80, Math.min(80, dragStart.current.rot[1] - dy * 0.38)),
+      0,
+    ];
+  };
+  const onUp = () => { dragging.current = false; touchDistRef.current = null; autoRef.current = true; };
+
   return (
-    <>
-      <ambientLight intensity={0.5} />
-      <pointLight position={[10, 10, 10]} intensity={1} />
-      <pointLight position={[-10, -10, -10]} intensity={0.5} />
-      <Sphere ref={globeRef} args={[2, 64, 64]} onClick={(e) => { if (e.object === globeRef.current) { onCircuitSelect(null); setAutoRotate(true); } }}>
-        <meshStandardMaterial color="#0A2A3A" roughness={0.8} metalness={0.2} emissive="#001a2a" emissiveIntensity={0.2} />
-      </Sphere>
-      <Sphere args={[2.01, 64, 64]}>
-        <meshBasicMaterial color="#00D2BE" transparent opacity={0.05} wireframe />
-      </Sphere>
-      <CalendarLines />
-      {/* 🔥 MAPPING PARFAIT: calendar2025[i].round → circuit position */}
-      {calendar2025.map((race) => (
-        <CircuitMarker 
-          key={race.round} 
-          circuit={race.circuit} 
-          roundNumber={race.round} 
-          onClick={() => { onCircuitSelect(race.round); setAutoRotate(false); }} 
-          isSelected={selectedRound === race.round} 
-        />
-      ))}
-      <OrbitControls ref={controlsRef} enableDamping dampingFactor={0.05} autoRotate={autoRotate} autoRotateSpeed={0.5} minDistance={3} maxDistance={15} enablePan={false} />
-    </>
+    <svg
+      ref={svgRef}
+      viewBox={`0 0 ${W} ${H}`}
+      className="w-full h-full"
+      style={{ cursor: dragging.current ? 'grabbing' : 'grab', touchAction: 'none' }}
+      onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp}
+      onTouchStart={onDown} onTouchMove={onMove} onTouchEnd={onUp}
+      onWheel={onWheel}
+    >
+      <defs>
+        <clipPath id="globe-clip">
+          <circle cx={W / 2} cy={H / 2} r={R - 0.5} />
+        </clipPath>
+      </defs>
+      {/* Ocean */}
+      <circle cx={W / 2} cy={H / 2} r={R} fill="#0A0A10" />
+      <g clipPath="url(#globe-clip)">
+        <path id="globe-grat" fill="none" stroke="#1e1e2c" strokeWidth={0.3} opacity={0.8} />
+        <g id="globe-countries" />
+        <g id="globe-seqlines" />
+      </g>
+      {/* Globe border */}
+      <circle cx={W / 2} cy={H / 2} r={R} fill="none" stroke="#00D2BE" strokeWidth={0.8} opacity={0.6} />
+      {/* Circuit markers */}
+      <g clipPath="url(#globe-clip)">
+        {calendar2025.map(race => (
+          <g
+            key={race.round}
+            id={`mk-${race.round}`}
+            visibility="hidden"
+            style={{ cursor: 'pointer' }}
+            onClick={e => {
+              e.stopPropagation();
+              onCircuitSelect(selRef.current === race.round ? null : race.round);
+            }}
+          >
+            <circle className="mk-glow" r={5} fill="#00D2BE" opacity={0.15} />
+            <circle className="mk-dot"  r={3.5} fill="#00D2BE" />
+            <text
+              className="mk-label"
+              y={-9}
+              textAnchor="middle"
+              fontFamily="'IBM Plex Mono', monospace"
+              fontSize={8}
+              fill="#00D2BE"
+              opacity={0.8}
+              style={{ pointerEvents: 'none', userSelect: 'none' }}
+            >
+              {String(race.round).padStart(2, '0')}
+            </text>
+          </g>
+        ))}
+      </g>
+    </svg>
   );
 }
 
@@ -574,10 +748,8 @@ export default function TrackDatabasePage() {
                   <div className="w-1 h-6 bg-metrik-turquoise rounded-full"></div>
                   <h2 className="text-sm font-bold text-white uppercase tracking-wide">Globe View</h2>
                 </div>
-                <div style={{ height: 'calc(100% - 48px)' }}>
-                  <Canvas camera={{ position: [0, 0, 10], fov: 50 }} style={{ background: '#0A0A0A' }}>
-                    <Globe selectedRound={selectedRound} onCircuitSelect={setSelectedRound} />
-                  </Canvas>
+                <div className="relative" style={{ height: 'calc(100% - 48px)' }}>
+                  <GlobeD3 selectedRound={selectedRound} onCircuitSelect={setSelectedRound} />
                   <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-metrik-card/80 backdrop-blur-xl border border-metrik-turquoise/30 rounded-full px-3 py-1.5">
                     <div className="text-gray-300 text-xs flex items-center gap-2">
                       <span className="w-1.5 h-1.5 rounded-full bg-metrik-turquoise animate-pulse"></span>
