@@ -9,6 +9,7 @@ interface DriverStats {
   wins: number;
   podiums: number;
   poles: number;
+  poleWins: number;
   points: number;
   dnfs: number;
   avgRacePosition: number;
@@ -321,6 +322,7 @@ export default function StatisticsPage() {
         wins: 0,
         podiums: 0,
         poles: 0,
+        poleWins: 0,
         points: 0,
         dnfs: 0,
         raceFinishes: [],
@@ -343,6 +345,7 @@ export default function StatisticsPage() {
         stats.points += points;
         if (position === 1) stats.wins += 1;
         if (position <= 3) stats.podiums += 1;
+        if (position === 1 && parseInt(result.grid) === 1) stats.poleWins += 1;
         if (result.FastestLap?.rank === '1') stats.fastestLaps += 1;
         
         if (status.includes('Finished') || status.includes('Lap') || status.includes('+')) {
@@ -710,7 +713,7 @@ export default function StatisticsPage() {
             ['Points per Race', (driverData.stats.points / (h2hData?.totalRaces || 24)).toFixed(1), true],
             ['Win Rate', `${((driverData.stats.wins / (h2hData?.totalRaces || 24)) * 100).toFixed(1)}%`],
             ['Podium Rate', `${((driverData.stats.podiums / (h2hData?.totalRaces || 24)) * 100).toFixed(1)}%`],
-            ['Pole Conversion', driverData.stats.poles > 0 ? `${((driverData.stats.wins / driverData.stats.poles) * 100).toFixed(1)}%` : 'N/A'],
+            ['Pole Conversion', driverData.stats.poles > 0 ? `${((driverData.stats.poleWins / driverData.stats.poles) * 100).toFixed(1)}%` : 'N/A'],
             ['Quali → Race', (() => {
               const change = driverData.stats.avgRacePosition - driverData.stats.avgQualiPosition;
               return change > 0 ? `-${Math.abs(change).toFixed(1)}` : `+${Math.abs(change).toFixed(1)}`;
