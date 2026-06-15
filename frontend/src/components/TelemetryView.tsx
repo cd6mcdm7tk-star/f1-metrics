@@ -721,13 +721,14 @@ export default function TelemetryView({
               <LineChart data={telemetryChartData} syncId="telemetry" margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#333333" vertical={false} horizontal={true} />
                 <XAxis dataKey="distance" stroke="#666" tick={{ fontSize: 9 }} axisLine={false} tickLine={false} hide />
-                <YAxis 
-                  stroke="#666" 
+                <YAxis
+                  stroke="#666"
                   tick={{ fontSize: 9 }}
                   axisLine={false}
                   tickLine={false}
                   width={35}
-                  domain={[(dataMin: number) => Math.floor(dataMin / 10) * 10, (dataMax: number) => Math.ceil(dataMax / 10) * 10]}
+                  domain={[(dataMin: number) => dataMin - 5, (dataMax: number) => Math.ceil(dataMax / 10) * 10]}
+                  padding={{ top: 5, bottom: 0 }}
                   tickFormatter={(value) => Math.round(value).toString()}
                   label={{ value: 'km/h', angle: -90, position: 'insideLeft', style: { fontSize: 9, fill: '#666' } }}
                 />
