@@ -115,13 +115,15 @@ export default function TelemetryView({
   }, [telemetryData]);
 
   // 🔥 Stats memoizées — recalculées seulement quand telemetryData change
-  const { maxSpeed1, maxSpeed2, avgSpeed1, avgSpeed2, delta, maxDistance } = useMemo(() => {
+  const { maxSpeed1, maxSpeed2, avgSpeed1, avgSpeed2, delta, maxDistance, speedMin } = useMemo(() => {
     const tel = telemetryData.telemetry;
-    let ms1 = -Infinity, ms2 = -Infinity, sum1 = 0, sum2 = 0;
+    let ms1 = -Infinity, ms2 = -Infinity, mn = Infinity, sum1 = 0, sum2 = 0;
     let md = -Infinity;
     for (const p of tel) {
       if (p.speed1 > ms1) ms1 = p.speed1;
       if (p.speed2 > ms2) ms2 = p.speed2;
+      if (p.speed1 < mn) mn = p.speed1;
+      if (p.speed2 < mn) mn = p.speed2;
       sum1 += p.speed1;
       sum2 += p.speed2;
       if (p.distance > md) md = p.distance;
@@ -133,6 +135,7 @@ export default function TelemetryView({
       avgSpeed2: sum2 / tel.length,
       delta: (telemetryData.lapTime2 || 0) - (telemetryData.lapTime1 || 0),
       maxDistance: md,
+      speedMin: Math.floor(mn / 10) * 10,
     };
   }, [telemetryData]);
 
@@ -727,7 +730,7 @@ export default function TelemetryView({
                   axisLine={false}
                   tickLine={false}
                   width={35}
-                  domain={[40, (dataMax: number) => Math.ceil(dataMax / 10) * 10]}
+                  domain={[speedMin, (dataMax: number) => Math.ceil(dataMax / 10) * 10]}
                   tickFormatter={(value) => Math.round(value).toString()}
                   label={{ value: 'km/h', angle: -90, position: 'insideLeft', style: { fontSize: 9, fill: '#666' } }}
                 />
