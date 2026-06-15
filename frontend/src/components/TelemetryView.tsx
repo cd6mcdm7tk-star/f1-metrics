@@ -727,7 +727,7 @@ export default function TelemetryView({
                   axisLine={false}
                   tickLine={false}
                   width={35}
-                  domain={[40, (dataMax: number) => Math.ceil(dataMax / 10) * 10]}
+                  domain={[(dataMin: number) => Math.floor(dataMin / 10) * 10, (dataMax: number) => Math.ceil(dataMax / 10) * 10]}
                   tickFormatter={(value) => Math.round(value).toString()}
                   label={{ value: 'km/h', angle: -90, position: 'insideLeft', style: { fontSize: 9, fill: '#666' } }}
                 />
