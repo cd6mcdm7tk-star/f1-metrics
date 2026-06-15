@@ -3,11 +3,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { Loader2, AlertCircle, Eye, EyeOff, TrendingUp } from 'lucide-react';
 import { useTelemetryCache } from '../hooks/useTelemetryCache';
 
-// 🔥 NOUVEAU: Type pour sélection flexible
-interface LapSelection {
-  driver: string;
-  lapNumber: number;
-}
+import type { LapSelection } from '../pages/TelemetryPage';
 
 interface SessionViewProps {
   year: number;
@@ -16,8 +12,7 @@ interface SessionViewProps {
   driver1: string;
   driver2: string;
   onLapClick: (driver: string, lapNumber: number) => void;
-  selection1: LapSelection | null;
-  selection2: LapSelection | null;
+  selections: LapSelection[];
   getDriverColor: (driverCode: string) => string;
   areTeammates: (driver1: string, driver2: string) => boolean;
 }
@@ -135,6 +130,8 @@ const CustomDot = (props: any) => {
   );
 };
 
+const MAX_LAPS = 4;
+
 export default function SessionView({
   year,
   selectedGP,
@@ -142,11 +139,12 @@ export default function SessionView({
   driver1,
   driver2,
   onLapClick,
-  selection1,
-  selection2,
+  selections,
   getDriverColor,
   areTeammates
 }: SessionViewProps) {
+  const selection1 = selections[0] || null;
+  const selection2 = selections[1] || null;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lapTimesData, setLapTimesData] = useState<LapTimeData[]>([]);
@@ -617,114 +615,126 @@ export default function SessionView({
         </div>
       </div>
 
-      {/* LAP TIMES TABLE */}
-      <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-xl p-3 sm:p-4">
-        <div className="overflow-x-auto">
-          {/* Driver 1 Row */}
-          {driver1 && lapData1 && (
-            <div className="mb-3 sm:mb-4">
-              <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2">
-                <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full flex-shrink-0" style={{ backgroundColor: driver1Color }} />
-                <span className="text-xs sm:text-sm font-rajdhani font-bold" style={{ color: driver1Color }}>
-                  {driver1} • {lapData1.team}
-                </span>
-              </div>
-              <div className="flex gap-1.5 sm:gap-2">
-                {allLapTimesData.map((lap) => {
-                  if (!lap.lapTime1) return null;
-                  const isSelected = 
-                    (selection1?.driver === driver1 && selection1?.lapNumber === lap.lapNumber) ||
-                    (selection2?.driver === driver1 && selection2?.lapNumber === lap.lapNumber);
-                  const hasTelemetry = lap.hasTelemetry1;
-                  return (
-                    <button
-                      key={`d1-${lap.lapNumber}`}
-                      onClick={() => onLapClick(driver1, lap.lapNumber)}
-                      disabled={!hasTelemetry}
-                      className={`
-                        min-w-[80px] sm:min-w-[100px] px-2 py-1.5 sm:px-3 sm:py-2 rounded-lg
-                        font-rajdhani font-bold text-xs sm:text-sm
-                        transition-all duration-200 flex-shrink-0
-                        ${!hasTelemetry 
-                          ? 'bg-metrik-black/30 border border-metrik-silver/10 text-metrik-silver/40 cursor-not-allowed' 
-                          : isSelected 
-                            ? 'bg-metrik-turquoise/20 border-2 border-metrik-turquoise text-white scale-105' 
-                            : 'bg-metrik-black/50 border border-metrik-silver/20 text-metrik-silver hover:border-metrik-turquoise/50 hover:text-white'
-                        }
-                      `}
-                    >
-                      <div className="text-[10px] sm:text-xs text-metrik-silver mb-0.5 sm:mb-1">Lap {lap.lapNumber}</div>
-                      <div className="flex items-center justify-center gap-1 sm:gap-1.5">
-                        <span className="text-[11px] sm:text-sm">{formatLapTime(lap.lapTime1)}</span>
-                        {hasTelemetry && lap.compound1 && lap.compound1 !== 'None' && (
-                          <span className="text-xs sm:text-sm font-black" style={{ color: getTyreColor(lap.compound1) }}>
-                            {lap.compound1.charAt(0).toUpperCase()}
-                          </span>
-                        )}
-                        {hasTelemetry && (!lap.compound1 || lap.compound1 === 'None') && (
-                          <span className="text-metrik-turquoise text-xs sm:text-sm">⊕</span>
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Driver 2 Row */}
-          {driver2 && lapData2 && (
-            <div>
-              <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2">
-                <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full flex-shrink-0" style={{ backgroundColor: driver2Color }} />
-                <span className="text-xs sm:text-sm font-rajdhani font-bold" style={{ color: driver2Color }}>
-                  {driver2} • {lapData2.team}
-                </span>
-              </div>
-              <div className="flex gap-1.5 sm:gap-2">
-                {allLapTimesData.map((lap) => {
-                  if (!lap.lapTime2) return null;
-                  const isSelected = 
-                    (selection1?.driver === driver2 && selection1?.lapNumber === lap.lapNumber) ||
-                    (selection2?.driver === driver2 && selection2?.lapNumber === lap.lapNumber);
-                  const hasTelemetry = lap.hasTelemetry2;
-                  return (
-                    <button
-                      key={`d2-${lap.lapNumber}`}
-                      onClick={() => onLapClick(driver2, lap.lapNumber)}
-                      disabled={!hasTelemetry}
-                      className={`
-                        min-w-[80px] sm:min-w-[100px] px-2 py-1.5 sm:px-3 sm:py-2 rounded-lg
-                        font-rajdhani font-bold text-xs sm:text-sm
-                        transition-all duration-200 flex-shrink-0
-                        ${!hasTelemetry 
-                          ? 'bg-metrik-black/30 border border-metrik-silver/10 text-metrik-silver/40 cursor-not-allowed' 
-                          : isSelected 
-                            ? 'bg-metrik-turquoise/20 border-2 border-metrik-turquoise text-white scale-105' 
-                            : 'bg-metrik-black/50 border border-metrik-silver/20 text-metrik-silver hover:border-metrik-turquoise/50 hover:text-white'
-                        }
-                      `}
-                    >
-                      <div className="text-[10px] sm:text-xs text-metrik-silver mb-0.5 sm:mb-1">Lap {lap.lapNumber}</div>
-                      <div className="flex items-center justify-center gap-1 sm:gap-1.5">
-                        <span className="text-[11px] sm:text-sm">{formatLapTime(lap.lapTime2)}</span>
-                        {hasTelemetry && lap.compound2 && lap.compound2 !== 'None' && (
-                          <span className="text-xs sm:text-sm font-black" style={{ color: getTyreColor(lap.compound2) }}>
-                            {lap.compound2.charAt(0).toUpperCase()}
-                          </span>
-                        )}
-                        {hasTelemetry && (!lap.compound2 || lap.compound2 === 'None') && (
-                          <span className="text-metrik-turquoise text-xs sm:text-sm">⊕</span>
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+      {/* LAP TABLE — with sector times */}
+      <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-xl overflow-hidden">
+        {/* Selection hint */}
+        <div className="flex items-center justify-between px-3 sm:px-4 py-2 border-b border-metrik-turquoise/10 bg-metrik-black/30">
+          <span className="text-[10px] font-rajdhani font-bold text-metrik-silver/60 uppercase tracking-wider">
+            Laps — click to compare ({selections.length}/{MAX_LAPS} selected)
+          </span>
+          <span className="text-[10px] text-metrik-silver/40 font-rajdhani">
+            S = Sector • ● = Tyre compound
+          </span>
         </div>
+
+        {[
+          { driver: driver1, lapData: lapData1, driverColor: driver1Color, timeKey: 'lapTime1' as const, telKey: 'hasTelemetry1' as const, compKey: 'compound1' as const },
+          { driver: driver2, lapData: lapData2, driverColor: driver2Color, timeKey: 'lapTime2' as const, telKey: 'hasTelemetry2' as const, compKey: 'compound2' as const },
+        ].map(({ driver, lapData, driverColor, timeKey, telKey, compKey }) => {
+          if (!driver || !lapData) return null;
+          const driverLaps = lapData.laps || [];
+
+          return (
+            <div key={driver} className="border-b last:border-b-0 border-metrik-turquoise/10">
+              {/* Driver header */}
+              <div className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-metrik-black/20">
+                <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: driverColor }} />
+                <span className="text-xs sm:text-sm font-rajdhani font-bold" style={{ color: driverColor }}>
+                  {driver}
+                </span>
+                <span className="text-[10px] text-metrik-silver/50 font-rajdhani">• {lapData.team}</span>
+              </div>
+
+              {/* Lap table */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-[10px] sm:text-xs font-rajdhani min-w-[500px]">
+                  <thead>
+                    <tr className="text-metrik-silver/50 border-b border-metrik-silver/10">
+                      <th className="text-left px-3 py-1.5 font-bold uppercase tracking-wider w-12">Lap</th>
+                      <th className="text-right px-2 py-1.5 font-bold uppercase tracking-wider">Time</th>
+                      <th className="text-right px-2 py-1.5 font-bold uppercase tracking-wider text-metrik-silver/40">S1</th>
+                      <th className="text-right px-2 py-1.5 font-bold uppercase tracking-wider text-metrik-silver/40">S2</th>
+                      <th className="text-right px-2 py-1.5 font-bold uppercase tracking-wider text-metrik-silver/40">S3</th>
+                      <th className="px-3 py-1.5 w-8"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {driverLaps.filter(l => l.LapTime !== null).map((lap) => {
+                      const isSelected = selections.some(s => s.driver === driver && s.lapNumber === lap.LapNumber);
+                      const selIdx = selections.findIndex(s => s.driver === driver && s.lapNumber === lap.LapNumber);
+                      const hasTelemetry = lap.HasTelemetry;
+                      const isRef = selIdx === 0;
+
+                      return (
+                        <tr
+                          key={lap.LapNumber}
+                          onClick={() => hasTelemetry && onLapClick(driver, lap.LapNumber)}
+                          className={`border-b border-metrik-silver/5 transition-all duration-150 ${
+                            !hasTelemetry
+                              ? 'opacity-30 cursor-not-allowed'
+                              : isSelected
+                                ? 'bg-metrik-turquoise/10 cursor-pointer'
+                                : 'hover:bg-metrik-black/40 cursor-pointer'
+                          }`}
+                        >
+                          {/* Lap number + compound */}
+                          <td className="px-3 py-2">
+                            <div className="flex items-center gap-1.5">
+                              {isSelected && (
+                                <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-black flex-shrink-0 ${isRef ? 'bg-metrik-turquoise text-black' : 'bg-metrik-silver/30 text-white'}`}>
+                                  {selIdx + 1}
+                                </span>
+                              )}
+                              <span className={`font-bold ${isSelected ? 'text-white' : 'text-metrik-silver'}`}>
+                                {lap.LapNumber}
+                              </span>
+                              {lap.Compound && lap.Compound !== 'None' && (
+                                <span className="font-black text-[9px]" style={{ color: getTyreColor(lap.Compound) }}>
+                                  {lap.Compound.charAt(0).toUpperCase()}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+
+                          {/* Lap time */}
+                          <td className="px-2 py-2 text-right">
+                            <span className={`font-bold ${lap.IsPersonalBest ? 'text-purple-400' : isSelected ? 'text-white' : 'text-metrik-silver'}`}>
+                              {formatLapTime(lap.LapTime)}
+                            </span>
+                            {lap.IsPersonalBest && <span className="ml-1 text-purple-400/70">PB</span>}
+                          </td>
+
+                          {/* Sectors */}
+                          <td className="px-2 py-2 text-right text-metrik-silver/60">
+                            {lap.Sector1Time ? formatSector(lap.Sector1Time) : '—'}
+                          </td>
+                          <td className="px-2 py-2 text-right text-metrik-silver/60">
+                            {lap.Sector2Time ? formatSector(lap.Sector2Time) : '—'}
+                          </td>
+                          <td className="px-2 py-2 text-right text-metrik-silver/60">
+                            {lap.Sector3Time ? formatSector(lap.Sector3Time) : '—'}
+                          </td>
+
+                          {/* Action indicator */}
+                          <td className="px-3 py-2">
+                            {hasTelemetry && (
+                              <div className={`w-1.5 h-1.5 rounded-full mx-auto ${isSelected ? 'bg-metrik-turquoise' : 'bg-metrik-silver/20'}`} />
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
+}
+
+function formatSector(s: number): string {
+  return s.toFixed(3);
 }
