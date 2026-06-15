@@ -115,17 +115,21 @@ export default function TelemetryView({
   }, [telemetryData]);
 
   // 🔥 Stats memoizées — recalculées seulement quand telemetryData change
-  const { maxSpeed1, maxSpeed2, avgSpeed1, avgSpeed2, delta, maxDistance } = useMemo(() => {
+  const { maxSpeed1, maxSpeed2, avgSpeed1, avgSpeed2, delta, maxDistance, speedDomainMin, speedDomainMax } = useMemo(() => {
     const tel = telemetryData.telemetry;
-    let ms1 = -Infinity, ms2 = -Infinity, sum1 = 0, sum2 = 0;
+    let ms1 = -Infinity, ms2 = -Infinity, mins1 = Infinity, mins2 = Infinity, sum1 = 0, sum2 = 0;
     let md = -Infinity;
     for (const p of tel) {
       if (p.speed1 > ms1) ms1 = p.speed1;
       if (p.speed2 > ms2) ms2 = p.speed2;
+      if (p.speed1 < mins1) mins1 = p.speed1;
+      if (p.speed2 < mins2) mins2 = p.speed2;
       sum1 += p.speed1;
       sum2 += p.speed2;
       if (p.distance > md) md = p.distance;
     }
+    const rawMin = Math.min(mins1, mins2);
+    const rawMax = Math.max(ms1, ms2);
     return {
       maxSpeed1: ms1,
       maxSpeed2: ms2,
@@ -133,6 +137,8 @@ export default function TelemetryView({
       avgSpeed2: sum2 / tel.length,
       delta: (telemetryData.lapTime2 || 0) - (telemetryData.lapTime1 || 0),
       maxDistance: md,
+      speedDomainMin: Math.floor(rawMin / 5) * 5,
+      speedDomainMax: Math.ceil(rawMax / 10) * 10,
     };
   }, [telemetryData]);
 
@@ -717,7 +723,7 @@ export default function TelemetryView({
             </div>
             <SectorLabels sector1Percent={sector1Percent} sector2Percent={sector2Percent} sector3Percent={sector3Percent} />
             {loading && <SkeletonChart />}
-            <ResponsiveContainer width="100%" height={150} className="sm:!h-[200px]">
+            <ResponsiveContainer width="100%" height={200} className="sm:!h-[300px]">
               <LineChart data={telemetryChartData} syncId="telemetry" margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#333333" vertical={false} horizontal={true} />
                 <XAxis dataKey="distance" stroke="#666" tick={{ fontSize: 9 }} axisLine={false} tickLine={false} hide />
@@ -727,8 +733,8 @@ export default function TelemetryView({
                   axisLine={false}
                   tickLine={false}
                   width={35}
-                  domain={[(dataMin: number) => dataMin - 5, (dataMax: number) => Math.ceil(dataMax / 10) * 10]}
-                  padding={{ top: 5, bottom: 0 }}
+                  domain={[speedDomainMin, speedDomainMax]}
+                  allowDataOverflow={false}
                   tickFormatter={(value) => Math.round(value).toString()}
                   label={{ value: 'km/h', angle: -90, position: 'insideLeft', style: { fontSize: 9, fill: '#666' } }}
                 />
