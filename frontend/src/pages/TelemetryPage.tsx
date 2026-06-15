@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { ArrowLeft, Loader2, Gauge, Link, Check } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { ArrowLeft, Loader2, Gauge, X, Link, Check } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import SEO from '../components/SEO';
@@ -16,38 +16,9 @@ import CompactSelectors from '../components/CompactSelectors';
 import SessionView from '../components/SessionView';
 import TelemetryView from '../components/TelemetryView';
 
-export interface LapSelection {
+interface LapSelection {
   driver: string;
   lapNumber: number;
-}
-
-const MAX_LAPS = 4;
-
-const TEAMS_2026: Record<string, string> = {
-  VER: 'Red Bull Racing', HAD: 'Red Bull Racing',
-  LEC: 'Ferrari',         HAM: 'Ferrari',
-  RUS: 'Mercedes',        ANT: 'Mercedes',
-  NOR: 'McLaren',         PIA: 'McLaren',
-  ALO: 'Aston Martin',    STR: 'Aston Martin',
-  GAS: 'Alpine',          COL: 'Alpine',
-  ALB: 'Williams',        SAI: 'Williams',
-  OCO: 'Haas',            BEA: 'Haas',
-  LAW: 'Racing Bulls',    LIN: 'Racing Bulls',
-  HUL: 'Audi',            BOR: 'Audi',
-  PER: 'Cadillac',        BOT: 'Cadillac',
-};
-
-function serializeSelections(selections: LapSelection[]): string {
-  return selections.map(s => `${s.driver}-${s.lapNumber}`).join(',');
-}
-
-function deserializeSelections(raw: string): LapSelection[] {
-  if (!raw) return [];
-  return raw.split(',').flatMap(part => {
-    const match = part.match(/^([A-Z]{2,4})-(\d+)$/);
-    if (!match) return [];
-    return [{ driver: match[1], lapNumber: parseInt(match[2]) }];
-  });
 }
 
 export default function TelemetryPage() {
@@ -55,38 +26,46 @@ export default function TelemetryPage() {
   const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  // --- URL-backed state ---
+  // --- URL-backed initial values ---
   const [year, setYearRaw] = useState(() => parseInt(searchParams.get('y') || '2025'));
   const [selectedGP, setSelectedGPRaw] = useState(() => parseInt(searchParams.get('gp') || '1'));
   const [sessionType, setSessionTypeRaw] = useState(() => searchParams.get('s') || 'Q');
   const [driver1, setDriver1Raw] = useState(() => searchParams.get('d1') || '');
   const [driver2, setDriver2Raw] = useState(() => searchParams.get('d2') || '');
-  const [selections, setSelectionsRaw] = useState<LapSelection[]>(() =>
-    deserializeSelections(searchParams.get('ls') || '')
-  );
 
-  // --- derived comparison state ---
-  const [activeCompIdx, setActiveCompIdx] = useState(0); // which comparison is shown (0 = sel[0] vs sel[1])
-  const [allTelemetryData, setAllTelemetryData] = useState<TelemetryData[]>([]); // indexed by comp slot
-  const [loadingIdx, setLoadingIdx] = useState<number | null>(null);
+  const [drivers, setDrivers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [telemetryData, setTelemetryData] = useState<TelemetryData | null>(null);
+  const { canAccessYear, isPremium, canMakeRequest, incrementRequest } = useSubscription();
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [grandsPrix, setGrandsPrix] = useState<any[]>([]);
+
   const [activeTab, setActiveTab] = useState<'session' | 'telemetry'>('session');
 
-  // --- other state ---
-  const [drivers, setDrivers] = useState<any[]>([]);
-  const [grandsPrix, setGrandsPrix] = useState<any[]>([]);
-  const [driverTeams, setDriverTeams] = useState<Record<string, string>>({});
-  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [selection1, setSelection1] = useState<LapSelection | null>(() => {
+    const ld1 = searchParams.get('ld1');
+    const l1 = searchParams.get('l1');
+    return ld1 && l1 ? { driver: ld1, lapNumber: parseInt(l1) } : null;
+  });
+  const [selection2, setSelection2] = useState<LapSelection | null>(() => {
+    const ld2 = searchParams.get('ld2');
+    const l2 = searchParams.get('l2');
+    return ld2 && l2 ? { driver: ld2, lapNumber: parseInt(l2) } : null;
+  });
+  const [telemetryReady, setTelemetryReady] = useState(false);
+  const [selectedLapsCount, setSelectedLapsCount] = useState(0);
+
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastVisible, setToastVisible] = useState(false);
+  const [driverTeams, setDriverTeams] = useState<Record<string, string>>({});
   const [urlCopied, setUrlCopied] = useState(false);
 
-  const { canAccessYear, isPremium, canMakeRequest, incrementRequest } = useSubscription();
   const { getCached, setCached, getTelemetryKey } = useTelemetryCache();
 
-  // --- URL sync (write) ---
-  const urlSyncRef = useRef(false);
+  // --- URL sync (write) — skip first render ---
+  const urlSyncReady = useRef(false);
   useEffect(() => {
-    if (!urlSyncRef.current) { urlSyncRef.current = true; return; }
+    if (!urlSyncReady.current) { urlSyncReady.current = true; return; }
     const params: Record<string, string> = {
       y: year.toString(),
       gp: selectedGP.toString(),
@@ -94,40 +73,18 @@ export default function TelemetryPage() {
     };
     if (driver1) params.d1 = driver1;
     if (driver2) params.d2 = driver2;
-    const ls = serializeSelections(selections);
-    if (ls) params.ls = ls;
+    if (selection1) { params.ld1 = selection1.driver; params.l1 = selection1.lapNumber.toString(); }
+    if (selection2) { params.ld2 = selection2.driver; params.l2 = selection2.lapNumber.toString(); }
     setSearchParams(params, { replace: true });
-  }, [year, selectedGP, sessionType, driver1, driver2, selections]);
+  }, [year, selectedGP, sessionType, driver1, driver2, selection1, selection2]);
 
-  // --- setters that also clear dependent state ---
-  const setYear = (v: number) => {
-    setYearRaw(v);
-    setSelectedGPRaw(1);
-    setSessionTypeRaw('Q');
-    setDriver1Raw('');
-    setDriver2Raw('');
-    setSelectionsRaw([]);
-    setAllTelemetryData([]);
-    setActiveTab('session');
+  const showToast = (message: string) => {
+    setToastMessage(message);
+    setToastVisible(true);
+    setTimeout(() => setToastVisible(false), 3000);
   };
 
-  const setSelectedGP = (v: number) => {
-    setSelectedGPRaw(v);
-    setSelectionsRaw([]);
-    setAllTelemetryData([]);
-  };
-
-  const setSessionType = (v: string) => {
-    setSessionTypeRaw(v);
-    setSelectionsRaw([]);
-    setAllTelemetryData([]);
-  };
-
-  const setDriver1 = (v: string) => { setDriver1Raw(v); };
-  const setDriver2 = (v: string) => { setDriver2Raw(v); };
-
-  // --- Team colors ---
-  const getTeamColor = useCallback((teamName: string): string => {
+  const getTeamColor = (teamName: string): string => {
     const name = teamName.toLowerCase();
     const teamColors: Record<string, string> = {
       'red bull': '#3671C6', 'ferrari': '#E8002D', 'mercedes': '#27F4D2',
@@ -141,23 +98,59 @@ export default function TelemetryPage() {
       if (name.includes(key)) return color;
     }
     return '#00E5CC';
-  }, []);
+  };
 
-  const getDriverColor = useCallback((driverCode: string): string => {
-    return getTeamColor(driverTeams[driverCode] || 'Unknown');
-  }, [driverTeams, getTeamColor]);
+  const getDriverColor = (driverCode: string): string => getTeamColor(driverTeams[driverCode] || 'Unknown');
 
-  const areTeammates = useCallback((d1: string, d2: string): boolean => {
-    const t1 = driverTeams[d1];
-    const t2 = driverTeams[d2];
+  const areTeammates = (d1: string, d2: string): boolean => {
+    const t1 = driverTeams[d1], t2 = driverTeams[d2];
     if (!t1 || !t2) return false;
     return t1.toLowerCase() === t2.toLowerCase();
-  }, [driverTeams]);
+  };
 
-  // --- Load drivers ---
+  const TEAMS_2026: Record<string, string> = {
+    VER: 'Red Bull Racing', HAD: 'Red Bull Racing',
+    LEC: 'Ferrari',         HAM: 'Ferrari',
+    RUS: 'Mercedes',        ANT: 'Mercedes',
+    NOR: 'McLaren',         PIA: 'McLaren',
+    ALO: 'Aston Martin',    STR: 'Aston Martin',
+    GAS: 'Alpine',          COL: 'Alpine',
+    ALB: 'Williams',        SAI: 'Williams',
+    OCO: 'Haas',            BEA: 'Haas',
+    LAW: 'Racing Bulls',    LIN: 'Racing Bulls',
+    HUL: 'Audi',            BOR: 'Audi',
+    PER: 'Cadillac',        BOT: 'Cadillac',
+  };
+
+  useEffect(() => {
+    setSelectedGPRaw(1);
+    setSessionTypeRaw('Q');
+    setTelemetryData(null);
+    setActiveTab('session');
+    setTelemetryReady(false);
+    setSelectedLapsCount(0);
+    setSelection1(null);
+    setSelection2(null);
+    setDriver1Raw('');
+    setDriver2Raw('');
+  }, [year]);
+
   useEffect(() => {
     loadDrivers();
+    setSelection1(null);
+    setSelection2(null);
+    setTelemetryData(null);
+    setTelemetryReady(false);
+    setSelectedLapsCount(0);
   }, [year, selectedGP, sessionType]);
+
+  useEffect(() => {
+    getGrandsPrix(year).then(d => setGrandsPrix(d.grands_prix || [])).catch(() => {});
+  }, [year]);
+
+  useEffect(() => {
+    if (selection1 && selection2) loadTelemetry();
+  }, [selection1, selection2]);
 
   const loadDrivers = async () => {
     try {
@@ -169,109 +162,110 @@ export default function TelemetryPage() {
         Object.entries(TEAMS_2026).forEach(([code, team]) => { if (!teamsMap[code]) teamsMap[code] = team; });
       }
       setDriverTeams(teamsMap);
-
-      // Set default driver1/driver2 from URL or first 2 in list
-      if (!driver1 && data.length > 0) setDriver1Raw(searchParams.get('d1') || data[0].abbreviation);
-      if (!driver2 && data.length > 1) setDriver2Raw(searchParams.get('d2') || data[1]?.abbreviation || data[0].abbreviation);
+      if (data.length > 0) {
+        const d1 = searchParams.get('d1') || data[0].abbreviation;
+        const d2 = searchParams.get('d2') || data[1]?.abbreviation || data[0].abbreviation;
+        if (!driver1) setDriver1Raw(d1);
+        if (!driver2) setDriver2Raw(d2);
+        const fastestKey = getTelemetryKey(year, selectedGP, sessionType, d1, undefined, d2, undefined);
+        if (!getCached(fastestKey)) {
+          getTelemetryComparison(year, selectedGP, sessionType, d1, d2)
+            .then(prefetched => setCached(fastestKey, prefetched))
+            .catch(() => {});
+        }
+      }
     } catch (e) {
       console.error('Error loading drivers:', e);
     }
   };
 
-  // --- Load grands prix ---
-  useEffect(() => {
-    getGrandsPrix(year).then(d => setGrandsPrix(d.grands_prix || [])).catch(() => {});
-  }, [year]);
-
-  // --- Load telemetry for a comparison pair ---
-  const loadComparison = useCallback(async (refSel: LapSelection, compSel: LapSelection, compIdx: number) => {
+  const loadTelemetry = async () => {
+    if (!selection1 || !selection2) return;
     if (!canMakeRequest) { setShowUpgradeModal(true); return; }
 
-    const cacheKey = getTelemetryKey(year, selectedGP, sessionType, refSel.driver, refSel.lapNumber, compSel.driver, compSel.lapNumber);
+    const cacheKey = getTelemetryKey(year, selectedGP, sessionType, selection1.driver, selection1.lapNumber, selection2.driver, selection2.lapNumber);
     const cached = getCached<TelemetryData>(cacheKey);
-
     if (cached) {
-      setAllTelemetryData(prev => { const next = [...prev]; next[compIdx] = cached; return next; });
-      setActiveCompIdx(compIdx);
+      setTelemetryData(cached);
+      setTelemetryReady(true);
+      setSelectedLapsCount(2);
       setActiveTab('telemetry');
+      prefetchFastestLaps();
       return;
     }
 
-    setLoadingIdx(compIdx);
+    setLoading(true);
+    setTelemetryReady(false);
     try {
-      const data = await getTelemetryComparison(year, selectedGP, sessionType, refSel.driver, compSel.driver, refSel.lapNumber, compSel.lapNumber);
-      setCached(cacheKey, data);
-      setAllTelemetryData(prev => { const next = [...prev]; next[compIdx] = data; return next; });
-      setActiveCompIdx(compIdx);
+      const data = await getTelemetryComparison(year, selectedGP, sessionType, selection1.driver, selection2.driver, selection1.lapNumber, selection2.lapNumber);
+      setTelemetryData(data);
+      setTelemetryReady(true);
+      setSelectedLapsCount(2);
       setActiveTab('telemetry');
+      setCached(cacheKey, data);
       incrementRequest();
+      prefetchFastestLaps();
     } catch (e) {
       console.error('Error loading telemetry:', e);
+      setTelemetryReady(false);
+      setSelectedLapsCount(0);
     } finally {
-      setLoadingIdx(null);
+      setLoading(false);
     }
-  }, [year, selectedGP, sessionType, canMakeRequest, getCached, setCached, getTelemetryKey, incrementRequest]);
+  };
 
-  // --- Auto-load when selections change ---
-  useEffect(() => {
-    if (selections.length < 2) return;
-    const ref = selections[0];
-    const comp = selections[activeCompIdx + 1] || selections[1];
-    const idx = selections.indexOf(comp) - 1;
-    loadComparison(ref, comp, Math.max(0, idx));
-  }, [selections]);
+  const prefetchFastestLaps = async () => {
+    if (!driver1 || !driver2) return;
+    const key = getTelemetryKey(year, selectedGP, sessionType, driver1, undefined, driver2, undefined);
+    if (getCached(key)) return;
+    getTelemetryComparison(year, selectedGP, sessionType, driver1, driver2)
+      .then(data => setCached(key, data))
+      .catch(() => {});
+  };
 
-  // --- Lap click handler ---
   const handleLapClick = (driver: string, lapNumber: number) => {
-    setSelectionsRaw(prev => {
-      const existingIdx = prev.findIndex(s => s.driver === driver && s.lapNumber === lapNumber);
-      if (existingIdx >= 0) {
-        const next = prev.filter((_, i) => i !== existingIdx);
-        if (next.length === 0) setAllTelemetryData([]);
-        return next;
-      }
-      if (prev.length >= MAX_LAPS) {
-        showToast(`Max ${MAX_LAPS} laps — oldest replaced`);
-        return [...prev.slice(1), { driver, lapNumber }];
-      }
-      showToast(`${driver} Lap ${lapNumber} added`);
-      return [...prev, { driver, lapNumber }];
-    });
-  };
-
-  // --- Switch active comparison ---
-  const handleSwitchComparison = (compIdx: number) => {
-    setActiveCompIdx(compIdx);
-    if (!allTelemetryData[compIdx]) {
-      loadComparison(selections[0], selections[compIdx + 1], compIdx);
-    } else {
-      setActiveTab('telemetry');
+    if (selection1?.driver === driver && selection1?.lapNumber === lapNumber) {
+      setSelection1(null); setTelemetryData(null); setTelemetryReady(false); setSelectedLapsCount(0);
+      showToast(`${driver} Lap ${lapNumber} removed`); return;
     }
+    if (selection2?.driver === driver && selection2?.lapNumber === lapNumber) {
+      setSelection2(null); setTelemetryData(null); setTelemetryReady(false); setSelectedLapsCount(0);
+      showToast(`${driver} Lap ${lapNumber} removed`); return;
+    }
+    if (!selection1) { setSelection1({ driver, lapNumber }); showToast(`${driver} Lap ${lapNumber} added`); }
+    else if (!selection2) { setSelection2({ driver, lapNumber }); showToast(`${driver} Lap ${lapNumber} added`); }
+    else { setSelection1({ driver, lapNumber }); showToast(`${driver} Lap ${lapNumber} replaced`); }
   };
 
-  // --- Compare fastest laps ---
   const handleCompareFastestLaps = () => {
-    if (!driver1 || !driver2 || !canMakeRequest) return;
+    setSelection1(null); setSelection2(null);
+    showToast(`Comparing fastest laps: ${driver1} vs ${driver2}`);
+    if (driver1 && driver2 && canMakeRequest) loadTelemetryFastestLaps();
+  };
+
+  const loadTelemetryFastestLaps = async () => {
+    if (!driver1 || !driver2) return;
+    if (!canMakeRequest) { setShowUpgradeModal(true); return; }
     const cacheKey = getTelemetryKey(year, selectedGP, sessionType, driver1, undefined, driver2, undefined);
     const cached = getCached<TelemetryData>(cacheKey);
-
-    const finish = (data: TelemetryData) => {
-      setSelectionsRaw([{ driver: driver1, lapNumber: 0 }, { driver: driver2, lapNumber: 0 }]);
-      setAllTelemetryData([data]);
-      setActiveCompIdx(0);
-      setActiveTab('telemetry');
-    };
-
-    if (cached) { finish(cached); return; }
-
-    setLoadingIdx(0);
-    getTelemetryComparison(year, selectedGP, sessionType, driver1, driver2)
-      .then(data => { setCached(cacheKey, data); finish(data); incrementRequest(); })
-      .catch(e => console.error(e))
-      .finally(() => setLoadingIdx(null));
+    if (cached) {
+      setTelemetryData(cached); setTelemetryReady(true); setSelectedLapsCount(2); setActiveTab('telemetry'); return;
+    }
+    setLoading(true); setTelemetryReady(false);
+    try {
+      const data = await getTelemetryComparison(year, selectedGP, sessionType, driver1, driver2);
+      setTelemetryData(data); setTelemetryReady(true); setSelectedLapsCount(2); setActiveTab('telemetry');
+      setCached(cacheKey, data); incrementRequest();
+    } catch (e) {
+      console.error('Error loading telemetry:', e); setTelemetryReady(false); setSelectedLapsCount(0);
+    } finally { setLoading(false); }
   };
 
-  // --- Share URL ---
+  const clearSelection = (slot: 1 | 2) => {
+    if (slot === 1) setSelection1(null); else setSelection2(null);
+    setTelemetryData(null); setTelemetryReady(false); setSelectedLapsCount(0);
+  };
+
   const handleShareUrl = () => {
     navigator.clipboard.writeText(window.location.href).then(() => {
       setUrlCopied(true);
@@ -279,15 +273,11 @@ export default function TelemetryPage() {
     });
   };
 
-  const showToast = (message: string) => {
-    setToastMessage(message);
-    setToastVisible(true);
-    setTimeout(() => setToastVisible(false), 3000);
-  };
-
-  const currentTelemetry = allTelemetryData[activeCompIdx] || null;
-  const isLoading = loadingIdx !== null;
-  const hasComparison = selections.length >= 2 && currentTelemetry !== null;
+  const setYear = (v: number) => setYearRaw(v);
+  const setSelectedGP = (v: number) => setSelectedGPRaw(v);
+  const setSessionType = (v: string) => setSessionTypeRaw(v);
+  const setDriver1 = (v: string) => setDriver1Raw(v);
+  const setDriver2 = (v: string) => setDriver2Raw(v);
 
   return (
     <>
@@ -309,7 +299,7 @@ export default function TelemetryPage() {
               <ArrowLeft className="group-hover:-translate-x-1 transition-transform" size={18} />
               <span className="font-rajdhani font-bold uppercase tracking-wide text-sm sm:text-base">Back</span>
             </button>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3">
               <Gauge className="text-metrik-turquoise" size={24} />
               <h1 className="text-2xl sm:text-4xl font-rajdhani font-black bg-gradient-to-r from-white to-metrik-turquoise bg-clip-text text-transparent">
                 TELEMETRY ANALYSIS
@@ -325,39 +315,40 @@ export default function TelemetryPage() {
             </button>
           </div>
 
-          {/* TABS */}
+          {/* TABS NAVIGATION */}
           <div className="bg-metrik-black border border-metrik-turquoise/20 rounded-xl mb-4 sm:mb-6 overflow-hidden">
             <div className="flex items-stretch">
               <button
                 onClick={() => setActiveTab('session')}
                 className={`relative flex-1 px-4 py-3 sm:px-8 sm:py-4 font-rajdhani font-bold text-xs sm:text-sm uppercase tracking-wider transition-all duration-300 ${activeTab === 'session' ? 'text-metrik-turquoise' : 'text-metrik-silver/70 hover:text-white'}`}
               >
-                Session View
+                <span className="hidden sm:inline">Session View</span>
+                <span className="sm:hidden">Session</span>
                 {activeTab === 'session' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-metrik-turquoise" />}
               </button>
 
               <div className="w-px bg-metrik-turquoise/10" />
 
               <button
-                onClick={() => hasComparison && setActiveTab('telemetry')}
-                disabled={!hasComparison}
-                className={`relative flex-1 px-4 py-3 sm:px-8 sm:py-4 font-rajdhani font-bold text-xs sm:text-sm uppercase tracking-wider transition-all duration-300 ${!hasComparison ? 'cursor-not-allowed text-metrik-silver/30' : activeTab === 'telemetry' ? 'text-metrik-turquoise' : 'text-metrik-silver/70 hover:text-white'}`}
+                onClick={() => { if (telemetryReady) setActiveTab('telemetry'); }}
+                disabled={!telemetryReady}
+                className={`relative flex-1 px-4 py-3 sm:px-8 sm:py-4 font-rajdhani font-bold text-xs sm:text-sm uppercase tracking-wider transition-all duration-300 ${!telemetryReady ? 'cursor-not-allowed text-metrik-silver/30' : activeTab === 'telemetry' ? 'text-metrik-turquoise' : 'text-metrik-silver/70 hover:text-white'}`}
               >
                 <div className="flex items-center justify-center gap-2 sm:gap-3">
                   <span>Telemetry</span>
-                  {selections.length > 0 && (
+                  {selectedLapsCount > 0 && (
                     <span className="px-1.5 py-0.5 sm:px-2 text-[10px] sm:text-xs font-black rounded-full bg-orange-500/90 text-white">
-                      {selections.length}
+                      {selectedLapsCount}
                     </span>
                   )}
-                  {isLoading && <Loader2 className="animate-spin text-metrik-turquoise" size={12} />}
+                  {loading && <Loader2 className="animate-spin text-metrik-turquoise" size={12} />}
                 </div>
                 {activeTab === 'telemetry' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-metrik-turquoise" />}
               </button>
             </div>
           </div>
 
-          {/* Selectors (session tab only) */}
+          {/* CompactSelectors */}
           {activeTab === 'session' && (
             <CompactSelectors
               year={year}
@@ -376,60 +367,47 @@ export default function TelemetryPage() {
               onDriver1Change={setDriver1}
               onDriver2Change={setDriver2}
               onCompareFastestLaps={handleCompareFastestLaps}
-              loading={isLoading}
-              selection1={selections[0] || null}
-              selection2={selections[1] || null}
+              loading={loading}
+              selection1={selection1}
+              selection2={selection2}
               getDriverColor={getDriverColor}
               areTeammates={areTeammates}
               isPremium={isPremium}
             />
           )}
 
-          {/* Selection bar */}
-          {activeTab === 'session' && selections.length > 0 && (
+          {/* Selection indicator */}
+          {activeTab === 'session' && (selection1 || selection2) && (
             <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-xl p-3 sm:p-4 mb-4 sm:mb-6">
-              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                <span className="text-[10px] sm:text-xs font-rajdhani font-bold text-metrik-silver/60 uppercase tracking-wider">
-                  Selected ({selections.length}/{MAX_LAPS})
-                </span>
-                {selections.map((sel, idx) => (
-                  <div
-                    key={`${sel.driver}-${sel.lapNumber}`}
-                    className="flex items-center gap-1.5 px-2.5 py-1.5 bg-metrik-black/50 border border-metrik-turquoise/50 rounded-lg"
-                  >
-                    {idx === 0 && (
-                      <span className="text-[9px] font-rajdhani font-black text-metrik-turquoise/70 uppercase">REF</span>
-                    )}
-                    <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: getDriverColor(sel.driver) }} />
-                    <span className="font-rajdhani font-bold text-xs sm:text-sm text-white">
-                      {sel.driver}{sel.lapNumber > 0 ? ` L${sel.lapNumber}` : ' fastest'}
-                    </span>
-                    <button
-                      onClick={() => handleLapClick(sel.driver, sel.lapNumber)}
-                      className="ml-1 text-metrik-silver/60 hover:text-white transition-colors text-xs leading-none"
-                    >
-                      ×
-                    </button>
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 sm:gap-6">
+                {selection1 ? (
+                  <div className="flex items-center gap-2 sm:gap-3 px-3 py-2 sm:px-4 bg-metrik-black/50 border border-metrik-turquoise/50 rounded-lg">
+                    <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full flex-shrink-0" style={{ backgroundColor: getDriverColor(selection1.driver) }} />
+                    <span className="font-rajdhani font-bold text-sm sm:text-base">{selection1.driver} - Lap {selection1.lapNumber}</span>
+                    <button onClick={() => clearSelection(1)} className="ml-auto text-metrik-silver hover:text-white transition-colors"><X size={14} className="sm:w-4 sm:h-4" /></button>
                   </div>
-                ))}
-                {selections.length < 2 && (
-                  <span className="text-[10px] font-rajdhani text-metrik-silver/50 italic">
-                    Pick {2 - selections.length} more lap{selections.length === 0 ? 's' : ''} to compare
-                  </span>
+                ) : (
+                  <div className="px-3 py-2 sm:px-4 bg-metrik-black/30 border border-metrik-silver/20 rounded-lg text-center">
+                    <span className="font-rajdhani text-metrik-silver text-sm sm:text-base">Select first lap</span>
+                  </div>
                 )}
-                {selections.length >= 2 && (
-                  <button
-                    onClick={() => setActiveTab('telemetry')}
-                    className="ml-auto px-3 py-1.5 bg-metrik-turquoise/20 border border-metrik-turquoise/60 rounded-lg text-[10px] sm:text-xs font-rajdhani font-bold text-metrik-turquoise hover:bg-metrik-turquoise/30 transition-all"
-                  >
-                    View Telemetry →
-                  </button>
+                <span className="text-metrik-silver font-rajdhani font-bold text-center text-sm sm:text-base">VS</span>
+                {selection2 ? (
+                  <div className="flex items-center gap-2 sm:gap-3 px-3 py-2 sm:px-4 bg-metrik-black/50 border border-metrik-turquoise/50 rounded-lg">
+                    <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full flex-shrink-0" style={{ backgroundColor: getDriverColor(selection2.driver) }} />
+                    <span className="font-rajdhani font-bold text-sm sm:text-base">{selection2.driver} - Lap {selection2.lapNumber}</span>
+                    <button onClick={() => clearSelection(2)} className="ml-auto text-metrik-silver hover:text-white transition-colors"><X size={14} className="sm:w-4 sm:h-4" /></button>
+                  </div>
+                ) : (
+                  <div className="px-3 py-2 sm:px-4 bg-metrik-black/30 border border-metrik-silver/20 rounded-lg text-center">
+                    <span className="font-rajdhani text-metrik-silver text-sm sm:text-base">Select second lap</span>
+                  </div>
                 )}
               </div>
             </div>
           )}
 
-          {/* Main content */}
+          {/* Content */}
           <div className={activeTab === 'session' ? 'mt-6 sm:mt-8' : 'mt-0'}>
             {activeTab === 'session' ? (
               driver1 || driver2 ? (
@@ -440,38 +418,36 @@ export default function TelemetryPage() {
                   driver1={driver1}
                   driver2={driver2}
                   onLapClick={handleLapClick}
-                  selections={selections}
+                  selection1={selection1}
+                  selection2={selection2}
                   getDriverColor={getDriverColor}
                   areTeammates={areTeammates}
                 />
               ) : (
                 <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-xl p-12 sm:p-20 text-center">
                   <Gauge className="text-metrik-silver/50 mx-auto mb-3 sm:mb-4" size={48} />
-                  <p className="text-metrik-silver font-rajdhani text-base sm:text-xl">
-                    Select at least one driver to view lap times
-                  </p>
+                  <p className="text-metrik-silver font-rajdhani text-base sm:text-xl">Select at least one driver to view lap times</p>
                 </div>
               )
             ) : (
-              currentTelemetry ? (
+              telemetryData ? (
                 <TelemetryView
-                  telemetryData={currentTelemetry}
-                  selections={selections}
-                  activeCompIdx={activeCompIdx}
-                  onSwitchComparison={handleSwitchComparison}
+                  telemetryData={telemetryData}
+                  driver1={selection1?.driver || driver1}
+                  driver2={selection2?.driver || driver2}
+                  sessionType={sessionType}
+                  lapNumber={selection1?.lapNumber || null}
                   getDriverColor={getDriverColor}
                   areTeammates={areTeammates}
-                  loading={isLoading}
-                  loadingIdx={loadingIdx}
-                  sessionType={sessionType}
+                  loading={loading}
                 />
               ) : (
                 <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-xl p-12 sm:p-20 text-center">
                   <Gauge className="text-metrik-silver/50 mx-auto mb-3 sm:mb-4" size={48} />
                   <p className="text-metrik-silver font-rajdhani text-base sm:text-xl mb-3 sm:mb-4">
-                    {isLoading ? 'Loading telemetry data...' : 'Select 2+ laps in Session View to compare'}
+                    {loading ? 'Loading telemetry data...' : 'Select 2 laps in Session View to compare'}
                   </p>
-                  {isLoading && <Loader2 className="animate-spin text-metrik-turquoise mx-auto" size={28} />}
+                  {loading && <Loader2 className="animate-spin text-metrik-turquoise mx-auto" size={28} />}
                 </div>
               )
             )}
@@ -482,9 +458,7 @@ export default function TelemetryPage() {
           {toastVisible && toastMessage && (
             <div className="fixed bottom-4 sm:bottom-8 left-1/2 transform -translate-x-1/2 z-50 animate-slide-up px-4 max-w-[90vw] sm:max-w-none">
               <div className="bg-metrik-black/95 backdrop-blur-md border border-metrik-turquoise/40 rounded-lg px-4 py-2 sm:px-5 sm:py-2.5 shadow-2xl">
-                <p className="text-[10px] sm:text-xs font-rajdhani font-bold text-metrik-silver tracking-wide text-center">
-                  {toastMessage}
-                </p>
+                <p className="text-[10px] sm:text-xs font-rajdhani font-bold text-metrik-silver tracking-wide text-center">{toastMessage}</p>
               </div>
             </div>
           )}
