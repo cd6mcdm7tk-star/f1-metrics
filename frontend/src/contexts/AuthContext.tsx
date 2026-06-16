@@ -59,6 +59,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     checkPremiumStatus()
   }, [user])
 
+  // Après login : vérifier s'il y a un intent de paiement en attente
+  useEffect(() => {
+    if (user && !premiumLoading && !isPremium) {
+      const pending = sessionStorage.getItem('pendingUpgrade') as 'monthly' | 'annual' | null
+      if (pending) {
+        sessionStorage.removeItem('pendingUpgrade')
+        const apiUrl = (import.meta as any).env.VITE_API_URL_EU || (import.meta as any).env.VITE_API_URL
+        fetch(`${apiUrl}/api/create-checkout-session`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: user.id, plan_type: pending })
+        })
+          .then(r => r.json())
+          .then(data => { if (data.checkout_url) window.location.href = data.checkout_url })
+          .catch(err => console.error('Pending checkout failed:', err))
+      }
+    }
+  }, [user, premiumLoading, isPremium])
+
   useEffect(() => {
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {

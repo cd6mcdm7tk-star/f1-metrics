@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { X, Mail, CheckCircle } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useTranslation } from 'react-i18next'
+import { supabase } from '../lib/supabase'
 
 interface AuthModalProps {
   isOpen: boolean
@@ -16,6 +17,8 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [showEmailConfirmation, setShowEmailConfirmation] = useState(false)
+  const [showForgotPassword, setShowForgotPassword] = useState(false)
+  const [resetSent, setResetSent] = useState(false)
   const { signUp, signIn } = useAuth()
 
   if (!isOpen) return null
@@ -51,6 +54,64 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
         setLoading(false)
       }
     }
+  }
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!email) { setError('Please enter your email address'); return }
+    setLoading(true)
+    setError('')
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    })
+    setLoading(false)
+    if (error) { setError(error.message) } else { setResetSent(true) }
+  }
+
+  // Forgot password screen
+  if (showForgotPassword) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+        <div className="relative w-full max-w-md backdrop-blur-xl bg-metrik-card/95 border-2 border-metrik-turquoise/50 rounded-xl shadow-2xl shadow-metrik-turquoise/20">
+          <button onClick={() => { setShowForgotPassword(false); setResetSent(false); setError('') }}
+            className="absolute top-4 right-4 text-metrik-silver hover:text-white transition-colors z-10">
+            <X size={24} />
+          </button>
+          <div className="p-8 text-center">
+            <div className="flex justify-center mb-6">
+              <div className="p-4 bg-metrik-turquoise/10 rounded-full border border-metrik-turquoise/30">
+                <Mail className="w-12 h-12 text-metrik-turquoise" />
+              </div>
+            </div>
+            {resetSent ? (
+              <>
+                <h2 className="text-2xl font-rajdhani font-black text-white mb-3">Check your email</h2>
+                <p className="text-metrik-silver text-sm mb-6">We sent a password reset link to <span className="text-metrik-turquoise font-bold">{email}</span>.</p>
+                <button onClick={() => { setShowForgotPassword(false); setResetSent(false) }}
+                  className="w-full py-3 px-4 bg-metrik-turquoise hover:bg-metrik-turquoise/90 text-metrik-black font-rajdhani font-bold rounded-lg transition-all">
+                  Back to login
+                </button>
+              </>
+            ) : (
+              <>
+                <h2 className="text-2xl font-rajdhani font-black text-white mb-3">Reset password</h2>
+                <p className="text-metrik-silver text-sm mb-6">Enter your email and we'll send you a reset link.</p>
+                <form onSubmit={handleForgotPassword} className="space-y-4 text-left">
+                  {error && <div className="bg-red-500/10 border border-red-500/50 text-red-400 px-4 py-3 rounded-lg text-sm">{error}</div>}
+                  <input type="email" required value={email} onChange={e => setEmail(e.target.value)}
+                    placeholder="your@email.com"
+                    className="w-full px-4 py-3 bg-metrik-black/50 border border-metrik-turquoise/20 rounded-lg text-white placeholder-metrik-silver/50 focus:outline-none focus:ring-2 focus:ring-metrik-turquoise font-rajdhani" />
+                  <button type="submit" disabled={loading}
+                    className="w-full py-3 px-4 bg-metrik-turquoise hover:bg-metrik-turquoise/90 text-metrik-black font-rajdhani font-black rounded-lg transition-all disabled:opacity-50">
+                    {loading ? 'Sending...' : 'Send reset link'}
+                  </button>
+                </form>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    )
   }
 
   // Message de confirmation email après signup
@@ -199,16 +260,21 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
             </button>
           </form>
 
-          <div className="mt-6 text-center">
+          <div className="mt-6 flex flex-col items-center gap-3">
             <button
-              onClick={() => {
-                setIsLogin(!isLogin)
-                setError('')
-              }}
+              onClick={() => { setIsLogin(!isLogin); setError('') }}
               className="text-sm font-rajdhani font-bold text-metrik-silver hover:text-metrik-turquoise transition-colors"
             >
               {isLogin ? t('auth.noAccount') : t('auth.hasAccount')}
             </button>
+            {isLogin && (
+              <button
+                onClick={() => { setShowForgotPassword(true); setError('') }}
+                className="text-xs font-rajdhani text-metrik-silver/60 hover:text-metrik-turquoise transition-colors"
+              >
+                Forgot password?
+              </button>
+            )}
           </div>
         </div>
       </div>

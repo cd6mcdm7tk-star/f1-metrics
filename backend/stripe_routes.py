@@ -79,6 +79,9 @@ async def create_checkout_session(request: Request):
                 'quantity': 1,
             }],
             mode='subscription',
+            subscription_data={
+                'trial_period_days': 7,
+            },
             success_url='https://metrikdelta.com/success?session_id={CHECKOUT_SESSION_ID}',
             cancel_url='https://metrikdelta.com/cancel',
             client_reference_id=user_id,

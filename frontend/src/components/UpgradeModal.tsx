@@ -18,8 +18,9 @@ export default function UpgradeModal({ isOpen, onClose, reason = 'current_season
   if (!isOpen) return null
 
   const handleUpgrade = async () => {
-    // Si pas connecté, ouvrir le modal de login
     if (!user) {
+      // Mémoriser l'intent de paiement → sera auto-déclenché après login
+      sessionStorage.setItem('pendingUpgrade', selectedPlan)
       setAuthModalOpen(true)
       onClose()
       return
@@ -131,6 +132,9 @@ export default function UpgradeModal({ isOpen, onClose, reason = 'current_season
                 <h3 className="text-xs sm:text-sm md:text-lg font-rajdhani font-bold text-white mb-1 sm:mb-2">
                   Monthly
                 </h3>
+                <div className="mb-0.5 sm:mb-1">
+                  <span className="text-[9px] sm:text-[10px] md:text-xs text-green-400 font-bold block">7 days free</span>
+                </div>
                 <div className="mb-1 sm:mb-2 md:mb-4">
                   <span className="text-xl sm:text-2xl md:text-4xl font-rajdhani font-black text-metrik-turquoise">
                     1,99€
@@ -138,7 +142,7 @@ export default function UpgradeModal({ isOpen, onClose, reason = 'current_season
                   <span className="text-metrik-silver text-[10px] sm:text-xs md:text-sm ml-0.5 sm:ml-1">/mo</span>
                 </div>
                 <p className="text-[9px] sm:text-[10px] md:text-xs text-metrik-silver leading-tight">
-                  Billed monthly<br className="md:hidden" /><span className="hidden md:inline"> • </span>Cancel anytime
+                  Then billed monthly<br className="md:hidden" /><span className="hidden md:inline"> • </span>Cancel anytime
                 </p>
               </div>
             </button>
@@ -176,6 +180,9 @@ export default function UpgradeModal({ isOpen, onClose, reason = 'current_season
                 <h3 className="text-xs sm:text-sm md:text-lg font-rajdhani font-bold text-white mb-1 sm:mb-2">
                   Annual
                 </h3>
+                <div className="mb-0.5 sm:mb-1">
+                  <span className="text-[9px] sm:text-[10px] md:text-xs text-green-400 font-bold block">7 days free</span>
+                </div>
                 <div className="mb-1 sm:mb-2">
                   <span className="text-xl sm:text-2xl md:text-4xl font-rajdhani font-black text-metrik-turquoise">
                     14,99€
@@ -191,7 +198,7 @@ export default function UpgradeModal({ isOpen, onClose, reason = 'current_season
                   </span>
                 </div>
                 <p className="text-[9px] sm:text-[10px] md:text-xs text-metrik-silver leading-tight">
-                  Billed yearly<br className="md:hidden" /><span className="hidden md:inline"> • </span>8,89€ saved
+                  Then billed yearly<br className="md:hidden" /><span className="hidden md:inline"> • </span>8,89€ saved
                 </p>
               </div>
             </button>
@@ -252,16 +259,16 @@ export default function UpgradeModal({ isOpen, onClose, reason = 'current_season
               </>
             ) : user ? (
               <span className="text-xs sm:text-sm md:text-base">
-                Upgrade to PRO - {selectedPlan === 'monthly' ? '1,99€/month' : '14,99€/year'}
+                Start 7-day free trial → {selectedPlan === 'monthly' ? '1,99€/mo after' : '14,99€/yr after'}
               </span>
             ) : (
-              <span className="text-xs sm:text-sm md:text-base">Sign in to continue</span>
+              <span className="text-xs sm:text-sm md:text-base">Start 7-day free trial</span>
             )}
           </button>
 
           {/* Footer Note */}
           <p className="text-center text-[9px] sm:text-[10px] md:text-xs text-metrik-silver mt-2 sm:mt-3 md:mt-4 leading-tight px-2">
-            Cancel anytime • Secure payment via Stripe • Money-back guarantee
+            7 days free • No charge until trial ends • Cancel anytime • Secure payment via Stripe
           </p>
         </div>
       </div>
