@@ -20,13 +20,6 @@ function GoogleIcon() {
   )
 }
 
-function AppleIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M14.04 9.57c-.02-1.96 1.6-2.9 1.67-2.95-0.91-1.33-2.33-1.51-2.84-1.53-1.21-.12-2.36.71-2.97.71-.61 0-1.56-.69-2.56-.67-1.32.02-2.54.77-3.22 1.96-1.37 2.38-.35 5.9.98 7.83.65.94 1.42 2 2.44 1.96.98-.04 1.35-.63 2.54-.63 1.18 0 1.52.63 2.56.61 1.05-.02 1.71-.96 2.35-1.9.75-1.09 1.05-2.15 1.07-2.2-.02-.01-2.04-.78-2.06-3.09l.04.1zM12.1 3.56c.54-.65.9-1.56.8-2.46-.78.03-1.72.52-2.28 1.16-.5.58-.94 1.51-.82 2.4.87.07 1.75-.44 2.3-1.1z" fill="white"/>
-    </svg>
-  )
-}
 
 export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
   const { t } = useTranslation()
@@ -34,7 +27,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
-  const [oauthLoading, setOauthLoading] = useState<'google' | 'apple' | null>(null)
+  const [oauthLoading, setOauthLoading] = useState<'google' | null>(null)
   const [error, setError] = useState('')
   const [showEmailConfirmation, setShowEmailConfirmation] = useState(false)
   const [showForgotPassword, setShowForgotPassword] = useState(false)
@@ -48,16 +41,6 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
     setError('')
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: window.location.origin },
-    })
-    if (error) { setError(error.message); setOauthLoading(null) }
-  }
-
-  const handleAppleLogin = async () => {
-    setOauthLoading('apple')
-    setError('')
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'apple',
       options: { redirectTo: window.location.origin },
     })
     if (error) { setError(error.message); setOauthLoading(null) }
@@ -207,7 +190,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
           )}
 
           {/* OAuth buttons */}
-          <div className="space-y-3 mb-6">
+          <div className="mb-6">
             <button
               onClick={handleGoogleLogin}
               disabled={oauthLoading !== null}
@@ -217,17 +200,6 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                 <span className="w-[18px] h-[18px] border-2 border-gray-400 border-t-gray-800 rounded-full animate-spin" />
               ) : <GoogleIcon />}
               Continue with Google
-            </button>
-
-            <button
-              onClick={handleAppleLogin}
-              disabled={oauthLoading !== null}
-              className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-black hover:bg-gray-900 text-white font-rajdhani font-bold text-sm rounded-lg transition-all border border-gray-700 disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {oauthLoading === 'apple' ? (
-                <span className="w-[18px] h-[18px] border-2 border-gray-600 border-t-white rounded-full animate-spin" />
-              ) : <AppleIcon />}
-              Continue with Apple
             </button>
           </div>
 
