@@ -1,2 +1,9 @@
 backend/cache/
 .vercel
+
+# Environment files — never commit secrets (Stripe keys, Supabase service
+# role, OpenF1 credentials, etc). None are currently tracked, but nothing
+# was stopping a careless `git add -A` from picking them up.
+.env
+.env.*
+!.env.example
