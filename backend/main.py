@@ -1,4 +1,6 @@
 from fastapi import FastAPI, HTTPException, Query, Request
+from pydantic import BaseModel
+from typing import Optional, List
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
@@ -7,6 +9,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 import asyncio
+import datetime
 import logging
 import math
 import traceback
@@ -97,46 +100,87 @@ async def health():
 
 # 🔥 ENDPOINT GRANDS-PRIX AVEC REDIS
 
+def _fetch_grands_prix_sync(year: int) -> list[dict]:
+    schedule = fastf1.get_event_schedule(year)
+    grands_prix = []
+    for _, event in schedule.iterrows():
+        if event.get('EventFormat', '') == 'testing':
+            continue
+        grands_prix.append({
+            "round": int(event['RoundNumber']),
+            "country": event['Country'],
+            "location": event['Location'],
+            "name": event['Location'],
+            "official_name": event['OfficialEventName'],
+            "date": event['EventDate'].strftime('%Y-%m-%d'),
+            "is_sprint": event.get('EventFormat', 'conventional') != 'conventional',
+        })
+    return grands_prix
+
+
+async def _get_grands_prix_cached(year: int) -> list[dict]:
+    cache_key = f"grands_prix:{year}"
+    cached = redis_cache.get(cache_key)
+    if cached:
+        return cached.get("grands_prix", [])
+    grands_prix = await asyncio.to_thread(_fetch_grands_prix_sync, year)
+    redis_cache.set(cache_key, {"grands_prix": grands_prix}, ttl=86400)
+    return grands_prix
+
+
 @app.get("/api/grands-prix/{year}")
 @limiter.limit("30/minute")
 async def get_grands_prix(request: Request, year: int):
     try:
-        # 🔥 ÉTAPE 1 : Vérifier Redis cache
-        cache_key = f"grands_prix:{year}"
-        cached_data = redis_cache.get(cache_key)
-        
-        if cached_data:
-            return cached_data
-        
-        # 🔥 ÉTAPE 2 : Cache MISS → Calculer
-        schedule = await asyncio.to_thread(fastf1.get_event_schedule, year)
-        grands_prix = []
-        
-        for idx, event in schedule.iterrows():
-            event_type = event.get('EventFormat', '')
-            # Filtrer les événements de test
-            if event_type == 'testing':
-                continue
-            
-            gp_info = {
-                "round": int(event['RoundNumber']),
-                "country": event['Country'],
-                "location": event['Location'],
-                "name": event['Location'],
-                "official_name": event['OfficialEventName'],
-                "date": event['EventDate'].strftime('%Y-%m-%d')
-            }
-            grands_prix.append(gp_info)
-        
-        result = {"grands_prix": grands_prix}
-        
-        # 🔥 ÉTAPE 3 : Sauvegarder dans Redis (TTL 24h - calendrier ne change jamais)
-        redis_cache.set(cache_key, result, ttl=86400)
-        
-        return result
-        
+        grands_prix = await _get_grands_prix_cached(year)
+        return {"grands_prix": grands_prix}
     except Exception as e:
         logger.error(f"Error fetching GPs: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# 🔥 ENDPOINT CALENDAR — real race start times, for the homepage countdown
+
+@app.get("/api/calendar/{year}")
+@limiter.limit("30/minute")
+async def get_calendar(request: Request, year: int):
+    try:
+        cache_key = f"calendar:{year}"
+        cached = redis_cache.get(cache_key)
+        if cached:
+            return cached
+
+        grands_prix = await _get_grands_prix_cached(year)
+
+        race_sessions = await _openf1_request("sessions", {"year": year, "session_name": "Race"})
+        race_sessions = [s for s in race_sessions if "test" not in s.get("meeting_name", "").lower()]
+
+        calendar = []
+        for g in grands_prix:
+            date_start = f"{g['date']}T00:00:00Z"  # fallback: date-only, midnight UTC
+            try:
+                target_date = datetime.date.fromisoformat(g["date"])
+                if race_sessions:
+                    best = min(
+                        race_sessions,
+                        key=lambda s: abs((datetime.date.fromisoformat(s["date_start"][:10]) - target_date).days),
+                    )
+                    if abs((datetime.date.fromisoformat(best["date_start"][:10]) - target_date).days) <= 2:
+                        date_start = best["date_start"]
+            except Exception:
+                pass
+            calendar.append({
+                "round": g["round"],
+                "location": g["location"],
+                "country": g["country"],
+                "date_start": date_start,
+            })
+
+        result = {"year": year, "calendar": calendar}
+        redis_cache.set(cache_key, result, ttl=21600)  # 6h — session times can firm up as the weekend nears
+        return result
+    except Exception as e:
+        logger.error(f"Error fetching calendar: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -170,18 +214,37 @@ async def get_drivers(request: Request, year: int, gp_round: int, session_type: 
                 }
                 for d in raw if d.get("name_acronym")
             ]
+
+            # Order by this session's own classification (finishing/qualifying
+            # position) — not raw API insertion order — so the grid always
+            # reflects who actually set times, fastest/leader first.
+            try:
+                results = await _openf1_request("session_result", {"session_key": session_key})
+                pos_by_number = {
+                    r["driver_number"]: r["position"]
+                    for r in results
+                    if r.get("position") is not None and r.get("driver_number") is not None
+                }
+                drivers.sort(key=lambda d: pos_by_number.get(int(d["number"]), 999) if d["number"].isdigit() else 999)
+            except Exception as e:
+                logger.warning(f"session_result ordering unavailable for {year} R{gp_round} {session_type}: {e}")
         else:
             session = fastf1.get_session(year, gp_round, session_type)
             await asyncio.to_thread(session.load)
             drivers = []
             for driver_code in session.drivers:
                 driver_info = session.get_driver(driver_code)
+                pos = driver_info.get('Position') if hasattr(driver_info, 'get') else None
                 drivers.append({
                     'abbreviation': str(driver_info['Abbreviation']),
                     'number': str(driver_info['DriverNumber']),
                     'team': str(driver_info['TeamName']),
-                    'fullName': str(driver_info['FullName']) if 'FullName' in driver_info else str(driver_info['Abbreviation'])
+                    'fullName': str(driver_info['FullName']) if 'FullName' in driver_info else str(driver_info['Abbreviation']),
+                    '_pos': int(pos) if pos is not None and not pd.isna(pos) else 999,
                 })
+            drivers.sort(key=lambda d: d['_pos'])
+            for d in drivers:
+                del d['_pos']
 
         # 🔥 ÉTAPE 3 : Sauvegarder dans Redis (TTL 24h — grille stable)
         redis_cache.set(cache_key, drivers, ttl=86400)
@@ -458,16 +521,45 @@ async def _openf1_get_session_key(year: int, gp_round: int, session_type: str) -
         "year": year,
         "session_name": session_name,
     })
-    race_sessions = sorted(
-        [s for s in all_sessions if "test" not in s.get("meeting_name", "").lower()],
-        key=lambda s: s.get("date_start", ""),
-    )
-    if gp_round < 1 or gp_round > len(race_sessions):
-        raise HTTPException(
-            status_code=404,
-            detail=f"Round {gp_round} not found for {year} {session_name} ({len(race_sessions)} sessions found)"
-        )
-    session_key = race_sessions[gp_round - 1]["session_key"]
+    race_sessions = [s for s in all_sessions if "test" not in s.get("meeting_name", "").lower()]
+    if not race_sessions:
+        raise HTTPException(status_code=404, detail=f"No {session_name} sessions found for {year}")
+
+    # Resolve by DATE, not by position in a date-sorted list: FastF1's schedule
+    # (which our round numbers/labels come from) and OpenF1's own session list
+    # can disagree on which events are included — e.g. FastF1's 2026 schedule
+    # omits Bahrain and Jeddah entirely, silently shifting every later round's
+    # *position* out of sync between the two sources even though both agree on
+    # the actual calendar date. Matching on date keeps the label and the data
+    # pointed at the same physical race regardless of either source's gaps.
+    session_key = None
+    try:
+        grands_prix = await _get_grands_prix_cached(year)
+        target_date_str = next((g["date"] for g in grands_prix if g["round"] == gp_round), None)
+        if target_date_str:
+            target_date = datetime.date.fromisoformat(target_date_str)
+
+            def _date_gap(s):
+                try:
+                    return abs((datetime.date.fromisoformat(s["date_start"][:10]) - target_date).days)
+                except Exception:
+                    return 999
+
+            best = min(race_sessions, key=_date_gap)
+            if _date_gap(best) <= 2:
+                session_key = best["session_key"]
+    except Exception as e:
+        logger.warning(f"Date-based session resolution failed for {year} R{gp_round}: {e}")
+
+    if session_key is None:
+        # Fallback — positional match (only if date resolution above failed)
+        race_sessions_by_date = sorted(race_sessions, key=lambda s: s.get("date_start", ""))
+        if gp_round < 1 or gp_round > len(race_sessions_by_date):
+            raise HTTPException(
+                status_code=404,
+                detail=f"Round {gp_round} not found for {year} {session_name} ({len(race_sessions_by_date)} sessions found)"
+            )
+        session_key = race_sessions_by_date[gp_round - 1]["session_key"]
 
     # Save to both PostgreSQL (permanent) and Redis (TTL fallback)
     if db.available:
@@ -556,12 +648,14 @@ async def _openf1_fetch_tel_df(
         "y": "Y",
     })
 
-    # Compute cumulative Distance from GPS coordinates (OpenF1 coords are in metres)
-    x = pd.to_numeric(df.get("X", 0), errors="coerce").fillna(0).values
-    y = pd.to_numeric(df.get("Y", 0), errors="coerce").fillna(0).values
-    dx = np.diff(x, prepend=x[0])
-    dy = np.diff(y, prepend=y[0])
-    df["Distance"] = np.cumsum(np.sqrt(dx**2 + dy**2))
+    # Compute cumulative Distance by integrating Speed over time (matches
+    # FastF1's own add_distance() convention). Summing raw X/Y position deltas
+    # instead inflates the total by ~8-10x — OpenF1's position samples carry
+    # enough GPS-level jitter that each small step's noise adds real length
+    # onto the cumulative sum, turning a real ~5-7km lap into ~50-60km.
+    dt = df["date"].diff().dt.total_seconds().fillna(0).values
+    speed_ms = pd.to_numeric(df.get("Speed", 0), errors="coerce").fillna(0).values / 3.6
+    df["Distance"] = np.cumsum(speed_ms * dt)
 
     return df
 
@@ -830,6 +924,291 @@ async def get_telemetry_comparison(
             error_msg += f" Lap2 {lap_number2}"
         raise handle_fastf1_error(e, error_msg)
 
+# ======================================================================
+# MULTI-LAP TELEMETRY (up to 10 laps, cross-season capable)
+# ======================================================================
+
+class LapRef(BaseModel):
+    year: int
+    gp: int
+    session: str
+    driver: str
+    lap: Optional[int] = None  # None = fastest lap
+
+class TelemetryMultiRequest(BaseModel):
+    laps: List[LapRef]
+
+
+def _fetch_raw_lap_from_db(year: int, gp: int, session: str, driver: str, lap_number) -> dict | None:
+    """Fetch raw telemetry arrays for one lap from PostgreSQL. Returns None if unavailable."""
+    try:
+        lap_type = "fastest" if lap_number is None else f"lap_{lap_number}"
+        t = db.get_telemetry(year, gp, session, driver, lap_type)
+        if t is None:
+            return None
+        actual_lap = t["lap_number"]
+        meta = db.get_lap_metadata(year, gp, session, driver, actual_lap) or {}
+        d = t["telemetry_data"]
+
+        dist_arr = np.array(d["distance"], dtype=float)
+        _, idx = np.unique(dist_arr, return_index=True)
+
+        def _pick(key, default=0.0):
+            arr = d.get(key, [default] * len(dist_arr))
+            return np.array(arr)[idx]
+
+        return {
+            "dist":     dist_arr[idx],
+            "speed":    _pick("speed"),
+            "throttle": _pick("throttle"),
+            "brake":    np.array(d.get("brake", [False] * len(dist_arr)), dtype=int)[idx],
+            "gear":     _pick("gear", 1),
+            "rpm":      _pick("rpm", 10000),
+            "x":        _pick("x"),
+            "y":        _pick("y"),
+            "lap_time": meta.get("lap_time"),
+            "sectors": {
+                "s1": meta.get("sector1_time"),
+                "s2": meta.get("sector2_time"),
+                "s3": meta.get("sector3_time"),
+            },
+            "lap_number": actual_lap,
+        }
+    except Exception as e:
+        logger.warning(f"DB fetch failed for {driver} {year} R{gp} {session}: {e}")
+        return None
+
+
+async def _fetch_raw_lap(lap_ref: LapRef) -> dict:
+    """Fetch raw telemetry for one lap. Tries DB → OpenF1 → FastF1."""
+    year, gp, session, driver, lap = lap_ref.year, lap_ref.gp, lap_ref.session, lap_ref.driver, lap_ref.lap
+
+    # 1. PostgreSQL fast path
+    if db.available:
+        result = await asyncio.to_thread(_fetch_raw_lap_from_db, year, gp, session, driver, lap)
+        if result:
+            return result
+
+    # 2. OpenF1 direct (2026+)
+    if year >= 2026:
+        session_key = await _openf1_get_session_key(year, gp, session)
+        await asyncio.sleep(0.3)
+        d_num = await _openf1_get_driver_number(session_key, driver)
+        await asyncio.sleep(0.3)
+        lap_info = await _openf1_get_lap_info(session_key, d_num, lap)
+        await asyncio.sleep(0.3)
+        tel_df = await _openf1_fetch_tel_df(session_key, d_num, lap_info["date_start"], lap_info["lap_duration"])
+        if tel_df is None or tel_df.empty:
+            raise HTTPException(status_code=404, detail=f"No telemetry for {driver}")
+        tel_df = _prepare_tel(tel_df)
+        dist = tel_df["Distance"].values
+        rpm_col = next((c for c in ["RPM", "nRPM", "Rpm"] if c in tel_df.columns), None)
+        rpm_arr = pd.to_numeric(tel_df[rpm_col], errors="coerce").fillna(10000).values if rpm_col else np.full(len(dist), 10000.0)
+        return {
+            "dist":     dist,
+            "speed":    tel_df["Speed"].values,
+            "throttle": tel_df["Throttle"].values,
+            "brake":    tel_df["Brake"].astype(int).values,
+            "gear":     tel_df["nGear"].values,
+            "rpm":      rpm_arr,
+            "x":        tel_df["X"].values if "X" in tel_df.columns else np.zeros(len(dist)),
+            "y":        tel_df["Y"].values if "Y" in tel_df.columns else np.zeros(len(dist)),
+            "lap_time": lap_info.get("lap_duration"),
+            "sectors":  {"s1": lap_info.get("duration_sector_1"), "s2": lap_info.get("duration_sector_2"), "s3": lap_info.get("duration_sector_3")},
+            "lap_number": lap_info["lap_number"],
+        }
+
+    # 3. FastF1 fallback
+    def _ff1_fetch():
+        sess = fastf1.get_session(year, gp, session)
+        sess.load()
+        driver_laps = sess.laps.pick_drivers(driver)
+        if lap is not None:
+            lap_rows = driver_laps[driver_laps["LapNumber"] == lap]
+            if lap_rows.empty:
+                raise HTTPException(status_code=404, detail=f"Lap {lap} not found for {driver}")
+            lap_row = lap_rows.iloc[0]
+        else:
+            lap_row = driver_laps.pick_fastest()
+        tel = lap_row.get_telemetry().add_distance()
+        tel = _prepare_tel(tel)
+        rpm_col = next((c for c in ["RPM", "nRPM", "Rpm"] if c in tel.columns), None)
+        rpm_arr = pd.to_numeric(tel[rpm_col], errors="coerce").fillna(10000).values if rpm_col else np.full(len(tel), 10000.0)
+        lap_t = float(lap_row["LapTime"].total_seconds()) if pd.notna(lap_row.get("LapTime")) else None
+        return {
+            "dist":     tel["Distance"].values,
+            "speed":    tel["Speed"].values,
+            "throttle": tel["Throttle"].values,
+            "brake":    tel["Brake"].astype(int).values,
+            "gear":     tel["nGear"].values,
+            "rpm":      rpm_arr,
+            "x":        tel["X"].values if "X" in tel.columns else np.zeros(len(tel)),
+            "y":        tel["Y"].values if "Y" in tel.columns else np.zeros(len(tel)),
+            "lap_time": lap_t,
+            "sectors": {
+                "s1": float(lap_row["Sector1Time"].total_seconds()) if pd.notna(lap_row.get("Sector1Time")) else None,
+                "s2": float(lap_row["Sector2Time"].total_seconds()) if pd.notna(lap_row.get("Sector2Time")) else None,
+                "s3": float(lap_row["Sector3Time"].total_seconds()) if pd.notna(lap_row.get("Sector3Time")) else None,
+            },
+            "lap_number": int(lap_row["LapNumber"]) if pd.notna(lap_row.get("LapNumber")) else (lap or 0),
+        }
+
+    return await asyncio.to_thread(_ff1_fetch)
+
+
+def _get_circuit_corners_sync(year: int, gp: int, session_type: str) -> dict:
+    """Official FIA corner numbers + static (X, Y) positions, and the circuit's
+    own display rotation (degrees) — both from FastF1's circuit reference data."""
+    sess = fastf1.get_session(year, gp, session_type)
+    sess.load(laps=True, telemetry=False, weather=False, messages=False)
+    ci = sess.get_circuit_info()
+    corners = [
+        {
+            "number": int(row.Number),
+            "letter": (row.Letter or "").strip() or None,
+            "x": float(row.X),
+            "y": float(row.Y),
+        }
+        for row in ci.corners.itertuples()
+    ]
+    return {"corners": corners, "rotation": float(ci.rotation)}
+
+
+@app.post("/api/telemetry/multi")
+@limiter.limit("5/minute")
+async def get_telemetry_multi(request: Request, body: TelemetryMultiRequest):
+    """Multi-lap telemetry comparison — up to 10 laps, cross-season capable."""
+    if len(body.laps) < 2:
+        raise HTTPException(status_code=400, detail="At least 2 laps required")
+    if len(body.laps) > 10:
+        raise HTTPException(status_code=400, detail="Maximum 10 laps allowed")
+
+    import hashlib, json as _json
+    cache_key = "tel:multi:" + hashlib.md5(
+        _json.dumps([l.model_dump() for l in body.laps], sort_keys=True).encode()
+    ).hexdigest()[:16]
+    cached = redis_cache.get(cache_key)
+    if cached:
+        return cached
+
+    # Fetch all laps sequentially (rate-limit safety for OpenF1)
+    raw_laps: list[dict] = []
+    for i, lap_ref in enumerate(body.laps):
+        if i > 0 and lap_ref.year >= 2026:
+            await asyncio.sleep(0.5)
+        raw = await _fetch_raw_lap(lap_ref)
+        raw_laps.append(raw)
+
+    # Official FIA corner numbers — static (X, Y) from FastF1 circuit reference data,
+    # matched to the reference lap's own path to get a distance value. X/Y frame is
+    # shared between FastF1 and OpenF1 (both trace back to the same F1 live-timing
+    # position feed), so nearest-neighbour matching works — but naive whole-lap
+    # nearest-neighbour breaks on tracks with tightly-packed technical sections
+    # (e.g. Baku's castle section) where several corners sit close together in raw
+    # (X, Y) space despite being far apart in lap distance, causing mismatches.
+    # Fix: corners are numbered sequentially around the lap by the FIA, so search
+    # each one FORWARD ONLY from the previous corner's match — this enforces
+    # monotonically increasing distance and eliminates that failure mode.
+    corners: list[dict] = []
+    rotation: float = 0.0
+    try:
+        ref = body.laps[0]
+        corners_key = f"circuit:corners:{ref.year}:{ref.gp}"
+        circuit_data = redis_cache.get(corners_key)
+        if circuit_data is None:
+            circuit_data = await asyncio.to_thread(_get_circuit_corners_sync, ref.year, ref.gp, ref.session)
+            redis_cache.set(corners_key, circuit_data, ttl=2592000)  # 30 days — circuit layout is static
+
+        raw_corners = circuit_data["corners"]
+        rotation = circuit_data["rotation"]
+
+        ref_x = raw_laps[0]["x"].astype(float)
+        ref_y = raw_laps[0]["y"].astype(float)
+        ref_dist_arr = raw_laps[0]["dist"].astype(float)
+
+        ordered_corners = sorted(raw_corners, key=lambda c: c["number"])
+        search_start = 0
+        for c in ordered_corners:
+            d2 = (ref_x[search_start:] - c["x"]) ** 2 + (ref_y[search_start:] - c["y"]) ** 2
+            idx = search_start + int(np.argmin(d2))
+            corners.append({"number": c["number"], "letter": c["letter"], "distance": float(ref_dist_arr[idx])})
+            search_start = idx
+    except Exception as e:
+        logger.warning(f"circuit corners unavailable for {body.laps[0].year} R{body.laps[0].gp}: {e}")
+        corners = []
+
+    # Reference distance grid from first lap (1000 points)
+    ref_dist = raw_laps[0]["dist"].astype(float)
+    min_d, max_d = float(ref_dist.min()), float(ref_dist.max())
+    N = 1000
+    common_dist = np.linspace(min_d, max_d, N)
+
+    # Build interpolators — scale each lap's distance to reference range for cross-season
+    kw = dict(bounds_error=False)
+    i_speed, i_throttle, i_brake, i_gear, i_rpm = [], [], [], [], []
+    i_x = i_y = None
+    ref_range = max_d - min_d
+
+    for idx, raw in enumerate(raw_laps):
+        d = raw["dist"].astype(float)
+        d_range = d.max() - d.min()
+        d_sc = (d - d.min()) / d_range * ref_range + min_d if d_range > 0 and ref_range > 0 else d
+
+        i_speed.append(interp1d(d_sc, raw["speed"],    kind="linear",  fill_value=0,     **kw))
+        i_throttle.append(interp1d(d_sc, raw["throttle"], kind="linear",  fill_value=0,     **kw))
+        i_brake.append(interp1d(d_sc, raw["brake"],   kind="nearest", fill_value=0,     **kw))
+        i_gear.append(interp1d(d_sc, raw["gear"],     kind="nearest", fill_value=1,     **kw))
+        i_rpm.append(interp1d(d_sc, raw["rpm"],      kind="linear",  fill_value=10000, **kw))
+        if idx == 0:
+            i_x = interp1d(d_sc, raw["x"], kind="linear", fill_value="extrapolate")
+            i_y = interp1d(d_sc, raw["y"], kind="linear", fill_value="extrapolate")
+
+    # Pre-compute speeds on grid for vectorized cumulative time
+    n_laps = len(raw_laps)
+    speeds_grid = np.array([[float(f(d)) for d in common_dist] for f in i_speed])  # (n_laps, N)
+
+    # Cumulative lap time per driver
+    cum_times = np.zeros((n_laps, N))
+    for i in range(1, N):
+        seg = common_dist[i] - common_dist[i - 1]
+        avg_spd = (speeds_grid[:, i] + speeds_grid[:, i - 1]) / 2 / 3.6  # km/h → m/s
+        dt = np.where(avg_spd > 0, seg / avg_spd, 0.0)
+        cum_times[:, i] = cum_times[:, i - 1] + dt
+
+    # Normalize to actual lap times
+    for j, raw in enumerate(raw_laps):
+        lt = raw["lap_time"]
+        if lt and cum_times[j, -1] > 0:
+            cum_times[j] *= lt / cum_times[j, -1]
+
+    # Build telemetry array
+    telemetry = []
+    for i, dist in enumerate(common_dist):
+        telemetry.append({
+            "distance":  float(dist),
+            "speeds":    [float(speeds_grid[j, i]) for j in range(n_laps)],
+            "throttles": [float(i_throttle[j](dist)) for j in range(n_laps)],
+            "brakes":    [bool(i_brake[j](dist)) for j in range(n_laps)],
+            "gears":     [int(i_gear[j](dist)) for j in range(n_laps)],
+            "rpms":      [float(i_rpm[j](dist)) for j in range(n_laps)],
+            "deltas":    [float(cum_times[j, i] - cum_times[0, i]) for j in range(n_laps)],
+            "x":         float(i_x(dist)),
+            "y":         float(i_y(dist)),
+        })
+
+    drivers_meta = [
+        {
+            "driver":  r.driver, "year": r.year, "gp": r.gp, "session": r.session,
+            "lap":     raw["lap_number"], "lapTime": raw["lap_time"], "sectors": raw["sectors"],
+        }
+        for r, raw in zip(body.laps, raw_laps)
+    ]
+
+    result = {"drivers": drivers_meta, "telemetry": telemetry, "corners": corners, "rotation": rotation}
+    redis_cache.set(cache_key, result, ttl=3600)
+    return result
+
+
 @app.get("/api/session-laps/{year}/{gp_round}/{session_type}/{driver}")
 @limiter.limit("10/minute")
 async def get_session_laps(
@@ -915,6 +1294,24 @@ async def get_session_laps(
             if not raw_laps:
                 raise HTTPException(status_code=404, detail=f"No laps found for {driver}")
 
+            # OpenF1's /laps has no per-lap compound field — tyre compound only
+            # comes from /stints, keyed by lap RANGE (lap_start..lap_end) per
+            # driver. Build a lap_number -> compound lookup from that.
+            compound_by_lap: dict[int, str] = {}
+            try:
+                stints = await _openf1_request("stints", {
+                    "session_key": session_key,
+                    "driver_number": driver_num,
+                })
+                for stint in stints:
+                    compound = stint.get("compound")
+                    lap_start, lap_end = stint.get("lap_start"), stint.get("lap_end")
+                    if compound and lap_start is not None and lap_end is not None:
+                        for n in range(lap_start, lap_end + 1):
+                            compound_by_lap[n] = compound
+            except Exception as e:
+                logger.warning(f"stints fetch failed for {driver} {year} R{gp_round} {session_type}: {e}")
+
             valid_times = [l["lap_duration"] for l in raw_laps if l.get("lap_duration") is not None]
             fastest_time = min(valid_times) if valid_times else None
 
@@ -936,7 +1333,7 @@ async def get_session_laps(
                     "HasTelemetry":   lap_time is not None and lap.get("date_start") is not None,
                     "Team":           None,
                     "Driver":         driver,
-                    "Compound":       lap.get("compound"),
+                    "Compound":       compound_by_lap.get(lap_num) or lap.get("compound"),
                     "AirTemp":        None,
                     "TrackTemp":      None,
                     "WindSpeed":      None,
