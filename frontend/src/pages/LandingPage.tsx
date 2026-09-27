@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import LegalLinks from '../components/LegalLinks';
 import SEO from '../components/SEO';
 import { useIsMobile } from '../hooks/useIsMobile';
+import { getApiBase } from '../config';
 
 // ── Palette (Marlboro) ────────────────────────────────────────────────────────
 
@@ -56,8 +57,7 @@ export default function LandingPage() {
   const [cd, setCd] = useState<Countdown>({ days: 0, hours: 0, minutes: 0, seconds: 0 });
 
   useEffect(() => {
-    const API = import.meta.env.VITE_API_URL_EU || `${import.meta.env.VITE_API_URL}/api`;
-    fetch(`${API}/calendar/${CALENDAR_YEAR}`)
+    fetch(`${getApiBase()}/calendar/${CALENDAR_YEAR}`)
       .then(r => r.json())
       .then(d => setCalendar(d.calendar || []))
       .catch(() => setCalendar([]));

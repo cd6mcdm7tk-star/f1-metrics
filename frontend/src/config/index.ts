@@ -43,6 +43,16 @@ export function getBackendUrl(region: 'eu' | 'usa' = 'eu'): string {
   return region === 'usa' ? config.backend.usaUrl : config.backend.euUrl;
 }
 
+// Helper: backend URL with exactly one trailing /api — normalizes regardless
+// of whether the host was given with or without it. Needed because Vercel's
+// configured VITE_API_URL_EU has no /api suffix while the local .env.production
+// file does; several call sites assumed the latter and 404'd in prod as a
+// result (grands-prix/calendar/session-laps all silently missing /api).
+export function getApiBase(region: 'eu' | 'usa' = 'eu'): string {
+  const trimmed = getBackendUrl(region).replace(/\/+$/, '');
+  return trimmed.endsWith('/api') ? trimmed : `${trimmed}/api`;
+}
+
 if (isDevelopment) {
   console.log('🔧 Dev — backend:', config.backend.baseUrl);
 }

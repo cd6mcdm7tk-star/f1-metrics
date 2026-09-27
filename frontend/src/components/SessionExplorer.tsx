@@ -6,6 +6,7 @@ import {
 import { Loader2, Eye, EyeOff } from 'lucide-react';
 import { useTelemetryCache } from '../hooks/useTelemetryCache';
 import { useIsMobile } from '../hooks/useIsMobile';
+import { getApiBase } from '../config';
 import type { LapData } from '../types/session';
 import { compoundColor } from '../utils/compoundColors';
 
@@ -185,7 +186,7 @@ export default function SessionExplorer({
   }, [showOutliers]);
 
   const { getCached, setCached, getSessionLapsKey } = useTelemetryCache();
-  const API = import.meta.env.VITE_API_URL_EU || `${import.meta.env.VITE_API_URL}/api`;
+  const API = getApiBase();
 
   // ── Reset on session change ────────────────────────────────────────────────
   useEffect(() => {

@@ -3,8 +3,9 @@ import type { EnhancedAnimationData, RaceAnimationData } from '../types/animatio
 import type { RaceData, PitStopsData, RaceEventsData } from '../types/pitwall';
 import type { PositionEvolution, StrategyComparison } from '../types/pitwall';
 import type { DriverStanding, ConstructorStanding, Circuit } from '../types/championship';
+import { getApiBase } from '../config';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL_EU || `${import.meta.env.VITE_API_URL}/api`;
+const API_BASE_URL = getApiBase();
 
 class BackendService {
   async getSchedule(year: number) {
