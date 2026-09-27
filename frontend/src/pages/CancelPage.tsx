@@ -1,71 +1,92 @@
-import { useNavigate } from 'react-router-dom'
-import { XCircle, Home, RotateCcw } from 'lucide-react'
-import { Helmet } from 'react-helmet-async'
+import { useNavigate } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
+
+const P = {
+  bg:        '#5e1018',
+  text:      '#f2e6d8',
+  textSub:   'rgba(242,230,216,0.55)',
+  textGhost: 'rgba(242,230,216,0.28)',
+  border:    'rgba(242,230,216,0.18)',
+};
 
 export default function CancelPage() {
-  const navigate = useNavigate()
-
-  const handleRetry = () => {
-    // Retour à la homepage où le user pourra re-cliquer sur upgrade
-    navigate('/')
-  }
+  const navigate = useNavigate();
 
   return (
     <>
-    <Helmet><meta name="robots" content="noindex, nofollow" /></Helmet>
-    <div className="min-h-screen bg-metrik-black flex items-center justify-center p-6">
-      <div className="max-w-2xl w-full bg-metrik-card rounded-2xl border border-red-500/30 p-8 md:p-12 text-center">
-        {/* Error Icon */}
-        <div className="mb-6 flex justify-center">
-          <XCircle className="w-24 h-24 text-red-500" />
+      <Helmet><meta name="robots" content="noindex, nofollow" /></Helmet>
+      <div style={{
+        height: '100dvh', background: P.bg,
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        fontFamily: "'Rajdhani', sans-serif",
+        textAlign: 'center', padding: '40px 24px',
+        position: 'relative',
+      }}>
+
+        {/* Top wordmark */}
+        <div style={{ position: 'absolute', top: 28, left: 36 }}>
+          <span style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 13, letterSpacing: '0.22em', textTransform: 'uppercase', color: P.text }}>
+            METRIK DELTA
+          </span>
         </div>
 
-        {/* Title */}
-        <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">
-          Payment cancelled
+        {/* Content */}
+        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, letterSpacing: '0.30em', textTransform: 'uppercase', color: P.textSub }}>
+          Payment not completed
+        </span>
+
+        <h1 style={{ fontWeight: 700, fontSize: 'clamp(28px, 4vw, 48px)', letterSpacing: '0.06em', textTransform: 'uppercase', color: P.text, margin: '16px 0 0', lineHeight: 1 }}>
+          No charge made.
         </h1>
 
-        {/* Description */}
-        <p className="text-gray-300 text-lg mb-8">
-          Your payment was not processed. No amount has been charged.
+        <p style={{ fontWeight: 400, fontSize: 'clamp(13px, 1.2vw, 15px)', letterSpacing: '0.04em', color: P.textSub, margin: '16px 0 0', maxWidth: 320, lineHeight: 1.6 }}>
+          Your payment was cancelled. You can continue with free access or subscribe at any time.
         </p>
 
-        {/* Info Box */}
-        <div className="bg-metrik-black/50 rounded-xl p-6 mb-8 border border-turquoise-500/20">
-          <p className="text-gray-300 text-left">
-            You can continue using METRIK DELTA with <span className="text-turquoise-500 font-semibold">12 free requests per day</span>,
-            or subscribe to METRIK+ at any time for unlimited access.
-          </p>
-        </div>
+        {/* Divider */}
+        <div style={{ width: 1, height: 40, background: `linear-gradient(to bottom, transparent, ${P.textGhost}, transparent)`, margin: '36px 0' }} />
 
         {/* CTAs */}
-        <div className="flex flex-col md:flex-row gap-4 justify-center">
+        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center' }}>
           <button
-            onClick={handleRetry}
-            className="px-8 py-4 bg-turquoise-500 hover:bg-[#00d4bb] text-black font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
+            onClick={() => navigate('/')}
+            style={{
+              fontFamily: "'JetBrains Mono', monospace", fontWeight: 400, fontSize: 10,
+              letterSpacing: '0.26em', textTransform: 'uppercase',
+              color: P.textSub, background: 'transparent',
+              border: `1px solid ${P.border}`,
+              padding: '12px 36px', cursor: 'pointer',
+              transition: 'border-color 0.2s, color 0.2s', outline: 'none',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = P.text; e.currentTarget.style.color = P.text; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = P.border; e.currentTarget.style.color = P.textSub; }}
           >
-            <RotateCcw className="w-5 h-5" />
-            Try again
+            Back to home
           </button>
 
           <button
-            onClick={() => navigate('/')}
-            className="px-8 py-4 bg-metrik-card hover:bg-gray-800 text-white font-bold rounded-lg transition-colors border border-turquoise-500/30 flex items-center justify-center gap-2"
+            onClick={() => navigate('/app')}
+            style={{
+              fontFamily: "'JetBrains Mono', monospace", fontWeight: 400, fontSize: 10,
+              letterSpacing: '0.26em', textTransform: 'uppercase',
+              color: P.text, background: 'transparent',
+              border: `1px solid ${P.text}`,
+              padding: '12px 36px', cursor: 'pointer',
+              transition: 'border-color 0.2s, color 0.2s, background 0.2s', outline: 'none',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(242,230,216,0.06)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
           >
-            <Home className="w-5 h-5" />
-            Back to home
+            Continue free
           </button>
         </div>
 
-        {/* Help */}
-        <p className="text-sm text-gray-500 mt-6">
-          Need help? Contact us on{' '}
-          <a href="https://twitter.com/metrikdelta" className="text-turquoise-500 hover:underline">
-            Twitter
-          </a>
-        </p>
+        {/* Footer */}
+        <span style={{ position: 'absolute', bottom: 28, fontFamily: "'JetBrains Mono', monospace", fontSize: 8, letterSpacing: '0.16em', textTransform: 'uppercase', color: P.textGhost }}>
+          Questions? @metrikdelta on X
+        </span>
       </div>
-    </div>
     </>
-  )
+  );
 }

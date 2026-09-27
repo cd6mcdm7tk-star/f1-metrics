@@ -1,6 +1,6 @@
-import { Zap, Gauge, MapPin, Target } from 'lucide-react';
+import { Zap, Gauge, MapPin, Target, Activity } from 'lucide-react';
 import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
-import type { TelemetryData } from '../types/telemetry';
+import type { TelemetryData, TelemetryPoint } from '../types/telemetry';
 import { useMemo, useRef, useEffect } from 'react';
 
 interface TelemetryViewProps {
@@ -11,735 +11,555 @@ interface TelemetryViewProps {
   lapNumber: number | null;
   getDriverColor: (driverCode: string) => string;
   areTeammates: (driver1: string, driver2: string) => boolean;
-  loading?: boolean; // 🔥 NOUVELLE PROP pour skeleton loaders
+  loading?: boolean;
+  onCursorChange?: (cursor: number) => void;
 }
 
-// SectorLabels défini hors du composant parent → référence stable, pas recréé à chaque render
-interface SectorLabelsProps {
-  sector1Percent: number;
-  sector2Percent: number;
-  sector3Percent: number;
+function nearestByDistance(arr: TelemetryPoint[], dist: number): TelemetryPoint {
+  let lo = 0, hi = arr.length - 1;
+  while (lo < hi - 1) {
+    const mid = (lo + hi) >> 1;
+    if (arr[mid].distance <= dist) lo = mid;
+    else hi = mid;
+  }
+  return Math.abs(arr[lo].distance - dist) <= Math.abs(arr[hi].distance - dist) ? arr[lo] : arr[hi];
 }
+
+// ── Shared chart style helpers ─────────────────────────────────────────────────
+
+const CHART_GRID  = 'rgba(255,255,255,0.04)';
+const CHART_TICK  = { fill: 'var(--text-2)', fontSize: 9, fontFamily: 'JetBrains Mono' };
+const TOOLTIP_STYLE = {
+  contentStyle: { background: 'var(--panel)', border: '1px solid var(--border-hi)', borderRadius: 'var(--r2)', padding: '6px 10px', fontSize: 10 },
+  labelStyle: { color: 'var(--accent)', fontFamily: 'JetBrains Mono', fontSize: 9, marginBottom: 2 },
+  itemStyle: { fontFamily: 'JetBrains Mono', fontSize: 10 },
+};
+
+// ── Panel styles ───────────────────────────────────────────────────────────────
+
+const panelStyle = (borderColor?: string): React.CSSProperties => ({
+  background: 'var(--surface)',
+  border: `1px solid ${borderColor ?? 'var(--border)'}`,
+  borderRadius: 'var(--r2)',
+  overflow: 'hidden',
+});
+
+const innerPanelStyle = (borderColor?: string): React.CSSProperties => ({
+  background: 'var(--panel)',
+  border: `1px solid ${borderColor ?? 'var(--border)'}`,
+  borderRadius: 'var(--r)',
+  padding: '10px 12px',
+});
+
+// ── Sector labels ──────────────────────────────────────────────────────────────
+
+interface SectorLabelsProps { sector1Percent: number; sector2Percent: number; sector3Percent: number; }
 const SectorLabels = ({ sector1Percent, sector2Percent, sector3Percent }: SectorLabelsProps) => (
-  <div className="hidden sm:flex absolute top-1 right-0 left-12 h-full text-[9px] font-rajdhani font-bold pointer-events-none z-10" style={{ paddingRight: '20px' }}>
-    <div className="flex items-start justify-center pt-0.5 text-metrik-silver/60" style={{ width: `${sector1Percent}%` }}>
-      <span>S1</span>
-    </div>
-    <div className="h-full w-px bg-metrik-silver/20" />
-    <div className="flex items-start justify-center pt-0.5 text-metrik-silver/60" style={{ width: `${sector2Percent - sector1Percent}%` }}>
-      <span>S2</span>
-    </div>
-    <div className="h-full w-px bg-metrik-silver/20" />
-    <div className="flex items-start justify-center pt-0.5 text-metrik-silver/60" style={{ width: `${sector3Percent}%` }}>
-      <span>S3</span>
-    </div>
+  <div className="hidden sm:flex absolute top-1 right-0 left-12 h-full pointer-events-none z-10" style={{ paddingRight: '20px' }}>
+    <div className="flex items-start justify-center pt-0.5 label-section" style={{ width: `${sector1Percent}%`, opacity: 0.4 }}>S1</div>
+    <div className="h-full w-px" style={{ background: 'var(--border)' }} />
+    <div className="flex items-start justify-center pt-0.5 label-section" style={{ width: `${sector2Percent - sector1Percent}%`, opacity: 0.4 }}>S2</div>
+    <div className="h-full w-px" style={{ background: 'var(--border)' }} />
+    <div className="flex items-start justify-center pt-0.5 label-section" style={{ width: `${sector3Percent}%`, opacity: 0.4 }}>S3</div>
   </div>
 );
 
-// 🔥 COMPOSANT SKELETON LOADER
-const SkeletonChart = () => (
-  <div className="relative w-full h-full">
-    {/* Shimmer effect */}
-    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-metrik-silver/5 to-transparent animate-shimmer" 
-         style={{ 
-           backgroundSize: '200% 100%',
-           animation: 'shimmer 2s infinite'
-         }} 
-    />
-    
-    {/* Structure skeleton */}
-    <div className="flex flex-col justify-between h-full p-4 opacity-30">
-      {/* Horizontal lines (grid) */}
-      {[...Array(5)].map((_, i) => (
-        <div key={i} className="w-full h-px bg-metrik-silver/20" />
-      ))}
-    </div>
+// ── Chart section header ───────────────────────────────────────────────────────
+
+const ChartHeader = ({ label, color }: { label: string; color: string }) => (
+  <div className="flex items-center gap-2 px-3 py-1.5" style={{ borderBottom: '1px solid var(--border)' }}>
+    <div style={{ width: 3, height: 12, background: color, borderRadius: 1 }} />
+    <span className="label-section" style={{ color: 'var(--text-2)' }}>{label}</span>
   </div>
 );
+
+// ── Main component ─────────────────────────────────────────────────────────────
 
 export default function TelemetryView({
-  telemetryData,
-  driver1,
-  driver2,
-  sessionType,
-  lapNumber,
-  getDriverColor,
-  areTeammates,
-  loading = false
+  telemetryData, driver1, driver2,
+  sessionType: _sessionType, lapNumber,
+  getDriverColor, areTeammates, loading = false,
+  onCursorChange,
 }: TelemetryViewProps) {
+
   const driver1Color = getDriverColor(driver1);
-  const driver2Color = areTeammates(driver1, driver2) ? '#FFFFFF' : getDriverColor(driver2);
+  const driver2Color = areTeammates(driver1, driver2) ? '#000000' : getDriverColor(driver2);
 
-  const hoverMarkerRef = useRef<SVGGElement>(null);
-  const chartsContainerRef = useRef<HTMLDivElement>(null);
-  const transformedPointsRef = useRef<any[]>([]);
+  const hoverMarkerRef       = useRef<SVGGElement>(null);
+  const chartsContainerRef   = useRef<HTMLDivElement>(null);
+  const transformedPointsRef = useRef<{ x: number; y: number; distance: number }[]>([]);
+  const crosshairLineRef     = useRef<HTMLDivElement>(null);
+  const livePanelRef         = useRef<HTMLDivElement>(null);
+  const liveDataRef          = useRef<Record<string, HTMLElement | null>>({
+    dist: null, sector: null,
+    d1Speed: null, d1Throttle: null, d1Brake: null, d1Gear: null,
+    d2Speed: null, d2Throttle: null, d2Brake: null, d2Gear: null,
+    delta: null, ahead: null,
+  });
 
-  const formatLapTime = (seconds: number | null): string => {
-    if (!seconds) return '--:--.---';
-    const mins = Math.floor(seconds / 60);
-    const secs = (seconds % 60).toFixed(3);
-    return `${mins}:${secs.padStart(6, '0')}`;
+  const fmtLapTime = (s: number | null): string => {
+    if (!s) return '--:--.---';
+    const m = Math.floor(s / 60);
+    return `${m}:${(s % 60).toFixed(3).padStart(6, '0')}`;
   };
 
-  const formatTooltipValue = (value: any): string => {
-    if (value === null || value === undefined) return '--';
-    const num = parseFloat(value);
-    if (isNaN(num)) return '--';
-    return Math.round(num).toString();
-  };
-
-  // 🔥 Downsampler à 300 points pour le rendu Recharts (12k → 3.6k SVG segments)
-  // Les données complètes restent disponibles pour les calculs (trackMap, stats)
   const telemetryChartData = useMemo(() => {
     const full = telemetryData.telemetry;
     const step = Math.max(1, Math.ceil(full.length / 300));
     const result = [];
     for (let i = 0; i < full.length; i += step) {
-      const point = full[i] as any;
+      const p = full[i] as any;
       result.push({
-        distance: point.distance,
-        speed1: point.speed1,
-        speed2: point.speed2,
-        throttle1: point.throttle1,
-        throttle2: point.throttle2,
-        brake1: point.brake1 ? 100 : 0,
-        brake2: point.brake2 ? 100 : 0,
-        gear1: point.gear1,
-        gear2: point.gear2,
-        rpm1: point.rpm1 || 0,
-        rpm2: point.rpm2 || 0,
-        delta: point.delta,
+        distance: p.distance,
+        speed1: p.speed1, speed2: p.speed2,
+        throttle1: p.throttle1, throttle2: p.throttle2,
+        brake1: p.brake1 ? 100 : 0, brake2: p.brake2 ? 100 : 0,
+        gear1: p.gear1, gear2: p.gear2,
+        rpm1: p.rpm1 || 0, rpm2: p.rpm2 || 0,
+        delta: p.delta,
       });
     }
     return result;
   }, [telemetryData]);
 
-  // 🔥 Stats memoizées — recalculées seulement quand telemetryData change
   const { maxSpeed1, maxSpeed2, avgSpeed1, avgSpeed2, delta, maxDistance, speedMin } = useMemo(() => {
     const tel = telemetryData.telemetry;
-    let ms1 = -Infinity, ms2 = -Infinity, mn = Infinity, sum1 = 0, sum2 = 0;
-    let md = -Infinity;
+    let ms1 = -Infinity, ms2 = -Infinity, mn = Infinity, sum1 = 0, sum2 = 0, md = -Infinity;
     for (const p of tel) {
       if (p.speed1 > ms1) ms1 = p.speed1;
       if (p.speed2 > ms2) ms2 = p.speed2;
       if (p.speed1 < mn) mn = p.speed1;
       if (p.speed2 < mn) mn = p.speed2;
-      sum1 += p.speed1;
-      sum2 += p.speed2;
+      sum1 += p.speed1; sum2 += p.speed2;
       if (p.distance > md) md = p.distance;
     }
     return {
-      maxSpeed1: ms1,
-      maxSpeed2: ms2,
-      avgSpeed1: sum1 / tel.length,
-      avgSpeed2: sum2 / tel.length,
+      maxSpeed1: ms1, maxSpeed2: ms2,
+      avgSpeed1: sum1 / tel.length, avgSpeed2: sum2 / tel.length,
       delta: (telemetryData.lapTime2 || 0) - (telemetryData.lapTime1 || 0),
       maxDistance: md,
       speedMin: Math.floor(mn / 10) * 10,
     };
   }, [telemetryData]);
 
-  // 🔥 Calcul des pourcentages de secteurs memoizé
   const { sector1Percent, sector2Percent, sector3Percent } = useMemo(() => {
-    let sector1Distance = maxDistance * 0.33;
-    let sector2Distance = maxDistance * 0.66;
-
+    let s1d = maxDistance * 0.33, s2d = maxDistance * 0.66;
     if (telemetryData.sectors1 && telemetryData.lapTime1) {
-      const totalTime = telemetryData.lapTime1;
-      const s1Time = telemetryData.sectors1.sector1 || 0;
-      const s2Time = telemetryData.sectors1.sector2 || 0;
-      sector1Distance = maxDistance * (s1Time / totalTime);
-      sector2Distance = maxDistance * ((s1Time + s2Time) / totalTime);
+      const t = telemetryData.lapTime1;
+      s1d = maxDistance * ((telemetryData.sectors1.sector1 || 0) / t);
+      s2d = maxDistance * (((telemetryData.sectors1.sector1 || 0) + (telemetryData.sectors1.sector2 || 0)) / t);
     }
-
-    const s1p = (sector1Distance / maxDistance) * 100;
-    const s2p = (sector2Distance / maxDistance) * 100;
+    const s1p = (s1d / maxDistance) * 100;
+    const s2p = (s2d / maxDistance) * 100;
     return { sector1Percent: s1p, sector2Percent: s2p, sector3Percent: 100 - s2p };
   }, [telemetryData, maxDistance]);
 
-  // 🔥 GPS points memoizés
+  const sectorGains = useMemo(() => {
+    if (!telemetryData.sectors1 || !telemetryData.sectors2) return null;
+    return {
+      s1: (telemetryData.sectors2.sector1 || 0) - (telemetryData.sectors1.sector1 || 0),
+      s2: (telemetryData.sectors2.sector2 || 0) - (telemetryData.sectors1.sector2 || 0),
+      s3: (telemetryData.sectors2.sector3 || 0) - (telemetryData.sectors1.sector3 || 0),
+    };
+  }, [telemetryData]);
+
   const rawGpsPoints = useMemo(() => telemetryData.telemetry
-    .filter((p: any) =>
-      p.x != null && p.y != null &&
-      !isNaN(p.x) && !isNaN(p.y) &&
-      Math.abs(p.x) > 0.001 && Math.abs(p.y) > 0.001
-    )
-    .map((p: any) => ({ x: p.x, y: p.y, distance: p.distance || 0 })),
+    .filter(p => p.x != null && p.y != null && !isNaN(p.x) && !isNaN(p.y) && Math.abs(p.x) > 0.001 && Math.abs(p.y) > 0.001)
+    .map(p => ({ x: p.x, y: p.y, distance: p.distance || 0 })),
   [telemetryData]);
 
   const hasGpsData = rawGpsPoints.length >= 10;
 
   const trackDominanceData = useMemo(() => {
     if (!hasGpsData) return null;
-
-    const segmentSize = 20;
+    const segSize = 20;
     const maxDist = rawGpsPoints[rawGpsPoints.length - 1]?.distance || 0;
-    const segments = [];
-    const numSegments = Math.ceil(maxDist / segmentSize);
-
-    for (let i = 0; i < numSegments; i++) {
-      const startDist = i * segmentSize;
-      const endDist = Math.min((i + 1) * segmentSize, maxDist);
-
-      const segmentPoints = telemetryData.telemetry.filter(
-        (p: any) => p.distance >= startDist && p.distance < endDist
-      );
-
-      if (segmentPoints.length > 0) {
-        const avgSpeed1 = segmentPoints.reduce((sum: number, p: any) => sum + p.speed1, 0) / segmentPoints.length;
-        const avgSpeed2 = segmentPoints.reduce((sum: number, p: any) => sum + p.speed2, 0) / segmentPoints.length;
-        const advantage = avgSpeed1 - avgSpeed2;
-
-        segments.push({
-          segment: i + 1,
-          startDistance: startDist,
-          endDistance: endDist,
-          dominant: advantage >= 0 ? 'driver1' : 'driver2',
-          advantage: Math.abs(advantage)
-        });
+    const segments: { startDistance: number; endDistance: number; dominant: 'driver1' | 'driver2'; advantage: number }[] = [];
+    for (let i = 0; i < Math.ceil(maxDist / segSize); i++) {
+      const s = i * segSize, e = Math.min((i + 1) * segSize, maxDist);
+      const pts = telemetryData.telemetry.filter(p => p.distance >= s && p.distance < e);
+      if (pts.length > 0) {
+        const a1 = pts.reduce((sum, p) => sum + p.speed1, 0) / pts.length;
+        const a2 = pts.reduce((sum, p) => sum + p.speed2, 0) / pts.length;
+        segments.push({ startDistance: s, endDistance: e, dominant: a1 >= a2 ? 'driver1' : 'driver2', advantage: Math.abs(a1 - a2) });
       }
     }
-
-    const driver1Dominant = segments.filter(s => s.dominant === 'driver1').length;
-    const driver2Dominant = segments.filter(s => s.dominant === 'driver2').length;
-
-
-    return {
-      segments,
-      stats: {
-        driver1Dominant,
-        driver2Dominant,
-        totalSegments: segments.length
-      }
-    };
+    const d1n = segments.filter(s => s.dominant === 'driver1').length;
+    return { segments, stats: { driver1Dominant: d1n, driver2Dominant: segments.length - d1n, totalSegments: segments.length } };
   }, [hasGpsData, rawGpsPoints, telemetryData.telemetry]);
 
   const trackMapBase = useMemo(() => {
     if (!hasGpsData) return null;
+    const xv = rawGpsPoints.map(p => p.x), yv = rawGpsPoints.map(p => p.y);
+    const minX = Math.min(...xv), maxX = Math.max(...xv);
+    const minY = Math.min(...yv), maxY = Math.max(...yv);
+    const rX = maxX - minX, rY = maxY - minY;
+    if (!rX || !rY) return null;
 
-    const xValues = rawGpsPoints.map(p => p.x);
-    const yValues = rawGpsPoints.map(p => p.y);
-    const minX = Math.min(...xValues);
-    const maxX = Math.max(...xValues);
-    const minY = Math.min(...yValues);
-    const maxY = Math.max(...yValues);
-    const rangeX = maxX - minX;
-    const rangeY = maxY - minY;
-
-    if (rangeX === 0 || rangeY === 0) return null;
-
-    const aspectRatio = rangeX / rangeY;
-    const shouldRotate = aspectRatio < 1;
-
-    const transformPoint = (p: any) => {
-      let x = p.x - minX;
-      let y = p.y - minY;
-      if (shouldRotate) {
-        const temp = x;
-        x = rangeY - y;
-        y = temp;
-      }
-      x = (shouldRotate ? rangeY : rangeX) - x;
+    const rot = rX / rY < 1;
+    const tx = (p: { x: number; y: number; distance: number }) => {
+      let x = p.x - minX, y = p.y - minY;
+      if (rot) { const t = x; x = rY - y; y = t; }
+      x = (rot ? rY : rX) - x;
       return { x, y, distance: p.distance };
     };
 
-    const transformedPoints = rawGpsPoints.map(transformPoint);
-    transformedPointsRef.current = transformedPoints;
-    
-    const effectiveRangeX = shouldRotate ? rangeY : rangeX;
-    const effectiveRangeY = shouldRotate ? rangeX : rangeY;
+    const tp = rawGpsPoints.map(tx);
+    transformedPointsRef.current = tp;
 
-    const paddingPercent = 0.04;
-    const paddedRangeX = effectiveRangeX * (1 + 2 * paddingPercent);
-    const paddedRangeY = effectiveRangeY * (1 + 2 * paddingPercent);
+    const eRX = rot ? rY : rX, eRY = rot ? rX : rY;
+    const pp = 0.04;
+    const pRX = eRX * (1 + 2 * pp), pRY = eRY * (1 + 2 * pp);
+    const cAR = 1000 / 350;
+    const tAR = pRX / pRY;
+    let vbW = tAR > cAR ? pRX : pRY * cAR;
+    let vbH = tAR > cAR ? pRX / cAR : pRY;
+    const viewBox = `${(eRX / 2 - vbW / 2).toFixed(0)} ${(eRY / 2 - vbH / 2).toFixed(0)} ${vbW.toFixed(0)} ${vbH.toFixed(0)}`;
+    const bsw = Math.max(eRX, eRY) * 0.015;
 
-    const cardAspectRatio = 1000 / 350;
-    const circuitAspectRatio = paddedRangeX / paddedRangeY;
+    let fullPath = `M ${tp[0].x},${tp[0].y}`;
+    for (let i = 1; i < tp.length; i++) fullPath += ` L ${tp[i].x},${tp[i].y}`;
 
-    let viewBoxWidth, viewBoxHeight;
-    if (circuitAspectRatio > cardAspectRatio) {
-      viewBoxWidth = paddedRangeX;
-      viewBoxHeight = paddedRangeX / cardAspectRatio;
-    } else {
-      viewBoxHeight = paddedRangeY;
-      viewBoxWidth = paddedRangeY * cardAspectRatio;
-    }
-
-    const centerX = effectiveRangeX / 2;
-    const centerY = effectiveRangeY / 2;
-    const viewBoxX = centerX - (viewBoxWidth / 2);
-    const viewBoxY = centerY - (viewBoxHeight / 2);
-    const viewBox = `${viewBoxX.toFixed(0)} ${viewBoxY.toFixed(0)} ${viewBoxWidth.toFixed(0)} ${viewBoxHeight.toFixed(0)}`;
-
-    const circuitSize = Math.max(effectiveRangeX, effectiveRangeY);
-    const baseStrokeWidth = circuitSize * 0.015;
-
-    let fullPath = `M ${transformedPoints[0].x},${transformedPoints[0].y}`;
-    for (let i = 1; i < transformedPoints.length; i++) {
-      fullPath += ` L ${transformedPoints[i].x},${transformedPoints[i].y}`;
-    }
-
-    // Build colored paths by assigning each GPS point a dominance color,
-    // then grouping consecutive same-color points. This is robust to sparse
-    // GPS data (OpenF1 2026) where 20m segments might have 0-1 points.
-    const coloredPaths: Array<{path: string, color: string}> = [];
-    if (trackDominanceData && trackDominanceData.segments.length > 0) {
-      const segments = trackDominanceData.segments;
-
-      // Binary search: find which segment a distance value belongs to
-      const getColorForDist = (dist: number): string => {
-        let lo = 0, hi = segments.length - 1;
+    const coloredPaths: { path: string; color: string }[] = [];
+    if (trackDominanceData?.segments.length) {
+      const segs = trackDominanceData.segments;
+      const getColor = (d: number) => {
+        let lo = 0, hi = segs.length - 1;
         while (lo <= hi) {
           const mid = (lo + hi) >> 1;
-          if (dist < segments[mid].startDistance) hi = mid - 1;
-          else if (dist >= segments[mid].endDistance) lo = mid + 1;
-          else return segments[mid].dominant === 'driver1' ? driver1Color : driver2Color;
+          if (d < segs[mid].startDistance) hi = mid - 1;
+          else if (d >= segs[mid].endDistance) lo = mid + 1;
+          else return segs[mid].dominant === 'driver1' ? driver1Color : driver2Color;
         }
         return driver1Color;
       };
-
-      let currentColor = '';
-      let currentPath = '';
-
-      for (const point of transformedPoints) {
-        const color = getColorForDist(point.distance);
-        if (color !== currentColor) {
-          if (currentPath) coloredPaths.push({ path: currentPath, color: currentColor });
-          currentColor = color;
-          currentPath = `M ${point.x},${point.y}`;
-        } else {
-          currentPath += ` L ${point.x},${point.y}`;
-        }
+      let cc = '', cp = '';
+      for (const pt of tp) {
+        const c = getColor(pt.distance);
+        if (c !== cc) { if (cp) coloredPaths.push({ path: cp, color: cc }); cc = c; cp = `M ${pt.x},${pt.y}`; }
+        else cp += ` L ${pt.x},${pt.y}`;
       }
-      if (currentPath) coloredPaths.push({ path: currentPath, color: currentColor });
+      if (cp) coloredPaths.push({ path: cp, color: cc });
     }
 
-    return {
-      viewBox,
-      fullPath,
-      coloredPaths,
-      transformedPoints,
-      baseStrokeWidth
-    };
+    return { viewBox, fullPath, coloredPaths, transformedPoints: tp, baseStrokeWidth: bsw };
   }, [hasGpsData, rawGpsPoints, trackDominanceData, driver1Color, driver2Color]);
 
+  // Crosshair + track marker + live panel
   useEffect(() => {
-    if (!chartsContainerRef.current || !hoverMarkerRef.current || !trackMapBase) return;
-
+    if (!chartsContainerRef.current) return;
     const container = chartsContainerRef.current;
+    const full = telemetryData.telemetry;
     const marker = hoverMarkerRef.current;
-    const points = transformedPointsRef.current;
+    let raf: number;
 
-    let animationFrameId: number;
+    const onMove = (e: MouseEvent) => {
+      if (raf) cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const surface = container.querySelector('.recharts-surface');
+        if (!surface || !full.length) return;
+        const sr = surface.getBoundingClientRect();
+        const ratio = Math.max(0, Math.min(1, (e.clientX - sr.left) / sr.width));
+        const dist = ratio * maxDistance;
+        onCursorChange?.(ratio);
 
-    const handleMouseMove = (e: MouseEvent) => {
-      if (animationFrameId) cancelAnimationFrame(animationFrameId);
-
-      animationFrameId = requestAnimationFrame(() => {
-        const chartSurface = container.querySelector('.recharts-surface');
-        if (!chartSurface || points.length === 0) return;
-
-        const rect = chartSurface.getBoundingClientRect();
-        const mouseX = e.clientX - rect.left;
-        const chartWidth = rect.width;
-        
-        const ratio = Math.max(0, Math.min(1, mouseX / chartWidth));
-        const distance = ratio * maxDistance;
-        
-        // 🔥 Binary search O(log n) au lieu de reduce O(n)
-        let lo = 0, hi = points.length - 1;
-        while (lo < hi - 1) {
-          const mid = (lo + hi) >> 1;
-          if (points[mid].distance <= distance) lo = mid;
-          else hi = mid;
+        if (crosshairLineRef.current) {
+          const cr = container.getBoundingClientRect();
+          crosshairLineRef.current.style.left = `${e.clientX - cr.left}px`;
+          crosshairLineRef.current.style.opacity = '1';
         }
-        const hoverPoint = Math.abs(points[lo].distance - distance) <= Math.abs(points[hi].distance - distance)
-          ? points[lo] : points[hi];
 
-        if (hoverPoint) {
-          marker.style.transform = `translate(${hoverPoint.x}px, ${hoverPoint.y}px)`;
-          marker.style.opacity = '1';
+        if (marker && trackMapBase && transformedPointsRef.current.length > 0) {
+          const hp = nearestByDistance(transformedPointsRef.current as any, dist) as any;
+          if (hp) { marker.style.transform = `translate(${hp.x}px, ${hp.y}px)`; marker.style.opacity = '1'; }
+        }
+
+        if (livePanelRef.current && full.length > 0) {
+          const pt = nearestByDistance(full, dist);
+          const s1d = maxDistance * (sector1Percent / 100);
+          const s2d = maxDistance * (sector2Percent / 100);
+          const sector = dist < s1d ? 'S1' : dist < s2d ? 'S2' : 'S3';
+          const dv = pt.delta || 0;
+          livePanelRef.current.style.opacity = '1';
+          const d = liveDataRef.current;
+          if (d.dist) d.dist.textContent = `${Math.round(dist)}m`;
+          if (d.sector) d.sector.textContent = sector;
+          if (d.d1Speed) d.d1Speed.textContent = `${Math.round(pt.speed1)}`;
+          if (d.d1Throttle) d.d1Throttle.textContent = `${Math.round(pt.throttle1)}%`;
+          if (d.d1Gear) d.d1Gear.textContent = `G${pt.gear1}`;
+          if (d.d1Brake) { d.d1Brake.textContent = pt.brake1 ? 'BRAKE' : 'OFF'; (d.d1Brake as HTMLElement).style.color = pt.brake1 ? '#f87171' : 'var(--text-2)'; }
+          if (d.d2Speed) d.d2Speed.textContent = `${Math.round(pt.speed2)}`;
+          if (d.d2Throttle) d.d2Throttle.textContent = `${Math.round(pt.throttle2)}%`;
+          if (d.d2Gear) d.d2Gear.textContent = `G${pt.gear2}`;
+          if (d.d2Brake) { d.d2Brake.textContent = pt.brake2 ? 'BRAKE' : 'OFF'; (d.d2Brake as HTMLElement).style.color = pt.brake2 ? '#f87171' : 'var(--text-2)'; }
+          if (d.delta) {
+            const abs = Math.abs(dv);
+            d.delta.textContent = abs < 0.001 ? '0.000s' : `${dv > 0 ? '+' : ''}${dv.toFixed(3)}s`;
+            (d.delta as HTMLElement).style.color = abs < 0.001 ? 'var(--text-2)' : dv > 0 ? '#f87171' : '#4ade80';
+          }
+          if (d.ahead) {
+            const abs = Math.abs(dv);
+            d.ahead.textContent = abs < 0.001 ? 'EQUAL' : dv > 0 ? `${driver1} AHEAD` : `${driver2} AHEAD`;
+          }
         }
       });
     };
 
-    const handleMouseLeave = () => {
-      if (animationFrameId) cancelAnimationFrame(animationFrameId);
-      marker.style.opacity = '0';
+    const onLeave = () => {
+      if (raf) cancelAnimationFrame(raf);
+      if (marker) marker.style.opacity = '0';
+      if (crosshairLineRef.current) crosshairLineRef.current.style.opacity = '0';
+      if (livePanelRef.current) livePanelRef.current.style.opacity = '0';
     };
 
-    container.addEventListener('mousemove', handleMouseMove);
-    container.addEventListener('mouseleave', handleMouseLeave);
+    container.addEventListener('mousemove', onMove);
+    container.addEventListener('mouseleave', onLeave);
+    return () => { if (raf) cancelAnimationFrame(raf); container.removeEventListener('mousemove', onMove); container.removeEventListener('mouseleave', onLeave); };
+  }, [trackMapBase, maxDistance, sector1Percent, sector2Percent, telemetryData, driver1, driver2]);
 
-    return () => {
-      if (animationFrameId) cancelAnimationFrame(animationFrameId);
-      container.removeEventListener('mousemove', handleMouseMove);
-      container.removeEventListener('mouseleave', handleMouseLeave);
-    };
-  }, [trackMapBase, maxDistance]);
-
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-4 sm:space-y-6">
-      {/* Stats + Track Map Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
-        
-        {/* Stats Cards */}
-        <div className="lg:col-span-1 space-y-3 sm:space-y-4">
-          
-          {/* Driver 1 Card */}
-          <div className={`backdrop-blur-xl bg-metrik-card/95 border-2 rounded-xl p-3 sm:p-4 transition-opacity duration-300 ${loading ? 'opacity-40' : 'opacity-100'}`} 
-               style={{ borderColor: driver1Color + '40' }}>
-            <div className="flex items-center justify-between mb-2 sm:mb-3">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <div className="w-1 h-10 sm:h-12 rounded" style={{ backgroundColor: driver1Color }} />
+    <div className="space-y-3">
+
+      {/* ── Driver cards + Track map ───────────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+
+        {/* Driver cards */}
+        <div className="lg:col-span-1 space-y-2">
+
+          {([
+            { d: driver1, color: driver1Color, lapTime: telemetryData.lapTime1, sectors: telemetryData.sectors1, maxSpd: maxSpeed1, avgSpd: avgSpeed1 },
+            { d: driver2, color: driver2Color, lapTime: telemetryData.lapTime2, sectors: telemetryData.sectors2, maxSpd: maxSpeed2, avgSpd: avgSpeed2 },
+          ] as const).map(({ d, color, lapTime, sectors, maxSpd, avgSpd }) => (
+            <div
+              key={d}
+              style={{ ...panelStyle(`${color}30`), borderLeft: `2px solid ${color}`, opacity: loading ? 0.4 : 1, padding: '12px 14px', transition: 'opacity 0.3s' }}
+            >
+              <div className="flex items-center justify-between mb-3">
                 <div>
-                  <div className="text-xl sm:text-2xl font-rajdhani font-black" style={{ color: driver1Color }}>
-                    {driver1}
-                  </div>
-                  <div className="text-[10px] sm:text-xs text-metrik-silver font-rajdhani font-bold">
-                    {lapNumber ? `Lap ${lapNumber}` : 'Fastest Lap'}
-                  </div>
+                  <div className="font-rajdhani font-black text-2xl" style={{ color }}>{d}</div>
+                  <div className="label-section mt-0.5">{lapNumber ? `LAP ${lapNumber}` : 'FASTEST LAP'}</div>
+                </div>
+                <div className="text-right">
+                  <div className="label-section mb-1">LAP TIME</div>
+                  <div className="data-value font-bold text-white text-lg">{fmtLapTime(lapTime || 0)}</div>
                 </div>
               </div>
-              <div className="text-right">
-                <div className="text-[10px] sm:text-xs text-metrik-silver uppercase font-rajdhani font-bold mb-0.5 sm:mb-1">Lap Time</div>
-                <div className="text-base sm:text-xl font-rajdhani font-black text-white">
-                  {formatLapTime(telemetryData.lapTime1 || 0)}
-                </div>
-              </div>
-            </div>
-            
-            {telemetryData.sectors1 && (
-              <div className="grid grid-cols-3 gap-1.5 sm:gap-2 mb-2 sm:mb-3">
-                <div className="bg-metrik-black/40 rounded-lg p-1.5 sm:p-2 border border-metrik-silver/10">
-                  <div className="text-[10px] sm:text-xs text-metrik-silver mb-0.5">S1</div>
-                  <div className="text-xs sm:text-sm font-rajdhani font-bold text-white">
-                    {telemetryData.sectors1.sector1?.toFixed(3)}s
-                  </div>
-                </div>
-                <div className="bg-metrik-black/40 rounded-lg p-1.5 sm:p-2 border border-metrik-silver/10">
-                  <div className="text-[10px] sm:text-xs text-metrik-silver mb-0.5">S2</div>
-                  <div className="text-xs sm:text-sm font-rajdhani font-bold text-white">
-                    {telemetryData.sectors1.sector2?.toFixed(3)}s
-                  </div>
-                </div>
-                <div className="bg-metrik-black/40 rounded-lg p-1.5 sm:p-2 border border-metrik-silver/10">
-                  <div className="text-[10px] sm:text-xs text-metrik-silver mb-0.5">S3</div>
-                  <div className="text-xs sm:text-sm font-rajdhani font-bold text-white">
-                    {telemetryData.sectors1.sector3?.toFixed(3)}s
-                  </div>
-                </div>
-              </div>
-            )}
 
-            <div className="grid grid-cols-2 gap-1.5 sm:gap-2 text-[10px] sm:text-xs">
-              <div className="flex items-center gap-1.5 sm:gap-2">
-                <Gauge className="text-metrik-turquoise flex-shrink-0" size={12} />
-                <div className="min-w-0">
-                  <div className="text-metrik-silver truncate">Max Speed</div>
-                  <div className="font-rajdhani font-bold text-white">{maxSpeed1.toFixed(0)} km/h</div>
+              {sectors && (
+                <div className="grid grid-cols-3 gap-1.5 mb-3">
+                  {(['sector1', 'sector2', 'sector3'] as const).map((s, i) => (
+                    <div key={s} style={innerPanelStyle()}>
+                      <div className="label-section mb-1">S{i + 1}</div>
+                      <div className="data-value text-white text-xs">{sectors[s]?.toFixed(3)}s</div>
+                    </div>
+                  ))}
                 </div>
-              </div>
-              <div className="flex items-center gap-1.5 sm:gap-2">
-                <Zap className="text-metrik-turquoise flex-shrink-0" size={12} />
-                <div className="min-w-0">
-                  <div className="text-metrik-silver truncate">Avg Speed</div>
-                  <div className="font-rajdhani font-bold text-white">{avgSpeed1.toFixed(0)} km/h</div>
-                </div>
-              </div>
-            </div>
-          </div>
+              )}
 
-          {/* Driver 2 Card */}
-          <div className={`backdrop-blur-xl bg-metrik-card/95 border-2 rounded-xl p-3 sm:p-4 transition-opacity duration-300 ${loading ? 'opacity-40' : 'opacity-100'}`} 
-               style={{ borderColor: driver2Color + '40' }}>
-            <div className="flex items-center justify-between mb-2 sm:mb-3">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <div className="w-1 h-10 sm:h-12 rounded" style={{ backgroundColor: driver2Color }} />
-                <div>
-                  <div className="text-xl sm:text-2xl font-rajdhani font-black" style={{ color: driver2Color }}>
-                    {driver2}
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { icon: <Gauge size={12} style={{ color: 'var(--accent)' }} />, label: 'Max', value: `${maxSpd.toFixed(0)} km/h` },
+                  { icon: <Zap size={12} style={{ color: 'var(--accent)' }} />, label: 'Avg', value: `${avgSpd.toFixed(0)} km/h` },
+                ].map(({ icon, label, value }) => (
+                  <div key={label} className="flex items-center gap-2">
+                    {icon}
+                    <div>
+                      <div className="label-section">{label} Speed</div>
+                      <div className="data-value text-white text-xs">{value}</div>
+                    </div>
                   </div>
-                  <div className="text-[10px] sm:text-xs text-metrik-silver font-rajdhani font-bold">
-                    {lapNumber ? `Lap ${lapNumber}` : 'Fastest Lap'}
-                  </div>
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="text-[10px] sm:text-xs text-metrik-silver uppercase font-rajdhani font-bold mb-0.5 sm:mb-1">Lap Time</div>
-                <div className="text-base sm:text-xl font-rajdhani font-black text-white">
-                  {formatLapTime(telemetryData.lapTime2 || 0)}
-                </div>
+                ))}
               </div>
             </div>
-            
-            {telemetryData.sectors2 && (
-              <div className="grid grid-cols-3 gap-1.5 sm:gap-2 mb-2 sm:mb-3">
-                <div className="bg-metrik-black/40 rounded-lg p-1.5 sm:p-2 border border-metrik-silver/10">
-                  <div className="text-[10px] sm:text-xs text-metrik-silver mb-0.5">S1</div>
-                  <div className="text-xs sm:text-sm font-rajdhani font-bold text-white">
-                    {telemetryData.sectors2.sector1?.toFixed(3)}s
-                  </div>
-                </div>
-                <div className="bg-metrik-black/40 rounded-lg p-1.5 sm:p-2 border border-metrik-silver/10">
-                  <div className="text-[10px] sm:text-xs text-metrik-silver mb-0.5">S2</div>
-                  <div className="text-xs sm:text-sm font-rajdhani font-bold text-white">
-                    {telemetryData.sectors2.sector2?.toFixed(3)}s
-                  </div>
-                </div>
-                <div className="bg-metrik-black/40 rounded-lg p-1.5 sm:p-2 border border-metrik-silver/10">
-                  <div className="text-[10px] sm:text-xs text-metrik-silver mb-0.5">S3</div>
-                  <div className="text-xs sm:text-sm font-rajdhani font-bold text-white">
-                    {telemetryData.sectors2.sector3?.toFixed(3)}s
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div className="grid grid-cols-2 gap-1.5 sm:gap-2 text-[10px] sm:text-xs">
-              <div className="flex items-center gap-1.5 sm:gap-2">
-                <Gauge className="text-metrik-turquoise flex-shrink-0" size={12} />
-                <div className="min-w-0">
-                  <div className="text-metrik-silver truncate">Max Speed</div>
-                  <div className="font-rajdhani font-bold text-white">{maxSpeed2.toFixed(0)} km/h</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-1.5 sm:gap-2">
-                <Zap className="text-metrik-turquoise flex-shrink-0" size={12} />
-                <div className="min-w-0">
-                  <div className="text-metrik-silver truncate">Avg Speed</div>
-                  <div className="font-rajdhani font-bold text-white">{avgSpeed2.toFixed(0)} km/h</div>
-                </div>
-              </div>
-            </div>
-          </div>
+          ))}
         </div>
 
-        {/* Track Map */}
+        {/* Track map */}
         <div className="lg:col-span-2">
-          <div className={`backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-xl p-3 sm:p-4 h-full flex flex-col transition-opacity duration-300 ${loading ? 'opacity-40' : 'opacity-100'}`}>
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 mb-3 sm:mb-4">
-              <div className="flex items-center gap-2 sm:gap-4">
-                <MapPin className="text-metrik-turquoise flex-shrink-0" size={14} />
-                <h3 className="text-[10px] sm:text-xs font-rajdhani font-bold text-white uppercase">Track Map</h3>
-                
-                <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 bg-metrik-black/40 rounded-lg border border-metrik-silver/10">
-                  <span className="text-[9px] sm:text-xs text-metrik-silver/70 font-rajdhani font-bold">GAP</span>
-                  <span className={`text-xs sm:text-sm font-rajdhani font-black ${
-                    delta > 0 ? 'text-red-500' : delta < 0 ? 'text-green-500' : 'text-metrik-silver'
-                  }`}>
+          <div style={{ ...panelStyle(), height: '100%', minHeight: 280, display: 'flex', flexDirection: 'column', opacity: loading ? 0.4 : 1, transition: 'opacity 0.3s' }}>
+
+            <div className="flex items-center justify-between px-4 py-2.5" style={{ borderBottom: '1px solid var(--border)' }}>
+              <div className="flex items-center gap-3">
+                <MapPin size={13} style={{ color: 'var(--accent)' }} />
+                <span className="label-section" style={{ color: 'var(--text-2)' }}>TRACK MAP</span>
+                <div style={innerPanelStyle()}>
+                  <span className="label-section">GAP</span>{' '}
+                  <span className="data-value text-sm font-bold" style={{ color: delta > 0 ? '#f87171' : delta < 0 ? '#4ade80' : 'var(--text-2)' }}>
                     {delta > 0 ? '+' : ''}{delta.toFixed(3)}s
                   </span>
-                  <span className="hidden sm:inline text-xs text-metrik-silver/60">
-                    {Math.abs(delta) < 0.001 ? '' : `${delta > 0 ? driver1 : driver2} faster`}
-                  </span>
+                  {Math.abs(delta) > 0.001 && (
+                    <span className="label-section ml-2">{delta > 0 ? driver1 : driver2} FASTER</span>
+                  )}
                 </div>
               </div>
-              
+
               {trackDominanceData && (
-                <div className="flex gap-2 sm:gap-3 text-[10px] sm:text-xs font-rajdhani font-bold">
-                  <div className="flex items-center gap-1 sm:gap-1.5">
-                    <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full flex-shrink-0" style={{ backgroundColor: driver1Color }} />
-                    <span style={{ color: driver1Color }}>
-                      {driver1} {((trackDominanceData.stats.driver1Dominant / trackDominanceData.stats.totalSegments) * 100).toFixed(0)}%
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1 sm:gap-1.5">
-                    <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full flex-shrink-0" style={{ backgroundColor: driver2Color }} />
-                    <span style={{ color: driver2Color }}>
-                      {driver2} {((trackDominanceData.stats.driver2Dominant / trackDominanceData.stats.totalSegments) * 100).toFixed(0)}%
-                    </span>
-                  </div>
+                <div className="flex gap-3 text-[10px] font-rajdhani font-bold">
+                  {[
+                    { code: driver1, color: driver1Color, pct: (trackDominanceData.stats.driver1Dominant / trackDominanceData.stats.totalSegments) * 100 },
+                    { code: driver2, color: driver2Color, pct: (trackDominanceData.stats.driver2Dominant / trackDominanceData.stats.totalSegments) * 100 },
+                  ].map(({ code, color, pct }) => (
+                    <div key={code} className="flex items-center gap-1.5">
+                      <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} />
+                      <span style={{ color }}>{code} {pct.toFixed(0)}%</span>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
-        
-            {hasGpsData && trackMapBase ? (
-              <div className="relative w-full flex-1 rounded-lg overflow-visible bg-[#0a0a0a] flex items-center justify-center min-h-[250px] sm:min-h-[300px]">
-                {/* 🔥 SKELETON OVERLAY pendant loading */}
-                {loading && (
-                  <div className="absolute inset-0 z-10 bg-metrik-black/60 backdrop-blur-sm flex items-center justify-center">
-                    <div className="text-metrik-turquoise text-sm font-rajdhani">Loading track...</div>
-                  </div>
-                )}
-                
-                <svg 
-                  className="w-full h-full"
-                  viewBox={trackMapBase.viewBox}
-                  preserveAspectRatio="xMidYMid meet"
-                  style={{ shapeRendering: 'geometricPrecision' }}
-                >
+
+            <div className="flex-1 flex items-center justify-center" style={{ background: '#07070e', minHeight: 220 }}>
+              {hasGpsData && trackMapBase ? (
+                <svg className="w-full h-full" viewBox={trackMapBase.viewBox} preserveAspectRatio="xMidYMid meet" style={{ shapeRendering: 'geometricPrecision' }}>
                   <defs>
-                    <filter id="glow-intense">
-                      <feGaussianBlur stdDeviation="8" result="coloredBlur"/>
-                      <feMerge>
-                        <feMergeNode in="coloredBlur"/>
-                        <feMergeNode in="coloredBlur"/>
-                        <feMergeNode in="SourceGraphic"/>
-                      </feMerge>
-                    </filter>
-                    <filter id="shadow-deep">
-                      <feDropShadow dx="0" dy="4" stdDeviation="6" floodOpacity="0.6"/>
+                    <filter id="glow">
+                      <feGaussianBlur stdDeviation="6" result="blur" />
+                      <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
                     </filter>
                   </defs>
-
-                  <g>
-                    <path
-                      d={trackMapBase.fullPath}
-                      fill="none"
-                      stroke="#000000"
-                      strokeWidth={trackMapBase.baseStrokeWidth * 2.8}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      opacity="0.5"
-                      filter="url(#shadow-deep)"
-                    />
-                    <path
-                      d={trackMapBase.fullPath}
-                      fill="none"
-                      stroke="#FFFFFF"
-                      strokeWidth={trackMapBase.baseStrokeWidth * 2.2}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      opacity="0.95"
-                    />
-                    {trackMapBase.coloredPaths.map((seg: any, idx: number) => (
-                      <path
-                        key={idx}
-                        d={seg.path}
-                        fill="none"
-                        stroke={seg.color}
-                        strokeWidth={trackMapBase.baseStrokeWidth * 1.6}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        opacity="0.95"
-                        filter="url(#glow-intense)"
-                        style={{ filter: `drop-shadow(0 0 ${trackMapBase.baseStrokeWidth * 0.8}px ${seg.color})` }}
-                      />
-                    ))}
-
-                    <g>
-                      <circle
-                        cx={trackMapBase.transformedPoints[0].x}
-                        cy={trackMapBase.transformedPoints[0].y}
-                        r={trackMapBase.baseStrokeWidth * 4}
-                        fill="none"
-                        stroke="#00E5CC"
-                        strokeWidth={trackMapBase.baseStrokeWidth * 0.1}
-                        opacity="0.2"
-                      >
-                        <animate
-                          attributeName="r"
-                          from={trackMapBase.baseStrokeWidth * 3}
-                          to={trackMapBase.baseStrokeWidth * 5}
-                          dur="2s"
-                          repeatCount="indefinite"
-                        />
-                        <animate
-                          attributeName="opacity"
-                          from="0.4"
-                          to="0"
-                          dur="2s"
-                          repeatCount="indefinite"
-                        />
-                      </circle>
-                      <circle
-                        cx={trackMapBase.transformedPoints[0].x}
-                        cy={trackMapBase.transformedPoints[0].y}
-                        r={trackMapBase.baseStrokeWidth * 2}
-                        fill="#00E5CC"
-                        opacity="0.95"
-                      />
-                      <circle
-                        cx={trackMapBase.transformedPoints[0].x}
-                        cy={trackMapBase.transformedPoints[0].y}
-                        r={trackMapBase.baseStrokeWidth * 0.8}
-                        fill="#FFFFFF"
-                        opacity="1"
-                      />
-                    </g>
-
-                    <g 
-                      ref={hoverMarkerRef}
-                      style={{ 
-                        opacity: 0,
-                        transition: 'opacity 0.1s ease-out',
-                        willChange: 'transform'
-                      }}
-                    >
-                      <circle
-                        cx={0}
-                        cy={0}
-                        r={trackMapBase.baseStrokeWidth * 3.5}
-                        fill="none"
-                        stroke="#00E5CC"
-                        strokeWidth={trackMapBase.baseStrokeWidth * 0.15}
-                        opacity="0.3"
-                      />
-                      <circle
-                        cx={0}
-                        cy={0}
-                        r={trackMapBase.baseStrokeWidth * 2.2}
-                        fill="#00E5CC"
-                        opacity="0.6"
-                      />
-                      <circle
-                        cx={0}
-                        cy={0}
-                        r={trackMapBase.baseStrokeWidth * 1}
-                        fill="#FFFFFF"
-                        opacity="1"
-                      />
-                    </g>
+                  <path d={trackMapBase.fullPath} fill="none" stroke="#000" strokeWidth={trackMapBase.baseStrokeWidth * 2.8} strokeLinecap="round" strokeLinejoin="round" opacity="0.5" />
+                  <path d={trackMapBase.fullPath} fill="none" stroke="#fff" strokeWidth={trackMapBase.baseStrokeWidth * 2.2} strokeLinecap="round" strokeLinejoin="round" opacity="0.9" />
+                  {trackMapBase.coloredPaths.map((seg, i) => (
+                    <path key={i} d={seg.path} fill="none" stroke={seg.color} strokeWidth={trackMapBase.baseStrokeWidth * 1.6} strokeLinecap="round" strokeLinejoin="round" opacity="0.95"
+                      style={{ filter: `drop-shadow(0 0 ${trackMapBase.baseStrokeWidth * 0.6}px ${seg.color})` }} />
+                  ))}
+                  {/* Start marker */}
+                  <circle cx={trackMapBase.transformedPoints[0].x} cy={trackMapBase.transformedPoints[0].y} r={trackMapBase.baseStrokeWidth * 2} fill="var(--accent)" opacity="0.95" />
+                  <circle cx={trackMapBase.transformedPoints[0].x} cy={trackMapBase.transformedPoints[0].y} r={trackMapBase.baseStrokeWidth * 0.8} fill="#fff" opacity="1" />
+                  {/* Hover marker */}
+                  <g ref={hoverMarkerRef} style={{ opacity: 0, transition: 'opacity 0.08s', willChange: 'transform' }}>
+                    <circle cx={0} cy={0} r={trackMapBase.baseStrokeWidth * 2.5} fill="var(--accent)" opacity="0.55" />
+                    <circle cx={0} cy={0} r={trackMapBase.baseStrokeWidth * 1} fill="#fff" opacity="1" />
                   </g>
                 </svg>
-              </div>
-            ) : (
-              <div className="flex-1 flex items-center justify-center min-h-[250px]">
+              ) : (
                 <div className="text-center">
-                  <Target className="w-6 h-6 sm:w-8 sm:h-8 text-metrik-silver/40 mx-auto mb-2" />
-                  <p className="text-metrik-silver/60 font-rajdhani text-xs sm:text-sm">GPS data not available</p>
+                  <Target size={28} style={{ color: 'var(--text-3)', margin: '0 auto 8px' }} />
+                  <p className="label-section">GPS data not available</p>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* 🔥 CHARTS avec Skeleton overlay si loading */}
-      <div ref={chartsContainerRef} className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-xl overflow-hidden relative">
-        
-        {/* 🔥 OPTIMISTIC UI - Ancien graphique reste visible en transparence */}
-        <div className={`transition-opacity duration-300 ${loading ? 'opacity-30' : 'opacity-100'}`}>
-          
-          {/* Speed */}
-          <div className="border-b border-metrik-turquoise/20 relative">
-            <div className="flex items-center gap-2 px-2 sm:px-3 py-1">
-              <div className="w-0.5 sm:w-1 h-2 sm:h-3 bg-blue-500 rounded" />
-              <h3 className="text-[10px] sm:text-xs font-rajdhani font-bold text-metrik-turquoise uppercase">Speed</h3>
+      {/* ── Sector analysis ───────────────────────────────────────────────────── */}
+      {sectorGains && (
+        <div style={{ ...panelStyle(), opacity: loading ? 0.4 : 1, transition: 'opacity 0.3s' }}>
+          <div className="flex items-center gap-2 px-4 py-2.5" style={{ borderBottom: '1px solid var(--border)' }}>
+            <Target size={12} style={{ color: 'var(--accent)' }} />
+            <span className="label-section" style={{ color: 'var(--accent)' }}>SECTOR ANALYSIS</span>
+          </div>
+          <div className="grid grid-cols-3 gap-3 p-3">
+            {([
+              { label: 'S1', gain: sectorGains.s1 },
+              { label: 'S2', gain: sectorGains.s2 },
+              { label: 'S3', gain: sectorGains.s3 },
+            ] as const).map(({ label, gain }) => {
+              const gc = gain > 0.001 ? driver1Color : gain < -0.001 ? driver2Color : 'var(--text-2)';
+              const gd = gain > 0.001 ? driver1 : gain < -0.001 ? driver2 : null;
+              const bw = Math.min(80, Math.abs(gain) * 300);
+              return (
+                <div key={label} style={innerPanelStyle()}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="label-section">{label}</span>
+                    {gd && <span className="font-rajdhani font-black text-[10px] px-1.5 py-0.5" style={{ borderRadius: 'var(--r)', background: `${gc}18`, color: gc }}>{gd}</span>}
+                  </div>
+                  <div className="data-value font-bold text-lg" style={{ color: gc }}>
+                    {Math.abs(gain) < 0.001 ? 'EQUAL' : `${gain > 0 ? '+' : ''}${gain.toFixed(3)}s`}
+                  </div>
+                  <div className="flex items-center gap-1 mt-2 h-1">
+                    <div className="flex-1 flex justify-end">
+                      {gain > 0.001 && <div style={{ height: '100%', width: `${bw}%`, background: driver1Color, minWidth: 2, borderRadius: 1 }} />}
+                    </div>
+                    <div style={{ width: 1, height: '100%', background: 'var(--border-hi)' }} />
+                    <div className="flex-1">
+                      {gain < -0.001 && <div style={{ height: '100%', width: `${bw}%`, background: driver2Color, minWidth: 2, borderRadius: 1 }} />}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Live analysis panel ─────────────────────────────────────────────── */}
+      <div ref={livePanelRef} style={{ ...panelStyle(`var(--accent-30)`), opacity: 0, transition: 'opacity 0.12s ease' }}>
+        <div className="flex items-center gap-3 px-4 py-2.5" style={{ borderBottom: '1px solid var(--border)' }}>
+          <Activity size={12} style={{ color: 'var(--accent)' }} />
+          <span className="label-section" style={{ color: 'var(--accent)' }}>LIVE ANALYSIS</span>
+          <span style={{ color: 'var(--border-hi)', fontFamily: 'JetBrains Mono', fontSize: 10 }}>—</span>
+          <span className="data-value text-xs" style={{ color: 'var(--text-2)' }}>
+            <span ref={el => { liveDataRef.current.dist = el; }} style={{ color: 'var(--text)' }}>--</span>m
+          </span>
+          <span ref={el => { liveDataRef.current.sector = el; }}
+            className="data-value text-[10px] px-2 py-0.5"
+            style={{ background: 'var(--accent-10)', color: 'var(--accent)', borderRadius: 'var(--r)' }}>--</span>
+        </div>
+
+        <div className="grid grid-cols-3 gap-3 p-3">
+          {[
+            {
+              d: driver1, color: driver1Color,
+              speedRef: 'd1Speed', thrRef: 'd1Throttle', brakeRef: 'd1Brake', gearRef: 'd1Gear',
+            },
+            {
+              d: driver2, color: driver2Color,
+              speedRef: 'd2Speed', thrRef: 'd2Throttle', brakeRef: 'd2Brake', gearRef: 'd2Gear',
+            },
+          ].map(({ d, color, speedRef, thrRef, brakeRef, gearRef }) => (
+            <div key={d} style={{ ...innerPanelStyle(`${color}25`), borderLeft: `2px solid ${color}` }}>
+              <div className="flex items-center gap-1.5 mb-2">
+                <div style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: color }} />
+                <span className="font-rajdhani font-black text-[11px]" style={{ color }}>{d}</span>
+              </div>
+              <div className="flex items-baseline gap-1 mb-1.5">
+                <span ref={el => { liveDataRef.current[speedRef] = el; }} className="data-value font-bold text-2xl text-white">--</span>
+                <span className="label-section">km/h</span>
+              </div>
+              <div className="flex items-center gap-2 data-value text-[10px]">
+                <span ref={el => { liveDataRef.current[thrRef] = el; }} style={{ color: '#4ade80' }}>--%</span>
+                <span style={{ color: 'var(--border-hi)' }}>·</span>
+                <span ref={el => { liveDataRef.current[brakeRef] = el; }} style={{ color: 'var(--text-2)' }}>OFF</span>
+                <span style={{ color: 'var(--border-hi)' }}>·</span>
+                <span ref={el => { liveDataRef.current[gearRef] = el; }} style={{ color: 'var(--text-2)' }}>G-</span>
+              </div>
             </div>
+          ))}
+
+          <div style={innerPanelStyle()}>
+            <div className="label-section mb-2">GAP AT CURSOR</div>
+            <div ref={el => { liveDataRef.current.delta = el; }} className="data-value font-bold text-2xl" style={{ color: 'var(--text-2)' }}>--</div>
+            <div ref={el => { liveDataRef.current.ahead = el; }} className="label-section mt-1.5">--</div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Telemetry charts ─────────────────────────────────────────────────── */}
+      <div ref={chartsContainerRef} style={{ ...panelStyle(), position: 'relative' }}>
+
+        {/* Synchronized crosshair */}
+        <div ref={crosshairLineRef} style={{
+          position: 'absolute', top: 0, bottom: 0, width: 1, pointerEvents: 'none', zIndex: 30,
+          opacity: 0, left: 0, background: 'linear-gradient(to bottom, transparent, rgba(255,255,255,0.25) 5%, rgba(255,255,255,0.25) 95%, transparent)',
+        }} />
+
+        <div style={{ opacity: loading ? 0.3 : 1, transition: 'opacity 0.3s' }}>
+
+          {/* Speed */}
+          <div className="relative" style={{ borderBottom: '1px solid var(--border)' }}>
+            <ChartHeader label="SPEED  km/h" color="#3b82f6" />
             <SectorLabels sector1Percent={sector1Percent} sector2Percent={sector2Percent} sector3Percent={sector3Percent} />
-            {loading && <SkeletonChart />}
-            <ResponsiveContainer width="100%" height={150} className="sm:!h-[200px]">
-              <LineChart data={telemetryChartData} syncId="telemetry" margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#333333" vertical={false} horizontal={true} />
-                <XAxis dataKey="distance" stroke="#666" tick={{ fontSize: 9 }} axisLine={false} tickLine={false} hide />
-                <YAxis
-                  stroke="#666"
-                  tick={{ fontSize: 9 }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={35}
-                  domain={[speedMin, (dataMax: number) => Math.ceil(dataMax / 10) * 10]}
-                  tickFormatter={(value) => Math.round(value).toString()}
-                  label={{ value: 'km/h', angle: -90, position: 'insideLeft', style: { fontSize: 9, fill: '#666' } }}
-                />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid #00E5CC', borderRadius: '8px', fontSize: '10px' }}
-                  labelFormatter={(label) => `${Math.round(parseFloat(label))}m`}
-                  formatter={(value: any, name: string) => [formatTooltipValue(value) + ' km/h', name]}
-                />
-                
+            <ResponsiveContainer width="100%" height={160}>
+              <LineChart data={telemetryChartData} syncId="telem" margin={{ top: 8, right: 20, left: 52, bottom: 4 }}>
+                <CartesianGrid strokeDasharray="1 6" stroke={CHART_GRID} vertical={false} />
+                <XAxis dataKey="distance" stroke="transparent" tick={false} />
+                <YAxis stroke="transparent" tick={CHART_TICK} tickLine={false} width={44}
+                  domain={[speedMin, (v: number) => Math.ceil(v / 10) * 10]}
+                  tickFormatter={v => Math.round(v).toString()} />
+                <Tooltip {...TOOLTIP_STYLE} labelFormatter={(l: string | number) => `${Math.round(parseFloat(String(l)))}m`} formatter={(v: any, n: string) => [`${Math.round(v)} km/h`, n]} />
                 <Line type="monotone" dataKey="speed1" stroke={driver1Color} strokeWidth={1.5} dot={false} name={driver1} />
                 <Line type="monotone" dataKey="speed2" stroke={driver2Color} strokeWidth={1.5} dot={false} name={driver2} />
               </LineChart>
@@ -747,78 +567,38 @@ export default function TelemetryView({
           </div>
 
           {/* Delta */}
-          <div className="border-b border-metrik-turquoise/20 relative">
-            <div className="flex items-center gap-2 px-2 sm:px-3 py-1">
-              <div className="w-0.5 sm:w-1 h-2 sm:h-3 bg-yellow-500 rounded" />
-              <h3 className="text-[10px] sm:text-xs font-rajdhani font-bold text-metrik-turquoise uppercase">Delta</h3>
-            </div>
+          <div className="relative" style={{ borderBottom: '1px solid var(--border)' }}>
+            <ChartHeader label="DELTA  s" color="#eab308" />
             <SectorLabels sector1Percent={sector1Percent} sector2Percent={sector2Percent} sector3Percent={sector3Percent} />
-            {loading && <SkeletonChart />}
-            <ResponsiveContainer width="100%" height={80} className="sm:!h-[100px]">
-              <AreaChart data={telemetryChartData} syncId="telemetry" margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+            <ResponsiveContainer width="100%" height={90}>
+              <AreaChart data={telemetryChartData} syncId="telem" margin={{ top: 8, right: 20, left: 52, bottom: 4 }}>
                 <defs>
-                  <linearGradient id="deltaFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#22c55e" stopOpacity={0.5}/>
-                    <stop offset="95%" stopColor="#22c55e" stopOpacity={0.05}/>
+                  <linearGradient id="deltaG" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.35} />
+                    <stop offset="95%" stopColor="var(--accent)" stopOpacity={0.02} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#333333" vertical={false} horizontal={true} />
-                <XAxis dataKey="distance" stroke="#666" tick={{ fontSize: 9 }} axisLine={false} tickLine={false} hide />
-                <YAxis
-                  stroke="#666"
-                  tick={{ fontSize: 9 }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={35}
-                  tickFormatter={(value) => `${value >= 0 ? '+' : ''}${value.toFixed(2)}s`}
-                  label={{ value: 's', angle: -90, position: 'insideLeft', style: { fontSize: 9, fill: '#666' } }}
-                />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid #00E5CC', borderRadius: '8px', fontSize: '10px' }}
-                  labelFormatter={(label) => `${Math.round(parseFloat(label))}m`}
-                  formatter={(value: any) => {
-                    const val = parseFloat(value);
-                    return [
-                      `${(val >= 0 ? '+' : '')}${val.toFixed(3)}s`,
-                      val > 0 ? `${driver1} ahead` : val < 0 ? `${driver2} ahead` : 'Equal'
-                    ];
-                  }}
-                />
-                <ReferenceLine y={0} stroke="#00E5CC" strokeWidth={1.5} strokeDasharray="4 2"
-                  label={{ value: '0', position: 'insideTopLeft', fill: '#00E5CC', fontSize: 9 }} />
-                <Area type="monotone" dataKey="delta" stroke="#00E5CC" strokeWidth={2} fill="url(#deltaFill)" fillOpacity={1} />
+                <CartesianGrid strokeDasharray="1 6" stroke={CHART_GRID} vertical={false} />
+                <XAxis dataKey="distance" stroke="transparent" tick={false} />
+                <YAxis stroke="transparent" tick={CHART_TICK} tickLine={false} width={44} tickFormatter={v => `${v >= 0 ? '+' : ''}${v.toFixed(1)}s`} />
+                <Tooltip {...TOOLTIP_STYLE} labelFormatter={(l: string | number) => `${Math.round(parseFloat(String(l)))}m`}
+                  formatter={(v: any) => { const n = parseFloat(v); return [`${n >= 0 ? '+' : ''}${n.toFixed(3)}s`, n > 0 ? `${driver1} ahead` : n < 0 ? `${driver2} ahead` : 'Equal']; }} />
+                <ReferenceLine y={0} stroke="var(--accent)" strokeWidth={1} strokeDasharray="4 2" />
+                <Area type="monotone" dataKey="delta" stroke="var(--accent)" strokeWidth={1.5} fill="url(#deltaG)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
 
           {/* Throttle */}
-          <div className="border-b border-metrik-turquoise/20 relative">
-            <div className="flex items-center gap-2 px-2 sm:px-3 py-1">
-              <div className="w-0.5 sm:w-1 h-2 sm:h-3 bg-green-500 rounded" />
-              <h3 className="text-[10px] sm:text-xs font-rajdhani font-bold text-metrik-turquoise uppercase">Throttle</h3>
-            </div>
+          <div className="relative" style={{ borderBottom: '1px solid var(--border)' }}>
+            <ChartHeader label="THROTTLE  %" color="#22c55e" />
             <SectorLabels sector1Percent={sector1Percent} sector2Percent={sector2Percent} sector3Percent={sector3Percent} />
-            {loading && <SkeletonChart />}
-            <ResponsiveContainer width="100%" height={150} className="sm:!h-[200px]">
-              <LineChart data={telemetryChartData} syncId="telemetry" margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#333333" vertical={false} horizontal={true} />
-                <XAxis dataKey="distance" stroke="#666" tick={{ fontSize: 9 }} axisLine={false} tickLine={false} hide />
-                <YAxis 
-                  stroke="#666" 
-                  tick={{ fontSize: 9 }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={35}
-                  domain={[0, 100]}
-                  tickFormatter={(value) => Math.round(value).toString()}
-                  label={{ value: '%', angle: -90, position: 'insideLeft', style: { fontSize: 9, fill: '#666' } }}
-                />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid #00E5CC', borderRadius: '8px', fontSize: '10px' }}
-                  labelFormatter={(label) => `${Math.round(parseFloat(label))}m`}
-                  formatter={(value: any, name: string) => [formatTooltipValue(value) + '%', name]}
-                />
-                
+            <ResponsiveContainer width="100%" height={110}>
+              <LineChart data={telemetryChartData} syncId="telem" margin={{ top: 8, right: 20, left: 52, bottom: 4 }}>
+                <CartesianGrid strokeDasharray="1 6" stroke={CHART_GRID} vertical={false} />
+                <XAxis dataKey="distance" stroke="transparent" tick={false} />
+                <YAxis stroke="transparent" tick={CHART_TICK} tickLine={false} width={44} domain={[0, 100]} tickFormatter={v => `${Math.round(v)}`} />
+                <Tooltip {...TOOLTIP_STYLE} labelFormatter={(l: string | number) => `${Math.round(parseFloat(String(l)))}m`} formatter={(v: any, n: string) => [`${Math.round(v)}%`, n]} />
                 <Line type="stepAfter" dataKey="throttle1" stroke={driver1Color} strokeWidth={1.5} dot={false} name={driver1} />
                 <Line type="stepAfter" dataKey="throttle2" stroke={driver2Color} strokeWidth={1.5} dot={false} name={driver2} />
               </LineChart>
@@ -826,33 +606,15 @@ export default function TelemetryView({
           </div>
 
           {/* Brake */}
-          <div className="border-b border-metrik-turquoise/20 relative">
-            <div className="flex items-center gap-2 px-2 sm:px-3 py-1">
-              <div className="w-0.5 sm:w-1 h-2 sm:h-3 bg-red-500 rounded" />
-              <h3 className="text-[10px] sm:text-xs font-rajdhani font-bold text-metrik-turquoise uppercase">Braking</h3>
-            </div>
+          <div className="relative" style={{ borderBottom: '1px solid var(--border)' }}>
+            <ChartHeader label="BRAKE  %" color="#ef4444" />
             <SectorLabels sector1Percent={sector1Percent} sector2Percent={sector2Percent} sector3Percent={sector3Percent} />
-            {loading && <SkeletonChart />}
-            <ResponsiveContainer width="100%" height={80} className="sm:!h-[100px]">
-              <LineChart data={telemetryChartData} syncId="telemetry" margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#333333" vertical={false} horizontal={true} />
-                <XAxis dataKey="distance" stroke="#666" tick={{ fontSize: 9 }} axisLine={false} tickLine={false} hide />
-                <YAxis 
-                  stroke="#666" 
-                  tick={{ fontSize: 9 }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={35}
-                  domain={[0, 100]}
-                  tickFormatter={(value) => Math.round(value).toString()}
-                  label={{ value: '%', angle: -90, position: 'insideLeft', style: { fontSize: 9, fill: '#666' } }}
-                />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid #00E5CC', borderRadius: '8px', fontSize: '10px' }}
-                  labelFormatter={(label) => `${Math.round(parseFloat(label))}m`}
-                  formatter={(value: any, name: string) => [value > 0 ? 'ON' : 'OFF', name]}
-                />
-                
+            <ResponsiveContainer width="100%" height={65}>
+              <LineChart data={telemetryChartData} syncId="telem" margin={{ top: 8, right: 20, left: 52, bottom: 4 }}>
+                <CartesianGrid strokeDasharray="1 6" stroke={CHART_GRID} vertical={false} />
+                <XAxis dataKey="distance" stroke="transparent" tick={false} />
+                <YAxis stroke="transparent" tick={CHART_TICK} tickLine={false} width={44} domain={[0, 100]} ticks={[0, 100]} tickFormatter={v => v > 0 ? 'ON' : 'OFF'} />
+                <Tooltip {...TOOLTIP_STYLE} labelFormatter={(l: string | number) => `${Math.round(parseFloat(String(l)))}m`} formatter={(v: any, n: string) => [v > 0 ? 'ON' : 'OFF', n]} />
                 <Line type="stepAfter" dataKey="brake1" stroke={driver1Color} strokeWidth={1.5} dot={false} name={driver1} />
                 <Line type="stepAfter" dataKey="brake2" stroke={driver2Color} strokeWidth={1.5} dot={false} name={driver2} />
               </LineChart>
@@ -860,33 +622,15 @@ export default function TelemetryView({
           </div>
 
           {/* RPM */}
-          <div className="border-b border-metrik-turquoise/20 relative">
-            <div className="flex items-center gap-2 px-2 sm:px-3 py-1">
-              <div className="w-0.5 sm:w-1 h-2 sm:h-3 bg-orange-500 rounded" />
-              <h3 className="text-[10px] sm:text-xs font-rajdhani font-bold text-metrik-turquoise uppercase">RPM</h3>
-            </div>
+          <div className="relative" style={{ borderBottom: '1px solid var(--border)' }}>
+            <ChartHeader label="RPM" color="#f97316" />
             <SectorLabels sector1Percent={sector1Percent} sector2Percent={sector2Percent} sector3Percent={sector3Percent} />
-            {loading && <SkeletonChart />}
-            <ResponsiveContainer width="100%" height={150} className="sm:!h-[200px]">
-              <LineChart data={telemetryChartData} syncId="telemetry" margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#333333" vertical={false} horizontal={true} />
-                <XAxis dataKey="distance" stroke="#666" tick={{ fontSize: 9 }} axisLine={false} tickLine={false} hide />
-                <YAxis 
-                  stroke="#666" 
-                  tick={{ fontSize: 9 }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={35}
-                  domain={[8000, 12000]}
-                  tickFormatter={(value) => Math.round(value).toString()}
-                  label={{ value: 'RPM', angle: -90, position: 'insideLeft', style: { fontSize: 9, fill: '#666' } }}
-                />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid #00E5CC', borderRadius: '8px', fontSize: '10px' }}
-                  labelFormatter={(label) => `${Math.round(parseFloat(label))}m`}
-                  formatter={(value: any, name: string) => [Math.round(parseFloat(value)).toString() + ' RPM', name]}
-                />
-                
+            <ResponsiveContainer width="100%" height={110}>
+              <LineChart data={telemetryChartData} syncId="telem" margin={{ top: 8, right: 20, left: 52, bottom: 4 }}>
+                <CartesianGrid strokeDasharray="1 6" stroke={CHART_GRID} vertical={false} />
+                <XAxis dataKey="distance" stroke="transparent" tick={false} />
+                <YAxis stroke="transparent" tick={CHART_TICK} tickLine={false} width={44} domain={[8000, 12000]} tickFormatter={v => `${Math.round(v / 1000)}k`} />
+                <Tooltip {...TOOLTIP_STYLE} labelFormatter={(l: string | number) => `${Math.round(parseFloat(String(l)))}m`} formatter={(v: any, n: string) => [`${Math.round(v)} rpm`, n]} />
                 <Line type="monotone" dataKey="rpm1" stroke={driver1Color} strokeWidth={1.5} dot={false} name={driver1} />
                 <Line type="monotone" dataKey="rpm2" stroke={driver2Color} strokeWidth={1.5} dot={false} name={driver2} />
               </LineChart>
@@ -895,45 +639,22 @@ export default function TelemetryView({
 
           {/* Gear */}
           <div className="relative">
-            <div className="flex items-center gap-2 px-2 sm:px-3 py-1">
-              <div className="w-0.5 sm:w-1 h-2 sm:h-3 bg-purple-500 rounded" />
-              <h3 className="text-[10px] sm:text-xs font-rajdhani font-bold text-metrik-turquoise uppercase">Gear</h3>
-            </div>
+            <ChartHeader label="GEAR" color="#a855f7" />
             <SectorLabels sector1Percent={sector1Percent} sector2Percent={sector2Percent} sector3Percent={sector3Percent} />
-            {loading && <SkeletonChart />}
-            <ResponsiveContainer width="100%" height={150} className="sm:!h-[200px]">
-              <LineChart data={telemetryChartData} syncId="telemetry" margin={{ top: 5, right: 10, left: 0, bottom: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#333333" vertical={false} horizontal={true} />
-                <XAxis 
-                  dataKey="distance" 
-                  stroke="#666" 
-                  tick={{ fontSize: 9 }}
-                  axisLine={false}
-                  tickLine={false}
-                  tickFormatter={(value) => Math.round(value).toString()}
-                  label={{ value: 'Distance (m)', position: 'insideBottom', offset: -10, style: { fontSize: 10, fill: '#666' } }}
-                />
-                <YAxis 
-                  stroke="#666" 
-                  tick={{ fontSize: 9 }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={35}
-                  domain={[1, 8]}
-                  ticks={[1, 2, 3, 4, 5, 6, 7, 8]}
-                  label={{ value: 'Gear', angle: -90, position: 'insideLeft', style: { fontSize: 9, fill: '#666' } }}
-                />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid #00E5CC', borderRadius: '8px', fontSize: '10px' }}
-                  labelFormatter={(label) => `${Math.round(parseFloat(label))}m`}
-                  formatter={(value: any, name: string) => [Math.round(parseFloat(value)).toString(), name]}
-                />
-                
+            <ResponsiveContainer width="100%" height={90}>
+              <LineChart data={telemetryChartData} syncId="telem" margin={{ top: 8, right: 20, left: 52, bottom: 20 }}>
+                <CartesianGrid strokeDasharray="1 6" stroke={CHART_GRID} vertical={false} />
+                <XAxis dataKey="distance" stroke="transparent" tick={CHART_TICK} tickLine={false}
+                  tickFormatter={v => `${Math.round(v)}m`}
+                  label={{ value: 'DISTANCE  m', position: 'insideBottom', offset: -8, style: { fontSize: 9, fontFamily: 'JetBrains Mono', fill: 'var(--text-3)', letterSpacing: '0.1em' } }} />
+                <YAxis stroke="transparent" tick={CHART_TICK} tickLine={false} width={44} domain={[1, 8]} ticks={[1, 2, 3, 4, 5, 6, 7, 8]} tickFormatter={v => String(v)} />
+                <Tooltip {...TOOLTIP_STYLE} labelFormatter={(l: string | number) => `${Math.round(parseFloat(String(l)))}m`} formatter={(v: any, n: string) => [`G${Math.round(v)}`, n]} />
                 <Line type="stepAfter" dataKey="gear1" stroke={driver1Color} strokeWidth={1.5} dot={false} name={driver1} />
                 <Line type="stepAfter" dataKey="gear2" stroke={driver2Color} strokeWidth={1.5} dot={false} name={driver2} />
               </LineChart>
             </ResponsiveContainer>
           </div>
+
         </div>
       </div>
     </div>

@@ -10,6 +10,21 @@ interface UpgradeModalProps {
 
 type PlanType = 'monthly' | 'annual'
 
+// Same self-contained dark "chrome" palette as AuthModal — see that file for
+// why it's hardcoded rather than read via CSS vars.
+const P = {
+  bg: '#3d0c10', surface: '#4d1016', panel: '#57121c',
+  accent: '#f2e6d8', text: '#f2e6d8',
+  text2: 'rgba(242,230,216,0.55)', text3: 'rgba(242,230,216,0.32)',
+  border: 'rgba(242,230,216,0.10)', borderHi: 'rgba(242,230,216,0.20)',
+  green: '#4ADE80', // 7.99:1 against `panel`
+}
+
+const labelStyle: React.CSSProperties = {
+  fontFamily: "'JetBrains Mono', monospace", fontSize: 9, letterSpacing: '0.14em',
+  textTransform: 'uppercase', color: P.text3,
+}
+
 export default function UpgradeModal({ isOpen, onClose, reason = 'current_season' }: UpgradeModalProps) {
   const [loading, setLoading] = useState(false)
   const [selectedPlan, setSelectedPlan] = useState<PlanType>('annual')
@@ -27,7 +42,7 @@ export default function UpgradeModal({ isOpen, onClose, reason = 'current_season
     }
 
     setLoading(true)
-    
+
     try {
       const response = await fetch(`${import.meta.env.VITE_API_URL_EU || import.meta.env.VITE_API_URL}/api/create-checkout-session`, {
         method: 'POST',
@@ -57,220 +72,191 @@ export default function UpgradeModal({ isOpen, onClose, reason = 'current_season
   const getReasonContent = () => {
     switch (reason) {
       case 'current_season':
-        return {
-          icon: <Trophy className="text-metrik-turquoise" size={48} />,
-          title: 'Unlock 2026 Season',
-          description: 'Access live data from the current F1 season'
-        }
+        return { icon: <Trophy size={32} color={P.accent} />, title: 'Unlock 2026 Season', description: 'Access live data from the current F1 season' }
       case 'live_timing':
-        return {
-          icon: <Radio className="text-metrik-turquoise" size={48} />,
-          title: 'Live Timing Locked',
-          description: 'Follow races in real-time with PRO'
-        }
+        return { icon: <Radio size={32} color={P.accent} />, title: 'Live Timing Locked', description: 'Follow races in real-time with PRO' }
       default:
-        return {
-          icon: <Zap className="text-metrik-turquoise" size={48} />,
-          title: 'Upgrade to PRO',
-          description: 'Unlock all premium features'
-        }
+        return { icon: <Zap size={32} color={P.accent} />, title: 'Upgrade to PRO', description: 'Unlock all premium features' }
     }
   }
 
   const reasonContent = getReasonContent()
 
+  const planCardStyle = (selected: boolean): React.CSSProperties => ({
+    position: 'relative', padding: '18px 16px', borderRadius: 'var(--r2)',
+    border: `2px solid ${selected ? P.accent : P.border}`,
+    background: selected ? 'rgba(242,230,216,0.08)' : P.bg,
+    cursor: loading ? 'not-allowed' : 'pointer',
+    textAlign: 'center', transition: 'all 0.2s',
+  })
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm">
-      <div className="relative w-full max-w-4xl bg-metrik-card border border-metrik-turquoise/30 rounded-xl shadow-2xl overflow-hidden max-h-[95vh] overflow-y-auto">
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 50,
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+      background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)',
+    }}>
+      <div style={{
+        position: 'relative', width: '100%', maxWidth: 620, maxHeight: '92vh', overflowY: 'auto',
+        background: P.panel, border: `1px solid ${P.borderHi}`, borderRadius: 'var(--r2)',
+        boxShadow: '0 24px 60px rgba(0,0,0,0.5)',
+        padding: '32px 28px 28px',
+      }}>
         <button
           onClick={onClose}
-          className="absolute top-3 right-3 sm:top-4 sm:right-4 z-10 text-metrik-silver hover:text-white transition-colors"
           disabled={loading}
+          style={{
+            position: 'absolute', top: 16, right: 16,
+            color: P.text3, background: 'transparent', border: 'none',
+            cursor: loading ? 'not-allowed' : 'pointer', padding: 4, lineHeight: 0, transition: 'color 0.15s',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.color = P.text }}
+          onMouseLeave={e => { e.currentTarget.style.color = P.text3 }}
         >
-          <X size={24} />
+          <X size={18} />
         </button>
 
-        <div className="p-4 sm:p-6 md:p-8">
-          {/* Header */}
-          <div className="text-center mb-4 sm:mb-6 md:mb-8">
-            <div className="flex justify-center mb-2 sm:mb-3 md:mb-4">
-              <div className="p-2 sm:p-3 md:p-4 bg-metrik-turquoise/10 rounded-full border border-metrik-turquoise/30">
-                {reasonContent.icon}
-              </div>
-            </div>
-            <h2 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-rajdhani font-black text-white mb-1 sm:mb-2">
-              {reasonContent.title}
-            </h2>
-            <p className="text-metrik-silver text-xs sm:text-sm md:text-base px-2">
-              {reasonContent.description}
-            </p>
-          </div>
-
-          {/* Plan Selector */}
-          <div className="grid grid-cols-2 md:grid-cols-2 gap-2 sm:gap-3 md:gap-4 mb-4 sm:mb-6 md:mb-8">
-            {/* Monthly Plan */}
-            <button
-              onClick={() => setSelectedPlan('monthly')}
-              disabled={loading}
-              className={`
-                relative p-3 sm:p-4 md:p-6 rounded-lg md:rounded-xl border-2 transition-all duration-300
-                ${selectedPlan === 'monthly'
-                  ? 'border-metrik-turquoise bg-metrik-turquoise/10 md:scale-105'
-                  : 'border-metrik-silver/20 bg-metrik-black/50 hover:border-metrik-turquoise/50'
-                }
-              `}
-            >
-              {selectedPlan === 'monthly' && (
-                <div className="absolute top-1.5 right-1.5 sm:top-2 sm:right-2 md:top-3 md:right-3">
-                  <div className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 rounded-full bg-metrik-turquoise flex items-center justify-center">
-                    <Check size={12} className="sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 text-metrik-black" />
-                  </div>
-                </div>
-              )}
-
-              <div className="text-center">
-                <h3 className="text-xs sm:text-sm md:text-lg font-rajdhani font-bold text-white mb-1 sm:mb-2">
-                  Monthly
-                </h3>
-                <div className="mb-0.5 sm:mb-1">
-                  <span className="text-[9px] sm:text-[10px] md:text-xs text-green-400 font-bold block">7 days free</span>
-                </div>
-                <div className="mb-1 sm:mb-2 md:mb-4">
-                  <span className="text-xl sm:text-2xl md:text-4xl font-rajdhani font-black text-metrik-turquoise">
-                    1,99€
-                  </span>
-                  <span className="text-metrik-silver text-[10px] sm:text-xs md:text-sm ml-0.5 sm:ml-1">/mo</span>
-                </div>
-                <p className="text-[9px] sm:text-[10px] md:text-xs text-metrik-silver leading-tight">
-                  Then billed monthly<br className="md:hidden" /><span className="hidden md:inline"> • </span>Cancel anytime
-                </p>
-              </div>
-            </button>
-
-            {/* Annual Plan */}
-            <button
-              onClick={() => setSelectedPlan('annual')}
-              disabled={loading}
-              className={`
-                relative p-3 sm:p-4 md:p-6 rounded-lg md:rounded-xl border-2 transition-all duration-300
-                ${selectedPlan === 'annual'
-                  ? 'border-metrik-turquoise bg-metrik-turquoise/10 md:scale-105'
-                  : 'border-metrik-silver/20 bg-metrik-black/50 hover:border-metrik-turquoise/50'
-                }
-              `}
-            >
-              {/* Best Value Badge - Repositionné en haut à gauche sur mobile, en haut au centre sur desktop */}
-              <div className="absolute top-1.5 left-1.5 md:-top-3 md:left-1/2 md:transform md:-translate-x-1/2">
-                <div className="px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-0.5 md:py-1 bg-gradient-to-r from-yellow-500 to-orange-500 rounded-full">
-                  <span className="text-[8px] sm:text-[9px] md:text-xs font-rajdhani font-black text-black uppercase">
-                    Best
-                  </span>
-                </div>
-              </div>
-
-              {selectedPlan === 'annual' && (
-                <div className="absolute top-1.5 right-1.5 sm:top-2 sm:right-2 md:top-3 md:right-3">
-                  <div className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 rounded-full bg-metrik-turquoise flex items-center justify-center">
-                    <Check size={12} className="sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 text-metrik-black" />
-                  </div>
-                </div>
-              )}
-
-              <div className="text-center">
-                <h3 className="text-xs sm:text-sm md:text-lg font-rajdhani font-bold text-white mb-1 sm:mb-2">
-                  Annual
-                </h3>
-                <div className="mb-0.5 sm:mb-1">
-                  <span className="text-[9px] sm:text-[10px] md:text-xs text-green-400 font-bold block">7 days free</span>
-                </div>
-                <div className="mb-1 sm:mb-2">
-                  <span className="text-xl sm:text-2xl md:text-4xl font-rajdhani font-black text-metrik-turquoise">
-                    14,99€
-                  </span>
-                  <span className="text-metrik-silver text-[10px] sm:text-xs md:text-sm ml-0.5 sm:ml-1">/yr</span>
-                </div>
-                <div className="flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2 mb-1 sm:mb-2">
-                  <span className="text-[9px] sm:text-[10px] md:text-xs text-metrik-silver line-through">
-                    23,88€
-                  </span>
-                  <span className="px-1 sm:px-1.5 md:px-2 py-0.5 bg-green-500/20 border border-green-500/50 rounded text-[8px] sm:text-[9px] md:text-xs font-bold text-green-400">
-                    -38%
-                  </span>
-                </div>
-                <p className="text-[9px] sm:text-[10px] md:text-xs text-metrik-silver leading-tight">
-                  Then billed yearly<br className="md:hidden" /><span className="hidden md:inline"> • </span>8,89€ saved
-                </p>
-              </div>
-            </button>
-          </div>
-
-          {/* Features List */}
-          <div className="bg-metrik-black/50 border border-metrik-turquoise/20 rounded-lg md:rounded-xl p-3 sm:p-4 md:p-6 mb-3 sm:mb-4 md:mb-6">
-            <h4 className="text-[10px] sm:text-xs md:text-sm font-rajdhani font-bold text-metrik-turquoise uppercase tracking-wide mb-2 sm:mb-3 md:mb-4 flex items-center gap-1.5 sm:gap-2">
-              <TrendingUp size={12} className="sm:w-3.5 sm:h-3.5 md:w-4 md:h-4" />
-              What's included in PRO
-            </h4>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2 md:gap-3">
-              <div className="flex items-start gap-1.5 sm:gap-2 md:gap-3">
-                <Check size={14} className="sm:w-4 sm:h-4 md:w-[18px] md:h-[18px] text-metrik-turquoise flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-white font-rajdhani font-bold text-[11px] sm:text-xs md:text-sm leading-tight">2026 Season Access</p>
-                  <p className="text-metrik-silver text-[9px] sm:text-[10px] md:text-xs leading-tight">Real-time data from current season</p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-1.5 sm:gap-2 md:gap-3">
-                <Check size={14} className="sm:w-4 sm:h-4 md:w-[18px] md:h-[18px] text-metrik-turquoise flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-white font-rajdhani font-bold text-[11px] sm:text-xs md:text-sm leading-tight">Live Timing</p>
-                  <p className="text-metrik-silver text-[9px] sm:text-[10px] md:text-xs leading-tight">Live data, GPS tracking, sector times & radio</p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-1.5 sm:gap-2 md:gap-3">
-                <Check size={14} className="sm:w-4 sm:h-4 md:w-[18px] md:h-[18px] text-metrik-turquoise flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-white font-rajdhani font-bold text-[11px] sm:text-xs md:text-sm leading-tight">Full Telemetry</p>
-                  <p className="text-metrik-silver text-[9px] sm:text-[10px] md:text-xs leading-tight">Detailed lap-by-lap analysis 2026 season</p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-1.5 sm:gap-2 md:gap-3">
-                <Check size={14} className="sm:w-4 sm:h-4 md:w-[18px] md:h-[18px] text-metrik-turquoise flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-white font-rajdhani font-bold text-[11px] sm:text-xs md:text-sm leading-tight">Historical Data</p>
-                  <p className="text-metrik-silver text-[9px] sm:text-[10px] md:text-xs leading-tight">Full access to 1950-2025</p>
-                </div>
-              </div>
+        {/* Header */}
+        <div style={{ textAlign: 'center', marginBottom: 24 }}>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 14 }}>
+            <div style={{
+              width: 56, height: 56, borderRadius: '50%',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: P.surface, border: `1px solid ${P.borderHi}`,
+            }}>
+              {reasonContent.icon}
             </div>
           </div>
-
-          {/* CTA Button */}
-          <button
-            onClick={handleUpgrade}
-            disabled={loading}
-            className="w-full py-2.5 sm:py-3 md:py-4 px-4 sm:px-4 md:px-6 bg-gradient-to-r from-metrik-turquoise to-cyan-500 hover:from-metrik-turquoise/90 hover:to-cyan-500/90 text-metrik-black font-rajdhani font-black text-sm sm:text-base md:text-lg rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-metrik-turquoise/30"
-          >
-            {loading ? (
-              <>
-                <Loader2 className="animate-spin w-4 h-4 sm:w-5 sm:h-5" />
-                <span className="text-xs sm:text-sm md:text-base">Processing...</span>
-              </>
-            ) : user ? (
-              <span className="text-xs sm:text-sm md:text-base">
-                Start 7-day free trial → {selectedPlan === 'monthly' ? '1,99€/mo after' : '14,99€/yr after'}
-              </span>
-            ) : (
-              <span className="text-xs sm:text-sm md:text-base">Start 7-day free trial</span>
-            )}
-          </button>
-
-          {/* Footer Note */}
-          <p className="text-center text-[9px] sm:text-[10px] md:text-xs text-metrik-silver mt-2 sm:mt-3 md:mt-4 leading-tight px-2">
-            7 days free • No charge until trial ends • Cancel anytime • Secure payment via Stripe
+          <h2 style={{
+            fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 24,
+            letterSpacing: '0.04em', textTransform: 'uppercase', color: P.text, margin: '0 0 6px',
+          }}>
+            {reasonContent.title}
+          </h2>
+          <p style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, color: P.text2, margin: 0 }}>
+            {reasonContent.description}
           </p>
         </div>
+
+        {/* Plan selector */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
+          <button onClick={() => setSelectedPlan('monthly')} disabled={loading} style={planCardStyle(selectedPlan === 'monthly')}>
+            {selectedPlan === 'monthly' && (
+              <div style={{
+                position: 'absolute', top: 10, right: 10, width: 20, height: 20, borderRadius: '50%',
+                background: P.accent, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <Check size={12} color={P.bg} />
+              </div>
+            )}
+            <h3 style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 14, textTransform: 'uppercase', color: P.text, margin: '0 0 8px' }}>Monthly</h3>
+            <span style={{ display: 'block', fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 700, color: P.green, marginBottom: 6 }}>7 days free</span>
+            <div style={{ marginBottom: 10 }}>
+              <span style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 800, fontSize: 30, color: P.accent }}>1,99€</span>
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: P.text2 }}>/mo</span>
+            </div>
+            <p style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: P.text3, margin: 0, lineHeight: 1.5 }}>
+              Then billed monthly · Cancel anytime
+            </p>
+          </button>
+
+          <button onClick={() => setSelectedPlan('annual')} disabled={loading} style={planCardStyle(selectedPlan === 'annual')}>
+            <div style={{
+              position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50%)',
+              padding: '2px 10px', borderRadius: 'var(--r)',
+              background: P.accent,
+            }}>
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: P.bg }}>Best</span>
+            </div>
+            {selectedPlan === 'annual' && (
+              <div style={{
+                position: 'absolute', top: 10, right: 10, width: 20, height: 20, borderRadius: '50%',
+                background: P.accent, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <Check size={12} color={P.bg} />
+              </div>
+            )}
+            <h3 style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 14, textTransform: 'uppercase', color: P.text, margin: '0 0 8px' }}>Annual</h3>
+            <span style={{ display: 'block', fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 700, color: P.green, marginBottom: 6 }}>7 days free</span>
+            <div style={{ marginBottom: 6 }}>
+              <span style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 800, fontSize: 30, color: P.accent }}>14,99€</span>
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: P.text2 }}>/yr</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 10 }}>
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: P.text3, textDecoration: 'line-through' }}>23,88€</span>
+              <span style={{
+                padding: '1px 6px', borderRadius: 'var(--r)',
+                background: 'rgba(74,222,128,0.15)', border: '1px solid rgba(74,222,128,0.4)',
+                fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 700, color: P.green,
+              }}>
+                -38%
+              </span>
+            </div>
+            <p style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: P.text3, margin: 0, lineHeight: 1.5 }}>
+              Then billed yearly · 8,89€ saved
+            </p>
+          </button>
+        </div>
+
+        {/* Features */}
+        <div style={{ background: P.bg, border: `1px solid ${P.border}`, borderRadius: 'var(--r2)', padding: 16, marginBottom: 20 }}>
+          <h4 style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase',
+            color: P.accent, margin: '0 0 12px', fontWeight: 700,
+          }}>
+            <TrendingUp size={13} />
+            What's included in PRO
+          </h4>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            {[
+              { title: '2026 Season Access', desc: 'Real-time data from current season' },
+              { title: 'Live Timing', desc: 'Live data, GPS tracking, sector times & radio' },
+              { title: 'Full Telemetry', desc: 'Detailed lap-by-lap analysis 2026 season' },
+              { title: 'Historical Data', desc: 'Full access to 1950-2025' },
+            ].map(({ title, desc }) => (
+              <div key={title} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                <Check size={14} color={P.accent} style={{ flexShrink: 0, marginTop: 2 }} />
+                <div>
+                  <p style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 13, color: P.text, margin: '0 0 2px' }}>{title}</p>
+                  <p style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: P.text2, margin: 0, lineHeight: 1.4 }}>{desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* CTA */}
+        <button
+          onClick={handleUpgrade}
+          disabled={loading}
+          style={{
+            width: '100%', padding: '13px 0',
+            background: P.accent, color: P.bg,
+            border: 'none', borderRadius: 'var(--r)',
+            fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 12,
+            letterSpacing: '0.1em', textTransform: 'uppercase',
+            cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            transition: 'opacity 0.15s',
+          }}
+        >
+          {loading ? (
+            <>
+              <Loader2 size={15} className="animate-spin" />
+              Processing...
+            </>
+          ) : user ? (
+            <>Start 7-day free trial → {selectedPlan === 'monthly' ? '1,99€/mo after' : '14,99€/yr after'}</>
+          ) : (
+            <>Start 7-day free trial</>
+          )}
+        </button>
+
+        <p style={{ ...labelStyle, textAlign: 'center', marginTop: 14, lineHeight: 1.6, letterSpacing: '0.04em' }}>
+          7 days free • No charge until trial ends • Cancel anytime • Secure payment via Stripe
+        </p>
       </div>
     </div>
   )

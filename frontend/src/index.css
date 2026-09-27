@@ -1,265 +1,174 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   METRIK DELTA — Design System · Direction A "Race Engineer"
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Design tokens ─────────────────────────────────────────────────────────
+   Accent: change --accent + --accent-rgb to rebrand in one place.
+   ────────────────────────────────────────────────────────────────────────── */
+:root {
+  /* Backgrounds — Marlboro DA (navigation/chrome) */
+  --bg:           #3d0c10;
+  --surface:      #4d1016;
+  --panel:        #57121c;
+
+  /* Chart grid lines */
+  --chart-grid:   rgba(242,230,216,0.06);
+
+  /* Borders */
+  --border:       rgba(242,230,216,0.08);
+  --border-hi:    rgba(242,230,216,0.18);
+
+  /* Accent — cream on dark red */
+  --accent:       #f2e6d8;
+  --accent-rgb:   242,230,216;
+
+  --accent-10:    rgba(var(--accent-rgb), 0.08);
+  --accent-20:    rgba(var(--accent-rgb), 0.16);
+  --accent-30:    rgba(var(--accent-rgb), 0.28);
+
+  /* Text */
+  --text:         #f2e6d8;
+  --text-2:       rgba(242,230,216,0.50);
+  --text-3:       rgba(242,230,216,0.22);
+
+  /* Radius — minimal for "engineering software" feel */
+  --r:  2px;
+  --r2: 4px;
+}
+
+/* ── Data zone — cream/paper inversion ──────────────────────────────────────
+   Applied to the right panel (charts + tables) only.
+   Accent flips to Marlboro red on cream ground.
+   ─────────────────────────────────────────────────────────────────────────── */
+.data-zone {
+  --bg:           #ede5d5;
+  --surface:      #e5dcc9;
+  --panel:        #dbd2bc;
+
+  /* Marlboro red as visible separators — clearly readable on cream */
+  --border:       rgba(94,16,24,0.22);
+  --border-hi:    rgba(94,16,24,0.48);
+
+  --accent:       #5e1018;
+  --accent-rgb:   94,16,24;
+  --accent-10:    rgba(94,16,24,0.07);
+  --accent-20:    rgba(94,16,24,0.15);
+  --accent-30:    rgba(94,16,24,0.26);
+
+  --text:         #1c0407;
+  --text-2:       rgba(28,4,7,0.58);
+  --text-3:       rgba(28,4,7,0.34);
+
+  --chart-grid:   rgba(94,16,24,0.18);
+
+  color:      #1c0407;
+  background: #ede5d5;
+}
+
+/* Select arrow override inside data-zone */
+.data-zone select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5' viewBox='0 0 8 5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='rgba(94%2C16%2C24%2C0.45)'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 10px center !important;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* ── Base ──────────────────────────────────────────────────────────────────── */
 @layer base {
+  *, *::before, *::after { box-sizing: border-box; }
+
+  html { height: 100%; }
+
   body {
-    @apply bg-metrik-black text-metrik-text font-inter antialiased;
-    background-image: 
-      linear-gradient(rgba(0,210,190,0.02) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(0,210,190,0.02) 1px, transparent 1px);
-    background-size: 40px 40px;
+    height: 100%;
+    margin: 0;
+    font-family: 'Rajdhani', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+    /* subtle dot grid — precision instrument feel */
+    background-image: radial-gradient(rgba(242,230,216,0.025) 1px, transparent 1px);
+    background-size: 22px 22px;
   }
 
-  h1, h2, h3, h4, h5, h6 {
-    @apply font-rajdhani font-semibold;
+  /* All data / numeric values → monospace */
+  .data, time, .lap-time, .sector-time {
+    font-family: 'JetBrains Mono', 'Fira Mono', monospace;
   }
 }
 
-@layer components {
-  /* Button Cockpit Style */
-  .btn-cockpit {
-    @apply px-6 py-3 bg-transparent border-2 border-metrik-turquoise text-metrik-text 
-           font-rajdhani font-semibold rounded-lg transition-all duration-300
-           hover:bg-metrik-turquoise hover:shadow-glow-turquoise;
-  }
+/* ── Scrollbar ─────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar       { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(var(--accent-rgb), 0.25); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(var(--accent-rgb), 0.45); }
 
-  .btn-cockpit-secondary {
-    @apply px-6 py-3 bg-metrik-card border border-metrik-silver text-metrik-text 
-           font-rajdhani font-semibold rounded-lg transition-all duration-300
-           hover:bg-metrik-dark hover:shadow-glow-silver;
-  }
+/* ── Utility classes ───────────────────────────────────────────────────────── */
 
-  /* Card Cockpit Style */
-  .card-cockpit {
-    @apply bg-metrik-card border border-metrik-turquoise/20 rounded-lg p-6
-           shadow-cockpit transition-all duration-300
-           hover:border-metrik-turquoise/40 hover:shadow-glow-turquoise;
-  }
-
-  /* Data Display (Chiffres style cockpit) */
-  .data-display {
-    @apply font-mono text-3xl font-bold text-metrik-turquoise tracking-wider;
-  }
-
-  /* Section Headers */
-  .section-header {
-    @apply text-3xl font-rajdhani font-bold text-metrik-text mb-2
-           border-b-2 border-metrik-turquoise/30 pb-2 inline-block;
-  }
-
-  /* Loading State */
-  .loading-spinner {
-    @apply inline-block w-12 h-12 border-4 border-metrik-dark 
-           border-t-metrik-turquoise rounded-full animate-spin;
-  }
-
-  /* Scrollbar Custom */
-  ::-webkit-scrollbar {
-    @apply w-2 h-2;
-  }
-
-  ::-webkit-scrollbar-track {
-    @apply bg-metrik-dark;
-  }
-
-  ::-webkit-scrollbar-thumb {
-    @apply bg-metrik-turquoise/50 rounded-full hover:bg-metrik-turquoise;
-  }
+/* Data value — use on any numeric / time value */
+.data-value {
+  font-family: 'JetBrains Mono', 'Fira Mono', monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
 }
 
-@layer utilities {
-  /* Glow Effects */
-  .glow-turquoise {
-    box-shadow: 0 0 20px rgba(0, 210, 190, 0.3);
-  }
-
-  .glow-turquoise-lg {
-    box-shadow: 0 0 40px rgba(0, 210, 190, 0.4);
-  }
-
-  /* Glassmorphism Cockpit */
-  .glass-cockpit {
-    background: rgba(18, 18, 18, 0.9);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-  }
-
-  /* Text Glow */
-  .text-glow {
-    text-shadow: 0 0 10px rgba(0, 210, 190, 0.5);
-  }
+/* Chart dot visible circle (SessionExplorer) — deliberately has no `style`
+   prop in JSX so its draw-in/retract fade animation (set via direct DOM
+   writes) survives unrelated re-renders instead of being reset. */
+[data-visible-dot] {
+  pointer-events: none;
 }
+
+/* Section label — tiny uppercase mono */
+.label-section {
+  font-family: 'JetBrains Mono', 'Fira Mono', monospace;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.20em;
+  color: var(--text-3);
+}
+
+/* Engineering panel */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r2);
+}
+
+/* Accent text */
+.accent { color: var(--accent); }
+
+/* ── Animations ────────────────────────────────────────────────────────────── */
+@keyframes slide-up {
+  from { opacity: 0; transform: translate(-50%, 12px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+.animate-slide-up { animation: slide-up 0.22s ease-out; }
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in { animation: fade-in 0.3s ease-out; }
 
 @keyframes slide-in-right {
-  from {
-    transform: translateX(100%);
-    opacity: 0;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
+  from { transform: translateX(100%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+.animate-slide-in-right { animation: slide-in-right 0.25s ease-out; }
+
+/* ── Legacy classes (kept for components not yet migrated) ──────────────────── */
+.glass-cockpit {
+  background: rgba(11,11,23,0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
-.animate-slide-in-right {
-  animation: slide-in-right 0.3s ease-out;
-}
-
-/* Animations personnalisées pour F1 METRIK HomePage */
-
-/* Animation gradient pour le titre */
-@keyframes gradient {
-  0%, 100% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
-}
-
-.animate-gradient {
-  background-size: 200% 200%;
-  animation: gradient 3s ease infinite;
-}
-
-/* Animation fade-in si elle n'existe pas */
-@keyframes fade-in {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.animate-fade-in {
-  animation: fade-in 0.8s ease-out forwards;
-}
-
-/* Animation pulse améliorée */
-@keyframes pulse-glow {
-  0%, 100% {
-    opacity: 1;
-    box-shadow: 0 0 10px rgba(0, 229, 204, 0.3);
-  }
-  50% {
-    opacity: 0.8;
-    box-shadow: 0 0 20px rgba(0, 229, 204, 0.6);
-  }
-}
-
-.animate-pulse-glow {
-  animation: pulse-glow 2s ease-in-out infinite;
-}
-
-/* Délai pour l'animation pulse */
-.delay-1000 {
-  animation-delay: 1s;
-}
-
-/* Animation de hover pour les cards */
-@keyframes card-hover {
-  0% {
-    transform: scale(1);
-  }
-  100% {
-    transform: scale(1.05);
-  }
-}
-
-/* Animation stagger pour les éléments de grille */
-@keyframes stagger-appear {
-  from {
-    opacity: 0;
-    transform: translateY(30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.animate-stagger {
-  animation: stagger-appear 0.6s ease-out forwards;
-}
-/* ========================================
-   Custom Scrollbar pour les modals Footer
-   ======================================== */
-
-.custom-scrollbar::-webkit-scrollbar {
-  width: 8px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 4px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(64, 220, 165, 0.3);
-  border-radius: 4px;
-  transition: background 0.2s ease;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(64, 220, 165, 0.5);
-}
-
-/* Pour Firefox */
-.custom-scrollbar {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(64, 220, 165, 0.3) rgba(255, 255, 255, 0.05);
-}
-
-/* Custom Scrollbar for Studio Pro */
-.custom-scrollbar::-webkit-scrollbar {
-  width: 8px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: rgba(30, 41, 59, 0.3);
-  border-radius: 4px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(0, 229, 204, 0.3);
-  border-radius: 4px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 229, 204, 0.5);
-}
-
-@keyframes fade-in {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.animate-fade-in {
-  animation: fade-in 0.4s ease-out;
-}
-
-/* Toast notification animation */
-@keyframes slide-up {
-  from {
-    opacity: 0;
-    transform: translate(-50%, 20px);
-  }
-  to {
-    opacity: 1;
-    transform: translate(-50%, 0);
-  }
-}
-
-.animate-slide-up {
-  animation: slide-up 0.3s ease-out;
-}
+.custom-scrollbar::-webkit-scrollbar       { width: 4px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(var(--accent-rgb), 0.25); border-radius: 2px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(var(--accent-rgb), 0.45); }

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { X, Mail, CheckCircle } from 'lucide-react'
+import { X, Mail, CheckCircle, Loader2 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useTranslation } from 'react-i18next'
 import { supabase } from '../lib/supabase'
@@ -9,9 +9,22 @@ interface AuthModalProps {
   onClose: () => void
 }
 
+// Self-contained dark "chrome" palette — the exact root theme tokens
+// (index.css :root), hardcoded rather than read via CSS vars so the modal
+// looks identical whether it's opened from a cream `.data-zone` page or the
+// dark landing page, matching how LandingPage.tsx defines its own palette
+// for the same reason. #ff6b6b for errors measures 5.0:1 against `panel`.
+const P = {
+  bg: '#3d0c10', surface: '#4d1016', panel: '#57121c',
+  accent: '#f2e6d8', text: '#f2e6d8',
+  text2: 'rgba(242,230,216,0.55)', text3: 'rgba(242,230,216,0.32)',
+  border: 'rgba(242,230,216,0.10)', borderHi: 'rgba(242,230,216,0.20)',
+  error: '#ff6b6b', errorBg: 'rgba(255,107,107,0.10)', errorBorder: 'rgba(255,107,107,0.35)',
+}
+
 function GoogleIcon() {
   return (
-    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg width="16" height="16" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path d="M17.64 9.205c0-.639-.057-1.252-.164-1.841H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
       <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/>
       <path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
@@ -20,6 +33,120 @@ function GoogleIcon() {
   )
 }
 
+// ── Shared style fragments (mirrors SessionExplorer's SelectField / label
+//    conventions: JetBrains Mono, uppercase, letter-spaced) ──────────────────
+
+const labelStyle: React.CSSProperties = {
+  display: 'block', marginBottom: 6,
+  fontFamily: "'JetBrains Mono', monospace",
+  fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase',
+  color: P.text3,
+}
+
+const inputStyle: React.CSSProperties = {
+  width: '100%', padding: '10px 12px', boxSizing: 'border-box',
+  background: P.bg,
+  border: `1px solid ${P.border}`,
+  borderRadius: 'var(--r)',
+  color: P.text,
+  fontFamily: "'JetBrains Mono', monospace", fontSize: 12,
+  outline: 'none',
+}
+
+const headingStyle: React.CSSProperties = {
+  fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 24,
+  letterSpacing: '0.04em', textTransform: 'uppercase',
+  color: P.text, margin: '0 0 6px', lineHeight: 1.1,
+}
+
+const subStyle: React.CSSProperties = {
+  fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: '0.02em',
+  color: P.text2, margin: '0 0 22px', lineHeight: 1.5,
+}
+
+const primaryButtonStyle: React.CSSProperties = {
+  width: '100%', padding: '12px 0',
+  background: P.accent, color: P.bg,
+  border: 'none', borderRadius: 'var(--r)',
+  fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 11,
+  letterSpacing: '0.14em', textTransform: 'uppercase',
+  cursor: 'pointer', transition: 'opacity 0.15s',
+}
+
+const googleButtonStyle: React.CSSProperties = {
+  width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+  padding: '11px 0', background: '#ffffff', color: '#3c4043',
+  border: '1px solid rgba(0,0,0,0.12)', borderRadius: 'var(--r)',
+  fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, letterSpacing: '0.04em',
+  cursor: 'pointer', transition: 'opacity 0.15s',
+}
+
+const linkStyle: React.CSSProperties = {
+  fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: '0.08em',
+  textTransform: 'uppercase', color: P.text2,
+  background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+  transition: 'color 0.15s',
+}
+
+function ErrorBanner({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{
+      background: P.errorBg, border: `1px solid ${P.errorBorder}`,
+      borderRadius: 'var(--r)', color: P.error,
+      fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, lineHeight: 1.4,
+      padding: '10px 12px', marginBottom: 16,
+    }}>
+      {children}
+    </div>
+  )
+}
+
+function Divider({ label }: { label: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '20px 0' }}>
+      <div style={{ flex: 1, height: 1, background: P.border }} />
+      <span style={{
+        fontFamily: "'JetBrains Mono', monospace", fontSize: 8,
+        letterSpacing: '0.16em', textTransform: 'uppercase', color: P.text3,
+        whiteSpace: 'nowrap',
+      }}>
+        {label}
+      </span>
+      <div style={{ flex: 1, height: 1, background: P.border }} />
+    </div>
+  )
+}
+
+function Card({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 50,
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+      background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)',
+    }}>
+      <div style={{
+        position: 'relative', width: '100%', maxWidth: 420,
+        background: P.panel, border: `1px solid ${P.borderHi}`, borderRadius: 'var(--r2)',
+        boxShadow: '0 24px 60px rgba(0,0,0,0.5)',
+        padding: '32px 28px 28px',
+      }}>
+        <button
+          onClick={onClose}
+          style={{
+            position: 'absolute', top: 16, right: 16,
+            color: P.text3, background: 'transparent', border: 'none',
+            cursor: 'pointer', padding: 4, lineHeight: 0, transition: 'color 0.15s',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.color = P.text }}
+          onMouseLeave={e => { e.currentTarget.style.color = P.text3 }}
+        >
+          <X size={18} />
+        </button>
+        {children}
+      </div>
+    </div>
+  )
+}
 
 export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
   const { t } = useTranslation()
@@ -56,8 +183,9 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
       if (error) { setError(error.message); setLoading(false) }
       else { onClose(); setEmail(''); setPassword(''); setLoading(false) }
     } else {
-      const { error } = await signUp(email, password)
+      const { data, error } = await signUp(email, password)
       if (error) { setError(error.message); setLoading(false) }
+      else if (data.session) { onClose(); setEmail(''); setPassword(''); setLoading(false) }
       else { setShowEmailConfirmation(true); setLoading(false) }
     }
   }
@@ -74,199 +202,182 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
     if (error) { setError(error.message) } else { setResetSent(true) }
   }
 
-  // Forgot password screen
+  // ── Forgot password screen ─────────────────────────────────────────────────
   if (showForgotPassword) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-        <div className="relative w-full max-w-md backdrop-blur-xl bg-metrik-card/95 border-2 border-metrik-turquoise/50 rounded-xl shadow-2xl shadow-metrik-turquoise/20">
-          <button onClick={() => { setShowForgotPassword(false); setResetSent(false); setError('') }}
-            className="absolute top-4 right-4 text-metrik-silver hover:text-white transition-colors z-10">
-            <X size={24} />
-          </button>
-          <div className="p-8 text-center">
-            <div className="flex justify-center mb-6">
-              <div className="p-4 bg-metrik-turquoise/10 rounded-full border border-metrik-turquoise/30">
-                <Mail className="w-12 h-12 text-metrik-turquoise" />
-              </div>
-            </div>
-            {resetSent ? (
-              <>
-                <h2 className="text-2xl font-rajdhani font-black text-white mb-3">Check your email</h2>
-                <p className="text-metrik-silver text-sm mb-6">
-                  We sent a reset link to <span className="text-metrik-turquoise font-bold">{email}</span>.
-                </p>
-                <button onClick={() => { setShowForgotPassword(false); setResetSent(false) }}
-                  className="w-full py-3 px-4 bg-metrik-turquoise hover:bg-metrik-turquoise/90 text-metrik-black font-rajdhani font-bold rounded-lg transition-all">
-                  Back to login
-                </button>
-              </>
-            ) : (
-              <>
-                <h2 className="text-2xl font-rajdhani font-black text-white mb-3">Reset password</h2>
-                <p className="text-metrik-silver text-sm mb-6">Enter your email and we'll send you a reset link.</p>
-                <form onSubmit={handleForgotPassword} className="space-y-4 text-left">
-                  {error && <div className="bg-red-500/10 border border-red-500/50 text-red-400 px-4 py-3 rounded-lg text-sm">{error}</div>}
-                  <input type="email" required value={email} onChange={e => setEmail(e.target.value)}
-                    placeholder="your@email.com"
-                    className="w-full px-4 py-3 bg-metrik-black/50 border border-metrik-turquoise/20 rounded-lg text-white placeholder-metrik-silver/50 focus:outline-none focus:ring-2 focus:ring-metrik-turquoise font-rajdhani" />
-                  <button type="submit" disabled={loading}
-                    className="w-full py-3 px-4 bg-metrik-turquoise hover:bg-metrik-turquoise/90 text-metrik-black font-rajdhani font-black rounded-lg transition-all disabled:opacity-50">
-                    {loading ? 'Sending...' : 'Send reset link'}
-                  </button>
-                </form>
-              </>
-            )}
+      <Card onClose={() => { setShowForgotPassword(false); setResetSent(false); setError('') }}>
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 20 }}>
+          <div style={{
+            width: 56, height: 56, borderRadius: '50%',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: P.surface, border: `1px solid ${P.borderHi}`,
+          }}>
+            <Mail size={26} color={P.accent} />
           </div>
         </div>
-      </div>
+        {resetSent ? (
+          <>
+            <h2 style={{ ...headingStyle, textAlign: 'center' }}>Check your email</h2>
+            <p style={{ ...subStyle, textAlign: 'center' }}>
+              We sent a reset link to <span style={{ color: P.accent, fontWeight: 700 }}>{email}</span>.
+            </p>
+            <button
+              onClick={() => { setShowForgotPassword(false); setResetSent(false) }}
+              style={primaryButtonStyle}
+            >
+              Back to login
+            </button>
+          </>
+        ) : (
+          <>
+            <h2 style={{ ...headingStyle, textAlign: 'center' }}>Reset password</h2>
+            <p style={{ ...subStyle, textAlign: 'center' }}>
+              Enter your email and we'll send you a reset link.
+            </p>
+            <form onSubmit={handleForgotPassword}>
+              {error && <ErrorBanner>{error}</ErrorBanner>}
+              <div style={{ marginBottom: 18 }}>
+                <span style={labelStyle}>Email</span>
+                <input
+                  type="email" required value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="your@email.com"
+                  style={inputStyle}
+                />
+              </div>
+              <button type="submit" disabled={loading} style={{ ...primaryButtonStyle, opacity: loading ? 0.6 : 1 }}>
+                {loading ? 'Sending...' : 'Send reset link'}
+              </button>
+            </form>
+          </>
+        )}
+      </Card>
     )
   }
 
-  // Email confirmation screen
+  // ── Email confirmation screen ──────────────────────────────────────────────
   if (showEmailConfirmation) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-        <div className="relative w-full max-w-md backdrop-blur-xl bg-metrik-card/95 border-2 border-metrik-turquoise/50 rounded-xl shadow-2xl shadow-metrik-turquoise/20">
-          <button onClick={() => { setShowEmailConfirmation(false); onClose(); setEmail(''); setPassword('') }}
-            className="absolute top-4 right-4 text-metrik-silver hover:text-white transition-colors z-10">
-            <X size={24} />
-          </button>
-          <div className="p-8 text-center">
-            <div className="flex justify-center mb-6">
-              <div className="relative">
-                <div className="absolute inset-0 bg-metrik-turquoise/20 rounded-full blur-xl" />
-                <div className="p-4 bg-metrik-turquoise/10 rounded-full border border-metrik-turquoise/30">
-                  <Mail className="w-12 h-12 text-metrik-turquoise relative" />
-                </div>
-              </div>
-            </div>
-            <h2 className="text-2xl font-rajdhani font-black text-white mb-3">Check Your Email! 📧</h2>
-            <p className="text-metrik-silver text-sm mb-4 leading-relaxed">We've sent a confirmation email to:</p>
-            <div className="bg-metrik-black/50 border border-metrik-turquoise/20 rounded-lg px-4 py-3 mb-6">
-              <p className="text-metrik-turquoise font-rajdhani font-bold break-all">{email}</p>
-            </div>
-            <p className="text-metrik-silver text-sm mb-6 leading-relaxed">
-              Please click the confirmation link to activate your account and start exploring METRIK DELTA.
-            </p>
-            <div className="bg-metrik-turquoise/10 border border-metrik-turquoise/30 rounded-lg p-4 mb-6">
-              <div className="flex items-start gap-3 text-left">
-                <CheckCircle className="w-5 h-5 text-metrik-turquoise flex-shrink-0 mt-0.5" />
-                <div className="text-xs text-metrik-silver">
-                  <p className="font-rajdhani font-bold text-white mb-1">Didn't receive the email?</p>
-                  <p>Check your spam folder or contact support if needed.</p>
-                </div>
-              </div>
-            </div>
-            <button onClick={() => { setShowEmailConfirmation(false); onClose(); setEmail(''); setPassword('') }}
-              className="w-full py-3 px-4 bg-metrik-turquoise hover:bg-metrik-turquoise/90 text-metrik-black font-rajdhani font-bold rounded-lg transition-all">
-              Got it!
-            </button>
+      <Card onClose={() => { setShowEmailConfirmation(false); onClose(); setEmail(''); setPassword('') }}>
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 20 }}>
+          <div style={{
+            width: 56, height: 56, borderRadius: '50%',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: P.surface, border: `1px solid ${P.borderHi}`,
+          }}>
+            <Mail size={26} color={P.accent} />
           </div>
         </div>
-      </div>
+        <h2 style={{ ...headingStyle, textAlign: 'center' }}>Check your email</h2>
+        <p style={{ ...subStyle, marginBottom: 12, textAlign: 'center' }}>
+          We've sent a confirmation email to:
+        </p>
+        <div style={{
+          background: P.bg, border: `1px solid ${P.border}`, borderRadius: 'var(--r)',
+          padding: '10px 14px', marginBottom: 18, textAlign: 'center',
+        }}>
+          <p style={{
+            fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700,
+            color: P.accent, margin: 0, wordBreak: 'break-all',
+          }}>
+            {email}
+          </p>
+        </div>
+        <p style={{ ...subStyle, textAlign: 'center' }}>
+          Click the confirmation link to activate your account and start exploring METRIK DELTA.
+        </p>
+        <div style={{
+          background: P.surface, border: `1px solid ${P.border}`, borderRadius: 'var(--r)',
+          padding: '12px 14px', marginBottom: 20,
+          display: 'flex', gap: 10, alignItems: 'flex-start',
+        }}>
+          <CheckCircle size={16} color={P.accent} style={{ flexShrink: 0, marginTop: 2 }} />
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, lineHeight: 1.5, color: P.text2 }}>
+            <p style={{ margin: '0 0 3px', color: P.text, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              Didn't receive it?
+            </p>
+            <p style={{ margin: 0 }}>Check your spam folder or contact support.</p>
+          </div>
+        </div>
+        <button
+          onClick={() => { setShowEmailConfirmation(false); onClose(); setEmail(''); setPassword('') }}
+          style={primaryButtonStyle}
+        >
+          Got it
+        </button>
+      </Card>
     )
   }
 
-  // Main login/signup modal
+  // ── Main login/signup modal ────────────────────────────────────────────────
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-      <div className="relative w-full max-w-md backdrop-blur-xl bg-metrik-card/95 border-2 border-metrik-turquoise/50 rounded-xl shadow-2xl shadow-metrik-turquoise/20">
-        <button onClick={onClose} className="absolute top-4 right-4 text-metrik-silver hover:text-white transition-colors z-10">
-          <X size={24} />
-        </button>
+    <Card onClose={onClose}>
+      <h2 style={headingStyle}>{isLogin ? t('auth.login') : t('auth.signup')}</h2>
+      <p style={subStyle}>
+        {isLogin ? 'Log in to access your account' : 'Sign up to start analyzing F1 data'}
+      </p>
 
-        <div className="p-8">
-          <h2 className="text-3xl font-rajdhani font-black text-white mb-1">
-            {isLogin ? t('auth.login') : t('auth.signup')}
-          </h2>
-          <p className="text-metrik-silver text-sm mb-6">
-            {isLogin ? 'Log in to access your account' : 'Sign up to start analyzing F1 data'}
-          </p>
+      {error && <ErrorBanner>{error}</ErrorBanner>}
 
-          {error && (
-            <div className="bg-red-500/10 border border-red-500/50 text-red-400 px-4 py-3 rounded-lg text-sm font-rajdhani mb-4">
-              {error}
-            </div>
-          )}
+      <button
+        onClick={handleGoogleLogin}
+        disabled={oauthLoading !== null}
+        style={{ ...googleButtonStyle, opacity: oauthLoading !== null ? 0.6 : 1, cursor: oauthLoading !== null ? 'not-allowed' : 'pointer' }}
+      >
+        {oauthLoading === 'google' ? <Loader2 size={16} className="animate-spin" /> : <GoogleIcon />}
+        Continue with Google
+      </button>
 
-          {/* OAuth buttons */}
-          <div className="mb-6">
-            <button
-              onClick={handleGoogleLogin}
-              disabled={oauthLoading !== null}
-              className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-white hover:bg-gray-50 text-gray-800 font-rajdhani font-bold text-sm rounded-lg transition-all border border-gray-200 disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {oauthLoading === 'google' ? (
-                <span className="w-[18px] h-[18px] border-2 border-gray-400 border-t-gray-800 rounded-full animate-spin" />
-              ) : <GoogleIcon />}
-              Continue with Google
-            </button>
-          </div>
+      <Divider label="or continue with email" />
 
-          {/* Divider */}
-          <div className="flex items-center gap-3 mb-6">
-            <div className="flex-1 h-px bg-metrik-turquoise/20" />
-            <span className="text-metrik-silver/60 text-xs font-rajdhani">or continue with email</span>
-            <div className="flex-1 h-px bg-metrik-turquoise/20" />
-          </div>
-
-          {/* Email/password form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label htmlFor="email" className="block text-sm font-rajdhani font-bold text-metrik-silver mb-2">
-                {t('auth.email')}
-              </label>
-              <input
-                id="email"
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 bg-metrik-black/50 border border-metrik-turquoise/20 rounded-lg text-white placeholder-metrik-silver/50 focus:outline-none focus:ring-2 focus:ring-metrik-turquoise focus:border-transparent font-rajdhani transition-all"
-                placeholder="your@email.com"
-              />
-            </div>
-            <div>
-              <label htmlFor="password" className="block text-sm font-rajdhani font-bold text-metrik-silver mb-2">
-                {t('auth.password')}
-              </label>
-              <input
-                id="password"
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 bg-metrik-black/50 border border-metrik-turquoise/20 rounded-lg text-white placeholder-metrik-silver/50 focus:outline-none focus:ring-2 focus:ring-metrik-turquoise focus:border-transparent font-rajdhani transition-all"
-                placeholder="••••••••"
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={loading || oauthLoading !== null}
-              className="w-full py-3 px-4 bg-metrik-turquoise hover:bg-metrik-turquoise/90 text-metrik-black font-rajdhani font-black rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-metrik-turquoise/30"
-            >
-              {loading ? t('common.loading') : (isLogin ? t('auth.login') : t('auth.signup'))}
-            </button>
-          </form>
-
-          <div className="mt-6 flex flex-col items-center gap-3">
-            <button
-              onClick={() => { setIsLogin(!isLogin); setError('') }}
-              className="text-sm font-rajdhani font-bold text-metrik-silver hover:text-metrik-turquoise transition-colors"
-            >
-              {isLogin ? t('auth.noAccount') : t('auth.hasAccount')}
-            </button>
-            {isLogin && (
-              <button
-                onClick={() => { setShowForgotPassword(true); setError('') }}
-                className="text-xs font-rajdhani text-metrik-silver/60 hover:text-metrik-turquoise transition-colors"
-              >
-                Forgot password?
-              </button>
-            )}
-          </div>
+      <form onSubmit={handleSubmit}>
+        <div style={{ marginBottom: 14 }}>
+          <span style={labelStyle}>{t('auth.email')}</span>
+          <input
+            id="email" type="email" required value={email}
+            onChange={e => setEmail(e.target.value)}
+            placeholder="your@email.com"
+            style={inputStyle}
+          />
         </div>
+        <div style={{ marginBottom: 20 }}>
+          <span style={labelStyle}>{t('auth.password')}</span>
+          <input
+            id="password" type="password" required value={password}
+            onChange={e => setPassword(e.target.value)}
+            placeholder="••••••••"
+            style={inputStyle}
+          />
+        </div>
+        <button
+          type="submit"
+          disabled={loading || oauthLoading !== null}
+          style={{ ...primaryButtonStyle, opacity: (loading || oauthLoading !== null) ? 0.6 : 1 }}
+        >
+          {loading ? t('common.loading') : (isLogin ? t('auth.login') : t('auth.signup'))}
+        </button>
+      </form>
+
+      <div style={{ marginTop: 22, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+        <button
+          onClick={() => { setIsLogin(!isLogin); setError('') }}
+          style={linkStyle}
+          onMouseEnter={e => { e.currentTarget.style.color = P.accent }}
+          onMouseLeave={e => { e.currentTarget.style.color = P.text2 }}
+        >
+          {isLogin ? t('auth.noAccount') : t('auth.hasAccount')}
+        </button>
+        {isLogin && (
+          <button
+            onClick={() => { setShowForgotPassword(true); setError('') }}
+            style={{ ...linkStyle, fontSize: 9, color: P.text3 }}
+            onMouseEnter={e => { e.currentTarget.style.color = P.accent }}
+            onMouseLeave={e => { e.currentTarget.style.color = P.text3 }}
+          >
+            Forgot password?
+          </button>
+        )}
       </div>
-    </div>
+    </Card>
   )
 }

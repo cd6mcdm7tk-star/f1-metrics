@@ -1,9 +1,13 @@
-import { useState, useEffect } from 'react';
-import { ArrowLeft, Trophy, Target, Award, Zap, Flag, BarChart3, Users } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Trophy, Target, Award, Zap, Flag, BarChart3, Users } from 'lucide-react';
 import SEO from '../components/SEO';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useSubscription } from '../hooks/useSubscription';
+import { useAuth } from '../contexts/AuthContext';
 import UpgradeModal from '../components/UpgradeModal';
+import AuthModal from '../components/AuthModal';
+import LegalLinks from '../components/LegalLinks';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 interface DriverStats {
   wins: number;
@@ -29,11 +33,19 @@ interface DriverInfo {
   stats: DriverStats;
 }
 
+interface RaceLogEntry {
+  round: number;
+  raceName: string;
+  pos1: number | null; // null = DNF
+  pos2: number | null;
+}
+
 interface H2HData {
   year: number;
   totalRaces: number;
   driver1: DriverInfo;
   driver2: DriverInfo;
+  raceLog: RaceLogEntry[];
 }
 
 // 🏎️ GRILLE 2026 - Fallback statique quand l'API n'a pas encore de données (avant la 1ère course)
@@ -88,14 +100,20 @@ const fetchErgastAPI = async (url: string, retries = 3): Promise<any> => {
 
 export default function StatisticsPage() {
   const navigate = useNavigate();
-  const { canAccessYear, isPremium, canMakeRequest, incrementRequest } = useSubscription();
+  const isMobile = useIsMobile();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { canAccessYear, isPremium, isReady: subscriptionReady } = useSubscription();
+  const { user, signOut } = useAuth();
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
-  
-  // Selection states
-  const [year, setYear] = useState(2025);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+
+  // Selection states — restored from the URL so a refresh (or a shared
+  // link) reproduces the same comparison instead of losing it, same fix
+  // as TelemetryPage's earlier multi-driver persistence bug.
+  const [year, setYear] = useState(() => parseInt(searchParams.get('y') || '2025'));
   const [drivers, setDrivers] = useState<any[]>([]);
-  const [driver1, setDriver1] = useState('');
-  const [driver2, setDriver2] = useState('');
+  const [driver1, setDriver1] = useState(() => searchParams.get('d1') || '');
+  const [driver2, setDriver2] = useState(() => searchParams.get('d2') || '');
   
   // Data states
   const [loading, setLoading] = useState(false);
@@ -108,30 +126,41 @@ export default function StatisticsPage() {
 
   // Official points map (driverId → points, includes sprint) — populated once per year
   const [standingsMap, setStandingsMap] = useState<Record<string, number>>({});
+  // Full ordered championship standings for the sidebar widget — same fetch
+  // as standingsMap, just keeping the whole list instead of only the points.
+  const [standingsList, setStandingsList] = useState<{ code: string; name: string; team: string; points: number; position: number }[]>([]);
 
-  // Couleurs par écurie (pas par pilote)
+  // Couleurs par écurie (pas par pilote) — same OKLCH-calibrated palette as
+  // TelemetryPage's TEAM_COLORS (contrast >=4.5:1 against the cream bg, since
+  // these render as bold text here, not just chart marks), extended with two
+  // historical-only teams (Racing Point, Renault) calibrated the same way.
+  // Racing Point sits close to Mercedes and Renault close to Alfa Romeo/Audi
+  // under red-green color blindness — an intrinsic limit of a light bg
+  // forcing every hue toward the same darkened band, same trade-off already
+  // accepted for the current team palette. Mitigated by the team name/driver
+  // code always being shown as text alongside the color.
   const teamColors: { [key: string]: string } = {
     'Red Bull': '#3671C6',
     'Red Bull Racing': '#3671C6',
-    'McLaren': '#FF8700',
+    'McLaren': '#EA4E00',
     'Ferrari': '#E8002D',
-    'Mercedes': '#27F4D2',
-    'Aston Martin': '#229971',
-    'Alpine': '#FF87BC',
-    'Williams': '#64C4FF',
-    'RB': '#6692FF',
-    'Racing Bulls': '#6692FF',
-    'AlphaTauri': '#6692FF',
-    'Toro Rosso': '#6692FF',
-    'Haas': '#B6BABD',
-    'Haas F1 Team': '#B6BABD',
-    'Kick Sauber': '#52E252',
-    'Sauber': '#52E252',
+    'Mercedes': '#008E87',
+    'Aston Martin': '#006A3D',
+    'Alpine': '#CE5C91',
+    'Williams': '#0088DE',
+    'RB': '#527AFF',
+    'Racing Bulls': '#527AFF',
+    'AlphaTauri': '#527AFF',
+    'Toro Rosso': '#527AFF',
+    'Haas': '#555555',
+    'Haas F1 Team': '#555555',
+    'Kick Sauber': '#008D00',
+    'Sauber': '#008D00',
     'Audi': '#BB0A30',
     'Alfa Romeo': '#C92D4B',
-    'Racing Point': '#F596C8',
-    'Renault': '#FFF500',
-    'Cadillac': '#003DA5',
+    'Racing Point': '#c40086',
+    'Renault': '#796600',
+    'Cadillac': '#0E49B1',
   };
 
   const getDriverColor = (teamName: string) => {
@@ -139,29 +168,64 @@ export default function StatisticsPage() {
 
     const teamLower = teamName.toLowerCase();
     if (teamLower.includes('red bull')) return '#3671C6';
-    if (teamLower.includes('mclaren')) return '#FF8700';
+    if (teamLower.includes('mclaren')) return '#EA4E00';
     if (teamLower.includes('ferrari')) return '#E8002D';
-    if (teamLower.includes('mercedes')) return '#27F4D2';
-    if (teamLower.includes('aston martin')) return '#229971';
-    if (teamLower.includes('alpine')) return '#FF87BC';
-    if (teamLower.includes('williams')) return '#64C4FF';
-    if (teamLower.includes('racing bulls') || teamLower.includes('alphatauri') || teamLower.includes('toro rosso')) return '#6692FF';
-    if (teamLower.includes('haas')) return '#B6BABD';
-    if (teamLower.includes('audi') || teamLower.includes('sauber') || teamLower.includes('alfa romeo')) return '#BB0A30';
-    if (teamLower.includes('cadillac')) return '#003DA5';
-    if (teamLower.includes('racing point')) return '#F596C8';
-    if (teamLower.includes('renault')) return '#FFF500';
+    if (teamLower.includes('mercedes')) return '#008E87';
+    if (teamLower.includes('aston martin')) return '#006A3D';
+    if (teamLower.includes('alpine')) return '#CE5C91';
+    if (teamLower.includes('williams')) return '#0088DE';
+    if (teamLower.includes('racing bulls') || teamLower.includes('alphatauri') || teamLower.includes('toro rosso')) return '#527AFF';
+    if (teamLower.includes('haas')) return '#555555';
+    if (teamLower.includes('audi')) return '#BB0A30';
+    if (teamLower.includes('alfa romeo')) return '#C92D4B';
+    if (teamLower.includes('sauber')) return '#008D00';
+    if (teamLower.includes('cadillac')) return '#0E49B1';
+    if (teamLower.includes('racing point')) return '#c40086';
+    if (teamLower.includes('renault')) return '#796600';
 
-    return '#00E5CC';
+    return '#555555';
   };
   
   const areTeammates = (team1: string, team2: string) => {
     return team1.toLowerCase() === team2.toLowerCase();
   };
 
+  // Shared by the driver grid and the championship standings list — same
+  // pick-two-drivers behavior everywhere a driver code can be clicked.
+  const toggleDriverSelection = (code: string) => {
+    if (driver1 === code) setDriver1('');
+    else if (driver2 === code) setDriver2('');
+    else if (!driver1) setDriver1(code);
+    else if (!driver2) setDriver2(code);
+    else setDriver1(code);
+  };
+
+  // ── URL sync ─────────────────────────────────────────────────────────────
+  const urlSyncReady = useRef(false);
   useEffect(() => {
-    loadDriversForYear();
-  }, [year]);
+    if (!urlSyncReady.current) { urlSyncReady.current = true; return; }
+    const p: Record<string, string> = { y: String(year) };
+    if (driver1) p.d1 = driver1;
+    if (driver2) p.d2 = driver2;
+    setSearchParams(p, { replace: true });
+  }, [year, driver1, driver2]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // A `y=2026` URL restores straight into state before any paywall check —
+  // once the subscription status is actually known, bounce back to 2025 if
+  // it turns out this viewer isn't entitled to it (waits for `subscriptionReady`
+  // so a genuinely premium user's own link isn't wrongly bounced first).
+  useEffect(() => {
+    if (subscriptionReady && !canAccessYear(year)) {
+      setYear(2025);
+      setShowUpgradeModal(true);
+    }
+  }, [subscriptionReady]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const firstYearLoadRef = useRef(true);
+  useEffect(() => {
+    loadDriversForYear(!firstYearLoadRef.current);
+    firstYearLoadRef.current = false;
+  }, [year]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const loadData = async () => {
@@ -197,11 +261,16 @@ export default function StatisticsPage() {
   };
 
   // 🔥 LOAD DRIVERS AVEC ERGAST DIRECT (ONLY DRIVERS WHO RACED)
-  const loadDriversForYear = async () => {
+  // `resetSelection` is false only for the very first call (page load) so a
+  // driver1/driver2 restored from the URL isn't wiped out before it's ever
+  // used — same fix as TelemetryPage's mount-wipe bug.
+  const loadDriversForYear = async (resetSelection: boolean = true) => {
     try {
       setDrivers([]);
-      setDriver1('');
-      setDriver2('');
+      if (resetSelection) {
+        setDriver1('');
+        setDriver2('');
+      }
 
       const jolpica_base = 'https://api.jolpi.ca/ergast/f1';
       const resultsData = await fetchErgastAPI(`${jolpica_base}/${year}/results.json?limit=1000`);
@@ -274,12 +343,19 @@ export default function StatisticsPage() {
 
       // Fetch official standings (includes sprint points) — one call per year change
       const standingsData = await fetchErgastAPI(`${jolpica_base}/${year}/driverStandings.json`);
-      const standingsList = standingsData?.MRData?.StandingsTable?.StandingsLists?.[0]?.DriverStandings ?? [];
+      const standingsEntries = standingsData?.MRData?.StandingsTable?.StandingsLists?.[0]?.DriverStandings ?? [];
       const newStandingsMap: Record<string, number> = {};
-      standingsList.forEach((s: any) => {
+      standingsEntries.forEach((s: any) => {
         newStandingsMap[s.Driver.driverId] = parseFloat(s.points);
       });
       setStandingsMap(newStandingsMap);
+      setStandingsList(standingsEntries.map((s: any) => ({
+        code: generateDriverCode(s.Driver),
+        name: `${s.Driver.givenName} ${s.Driver.familyName}`,
+        team: s.Constructors?.[0]?.name || 'Unknown',
+        points: parseFloat(s.points),
+        position: parseInt(s.position),
+      })));
 
       const formattedDrivers = Array.from(driverInfoMap.values()).sort((a, b) =>
         a.abbreviation.localeCompare(b.abbreviation)
@@ -461,40 +537,50 @@ export default function StatisticsPage() {
         }
       });
       
+      const raceLog: RaceLogEntry[] = [];
+
       driver1Races.forEach((race: any) => {
         if (!race.Results?.[0]) return;
         const result = race.Results[0];
-        
+
         const position = parseInt(result.position);
         const points = parseFloat(result.points);
         const status = result.status;
-        
+
         driver1Stats.points += points;
         driver1Stats.racePoints += points;
         if (position === 1) driver1Stats.wins += 1;
         if (position <= 3) driver1Stats.podiums += 1;
         if (position === 1 && parseInt(result.grid) === 1) driver1Stats.poleWins += 1;
         if (result.FastestLap?.rank === '1') driver1Stats.fastestLaps += 1;
-        
-        if (status.includes('Finished') || status.includes('Lap') || status.includes('+')) {
+
+        const d1Finished = status.includes('Finished') || status.includes('Lap') || status.includes('+');
+        if (d1Finished) {
           driver1Stats.raceFinishes.push(position);
         } else {
           driver1Stats.dnfs += 1;
         }
-        
+
         const driver2Result = driver2ResultsByRound[race.round];
+        let pos2ForLog: number | null = null;
         if (driver2Result) {
           const pos2 = parseInt(driver2Result.position);
           const status2 = driver2Result.status;
-          
-          const d1Finished = status.includes('Finished') || status.includes('Lap') || status.includes('+');
           const d2Finished = status2.includes('Finished') || status2.includes('Lap') || status2.includes('+');
-          
+          pos2ForLog = d2Finished ? pos2 : null;
+
           if (d1Finished && d2Finished) {
             if (position < pos2) driver1Stats.raceWins += 1;
             else if (pos2 < position) driver2Stats.raceWins += 1;
           }
         }
+
+        raceLog.push({
+          round: parseInt(race.round),
+          raceName: race.raceName,
+          pos1: d1Finished ? position : null,
+          pos2: pos2ForLog,
+        });
       });
       
       driver2Races.forEach((race: any) => {
@@ -598,7 +684,8 @@ export default function StatisticsPage() {
           name: `${driver2Info.givenName} ${driver2Info.familyName}`,
           team: driver2Team,
           stats: driver2Stats
-        }
+        },
+        raceLog: raceLog.sort((a, b) => a.round - b.round),
       };
       
       setH2HData(h2hResult);
@@ -660,59 +747,62 @@ export default function StatisticsPage() {
   const renderDriverCard = (driverData: DriverInfo | null, placeholder: string, isSecondDriver: boolean = false) => {
     if (!driverData) {
       return (
-        <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-xl p-12 sm:p-20 flex flex-col items-center justify-center transition-all duration-300 ease-in-out">
-          <Users className="text-metrik-silver/50 mb-4 transition-all duration-300" size={48} />
-          <p className="text-metrik-silver font-rajdhani text-lg text-center transition-all duration-300">{placeholder}</p>
+        <div style={{
+          background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 'var(--r2)',
+          padding: '60px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <Users size={40} style={{ color: 'var(--text-3)', marginBottom: 16 }} />
+          <p style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: 'var(--text-2)', textAlign: 'center', margin: 0 }}>{placeholder}</p>
         </div>
       );
     }
 
     const baseColor = getDriverColor(driverData.team);
+    // Teammates share a team color, so the second driver gets a distinct
+    // marker instead — black (not white, unlike the old dark-theme version)
+    // since the page background is cream now.
     const displayColor = isSecondDriver && h2hData && areTeammates(h2hData.driver1.team, h2hData.driver2.team)
-      ? '#FFFFFF'
+      ? '#000000'
       : baseColor;
 
     return (
-      <div 
-        className="backdrop-blur-xl bg-gradient-to-br from-black/40 to-metrik-card/95 border-2 rounded-xl p-3 sm:p-4 transition-all duration-300 ease-in-out animate-fadeIn"
-        style={{ borderColor: `${displayColor}80` }}
-      >
-        <div className="flex items-center justify-between mb-3 sm:mb-4">
+      <div style={{ background: 'var(--panel)', border: `2px solid ${displayColor}80`, borderRadius: 'var(--r2)', padding: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
           <div>
-            <h2 className="text-xl sm:text-2xl font-rajdhani font-black mb-1" style={{ color: displayColor }}>
+            <h2 style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 800, fontSize: 22, margin: '0 0 4px', color: displayColor }}>
               {driverData.code}
             </h2>
-            <p className="text-xs text-metrik-silver">{driverData.name}</p>
-            <p className="text-[10px] text-metrik-silver/70">{driverData.team}</p>
+            <p style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: 'var(--text-2)', margin: 0 }}>{driverData.name}</p>
+            <p style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: 'var(--text-3)', margin: 0 }}>{driverData.team}</p>
           </div>
-          <div className="text-right">
-            <div className="text-3xl sm:text-4xl font-rajdhani font-black" style={{ color: displayColor }}>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 800, fontSize: 32, color: displayColor, lineHeight: 1 }}>
               {driverData.stats.points}
             </div>
-            <div className="text-[10px] text-metrik-silver uppercase">Points</div>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text-3)' }}>Points</div>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 sm:gap-3 mb-3 sm:mb-4">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
           {[
             { icon: Trophy, label: 'Wins', value: driverData.stats.wins },
             { icon: Target, label: 'Poles', value: driverData.stats.poles },
             { icon: Award, label: 'Podiums', value: driverData.stats.podiums },
             { icon: Zap, label: 'Fastest', value: driverData.stats.fastestLaps }
           ].map(({ icon: Icon, label, value }) => (
-            <div key={label} className="bg-metrik-black/40 rounded-lg p-2 sm:p-3 border border-white/10">
-              <div className="flex items-center gap-2 mb-1">
-                <Icon size={14} style={{ color: displayColor }} />
-                <span className="text-[10px] text-metrik-silver uppercase">{label}</span>
+            <div key={label} style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 'var(--r)', padding: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                <Icon size={12} style={{ color: displayColor }} />
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-3)' }}>{label}</span>
               </div>
-              <div className="text-xl sm:text-2xl font-rajdhani font-black" style={{ color: displayColor }}>
+              <div style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 800, fontSize: 20, color: displayColor }}>
                 {value}
               </div>
             </div>
           ))}
         </div>
 
-        <div className="space-y-2">
+        <div>
           {[
             ['Avg Race Position', `P${driverData.stats.avgRacePosition}`],
             ['Avg Quali Position', `P${driverData.stats.avgQualiPosition}`],
@@ -726,12 +816,15 @@ export default function StatisticsPage() {
               return change > 0 ? `-${Math.abs(change).toFixed(1)}` : `+${Math.abs(change).toFixed(1)}`;
             })()]
           ].map(([label, value, separator], index) => (
-            <div 
+            <div
               key={index}
-              className={`flex justify-between items-center py-2 border-t ${separator ? 'border-metrik-turquoise/20' : 'border-metrik-turquoise/10'}`}
+              style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0',
+                borderTop: `1px solid ${separator ? 'var(--border-hi)' : 'var(--border)'}`,
+              }}
             >
-              <span className="text-xs text-metrik-silver uppercase">{label}</span>
-              <span className="text-base sm:text-lg font-rajdhani font-black" style={{ color: displayColor }}>
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-2)' }}>{label}</span>
+              <span style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 800, fontSize: 15, color: displayColor }}>
                 {value}
               </span>
             </div>
@@ -743,168 +836,360 @@ export default function StatisticsPage() {
 
   return (
     <>
-    <SEO path="/statistics" title="F1 Driver Statistics - METRIK DELTA" description="Compare Formula 1 drivers with head-to-head statistics: wins, podiums, qualifying performance and race analysis." keywords="f1 driver statistics, formula 1 h2h, f1 driver comparison, f1 qualifying stats, f1 race stats" />
-    <div className="min-h-screen bg-metrik-black text-white">
-      <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-6 max-w-[1600px]">
-        {/* 🔥 HEADER RESPONSIVE */}
-        <div className="flex flex-col sm:flex-row items-center justify-between mb-4 sm:mb-6 gap-4">
+    <SEO
+      path="/stats"
+      title="F1 Driver Statistics & Head-to-Head Comparison - METRIK DELTA"
+      description="Compare Formula 1 drivers head-to-head: wins, podiums, poles, fastest laps, qualifying performance and career stats from 1950 to 2026."
+      keywords="f1 driver statistics, formula 1 h2h, f1 driver comparison, f1 qualifying stats, f1 race stats, f1 career stats, compare f1 drivers"
+      structuredData={{
+        "@context": "https://schema.org",
+        "@type": "WebPage",
+        "name": "F1 Driver Statistics",
+        "description": "Compare Formula 1 drivers head-to-head with full career statistics.",
+        "url": "https://metrikdelta.com/stats",
+        "breadcrumb": {
+          "@type": "BreadcrumbList",
+          "itemListElement": [
+            { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://metrikdelta.com" },
+            { "@type": "ListItem", "position": 2, "name": "Statistics", "item": "https://metrikdelta.com/stats" }
+          ]
+        }
+      }}
+    />
+    <div className="data-zone" style={{
+      ...(isMobile ? { minHeight: '100vh', height: 'auto' } : { height: '100vh', overflow: 'hidden' }),
+      display: 'grid', gridTemplateRows: isMobile ? 'auto 1fr' : '44px 1fr', gridTemplateColumns: 'minmax(0, 1fr)',
+    }}>
+
+      {/* ── TOP BAR — identical to the Telemetry page's header ─────────────── */}
+      <header style={{
+        display: 'flex', alignItems: 'center', gap: isMobile ? 6 : 10,
+        flexWrap: isMobile ? 'wrap' : 'nowrap',
+        paddingLeft: 12, paddingRight: 10,
+        paddingTop: isMobile ? 8 : 0, paddingBottom: isMobile ? 8 : 0,
+        borderBottom: '1px solid var(--border)',
+        background: 'var(--bg)', flexShrink: 0,
+        position: 'relative',
+      }}>
+        <span className="font-rajdhani font-black text-sm tracking-[0.12em]">
+          <span style={{ color: 'var(--text)' }}>METRIK</span>
+          <span style={{ color: 'var(--accent)' }}> DELTA</span>
+        </span>
+
+        <div style={{
+          display: 'flex',
+          order: isMobile ? 3 : undefined,
+          flexBasis: isMobile ? '100%' : undefined,
+          justifyContent: isMobile ? 'center' : undefined,
+          position: isMobile ? 'static' : 'absolute',
+          left: isMobile ? undefined : '50%', transform: isMobile ? undefined : 'translateX(-50%)',
+          border: '1px solid var(--border)', borderRadius: 'var(--r)', overflow: 'hidden',
+        }}>
           <button
-            onClick={() => navigate('/')}
-            className="flex items-center gap-2 text-metrik-silver hover:text-metrik-turquoise transition-all duration-300 font-rajdhani hover:translate-x-[-4px] self-start sm:self-center"
+            onClick={() => navigate('/app')}
+            style={{
+              padding: '3px 9px',
+              fontFamily: "'JetBrains Mono', monospace", fontSize: 9, letterSpacing: '0.1em',
+              background: 'transparent', color: 'var(--text-2)',
+              border: 'none', borderRight: '1px solid var(--border)',
+              cursor: 'pointer', outline: 'none',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.color = 'var(--text)'; }}
+            onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-2)'; }}
           >
-            <ArrowLeft size={20} />
-            <span className="text-sm sm:text-base font-bold uppercase">Back</span>
+            Telemetry
           </button>
-
-          <div className="flex items-center gap-2 sm:gap-3">
-            <BarChart3 className="text-metrik-turquoise" size={24} />
-            <h1 className="text-2xl sm:text-3xl font-rajdhani font-black text-transparent bg-clip-text bg-gradient-to-r from-metrik-turquoise to-cyan-300 tracking-wider uppercase">
-              Statistics H2H
-            </h1>
-          </div>
-
-          <div className="hidden sm:block w-24"></div>
+          <span style={{
+            padding: '3px 9px',
+            fontFamily: "'JetBrains Mono', monospace", fontSize: 9, letterSpacing: '0.1em',
+            background: 'var(--accent-10)', color: 'var(--accent)',
+          }}>
+            Statistics
+          </span>
         </div>
 
-        {/* 🔥 CONTROLS RESPONSIVE */}
-        <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-xl p-4 sm:p-6 mb-4">
-          <div className="grid grid-cols-1 lg:grid-cols-[200px_1fr] gap-4 sm:gap-6">
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-1 h-6 bg-metrik-turquoise rounded" />
-                <h3 className="text-sm font-rajdhani font-bold text-white uppercase tracking-wide">Season</h3>
-              </div>
+        {!isMobile && <div style={{ flex: 1 }} />}
 
-              <div>
-                <label className="block text-xs font-rajdhani font-bold text-metrik-silver uppercase tracking-wide mb-2">Year</label>
-                <select
+        {isPremium && (
+          <span style={{
+            display: 'flex', alignItems: 'center', gap: 3,
+            padding: '1px 6px', borderRadius: 'var(--r)',
+            fontSize: 9, fontFamily: 'Rajdhani, sans-serif', fontWeight: 900,
+            background: 'var(--accent-10)', color: 'var(--accent)',
+            border: '1px solid var(--accent-20)',
+          }}>
+            <Zap size={9} />PRO
+          </span>
+        )}
+
+        <div style={{ marginLeft: isMobile ? 'auto' : 0 }}>
+        {user ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: 'var(--text-2)' }}>
+              {user.email?.split('@')[0]}
+            </span>
+            <button
+              onClick={() => signOut()}
+              style={{
+                fontFamily: "'JetBrains Mono', monospace", fontSize: 9,
+                border: '1px solid var(--border)', borderRadius: 'var(--r)',
+                padding: '2px 7px', background: 'transparent', color: 'var(--text-2)', cursor: 'pointer', outline: 'none',
+              }}
+            >
+              Sign out
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setAuthModalOpen(true)}
+            style={{
+              fontFamily: "'JetBrains Mono', monospace", fontSize: 9,
+              border: '1px solid var(--border)', borderRadius: 'var(--r)',
+              padding: '3px 8px', background: 'transparent', color: 'var(--text-2)', cursor: 'pointer', outline: 'none',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.color = 'var(--text)'; e.currentTarget.style.borderColor = 'var(--border-hi)'; }}
+            onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-2)'; e.currentTarget.style.borderColor = 'var(--border)'; }}
+          >
+            Sign in
+          </button>
+        )}
+        </div>
+      </header>
+
+      {/* ── BODY — left selector panel + right content ──────────────────────── */}
+      <div style={{
+        display: 'flex', flexDirection: isMobile ? 'column' : 'row',
+        overflow: isMobile ? 'visible' : 'hidden',
+      }}>
+
+        {/* ── LEFT PANEL — mirrors SessionExplorer's exactly ─────────────────── */}
+        <div style={{
+          width: isMobile ? '100%' : 256, flexShrink: 0,
+          borderRight: isMobile ? 'none' : '1px solid var(--border)',
+          borderBottom: isMobile ? '1px solid var(--border)' : 'none',
+          background: 'var(--surface)',
+          display: 'flex', flexDirection: 'column',
+          overflowY: isMobile ? 'visible' : 'auto',
+        }}>
+          <div style={{ padding: '16px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div>
+              <span style={{ display: 'block', marginBottom: 5, fontFamily: "'JetBrains Mono', monospace", fontSize: 7, letterSpacing: '0.22em', textTransform: 'uppercase', color: 'var(--text-3)' }}>Season</span>
+              <select
                 value={year}
-               onChange={(e) => {
-               const newYear = Number(e.target.value);
-    
-                // Bloquer 2026 pour FREE users
-               if (newYear >= 2026 && !canAccessYear(newYear)) {
-              setShowUpgradeModal(true);
-                return;
-               }
-    
-               setYear(newYear);
-                  }}
-                  className="w-full h-11 px-4 bg-metrik-black/50 border border-metrik-turquoise/20 rounded-lg text-white text-sm font-rajdhani font-bold focus:border-metrik-turquoise focus:outline-none hover:border-metrik-turquoise/50 transition-all appearance-none cursor-pointer"
-                >
-                  {Array.from({ length: 2026 - 2003 + 1 }, (_, i) => 2026 - i).map((y) => (
-                    <option key={y} value={y}>{y}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <div className="w-1 h-6 bg-metrik-turquoise rounded" />
-                  <h3 className="text-sm font-rajdhani font-bold text-white uppercase tracking-wide">Driver Selection</h3>
-                </div>
-                {(driver1 || driver2) && (
-                  <button
-                    onClick={() => { setDriver1(''); setDriver2(''); }}
-                    className="text-xs font-rajdhani font-bold text-metrik-silver hover:text-metrik-turquoise uppercase tracking-wide transition-colors"
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
-
-              {/* 🔥 DRIVER GRID RESPONSIVE - 5 colonnes mobile, 10 desktop */}
-              <div className="grid grid-cols-5 sm:grid-cols-8 lg:grid-cols-10 gap-2">
-                {drivers.map((driver) => {
-                  const isDriver1Selected = driver1 === driver.abbreviation;
-                  const isDriver2Selected = driver2 === driver.abbreviation;
-                  const isSelected = isDriver1Selected || isDriver2Selected;
-                  const driverColor = getDriverColor(driver.team || 'Unknown');
-                  
-                  let displayColor = driverColor;
-                  if (isDriver2Selected && driver1) {
-                    const driver1Team = drivers.find(d => d.abbreviation === driver1)?.team;
-                    if (driver1Team && areTeammates(driver.team, driver1Team)) {
-                      displayColor = '#FFFFFF';
-                    }
+                onChange={(e) => {
+                  const newYear = Number(e.target.value);
+                  // Bloquer 2026 pour FREE users
+                  if (newYear >= 2026 && !canAccessYear(newYear)) {
+                    setShowUpgradeModal(true);
+                    return;
                   }
-
-                  return (
-                    <button
-                      key={driver.abbreviation}
-                      onClick={() => {
-                        if (isDriver1Selected) {
-                          setDriver1('');
-                        } else if (isDriver2Selected) {
-                          setDriver2('');
-                        } else if (!driver1) {
-                          setDriver1(driver.abbreviation);
-                        } else if (!driver2) {
-                          setDriver2(driver.abbreviation);
-                        } else {
-                          setDriver1(driver.abbreviation);
-                        }
-                      }}
-                      disabled={loading}
-                      className={`
-                        relative h-9 sm:h-10 rounded-lg font-rajdhani font-black text-xs sm:text-sm uppercase tracking-wide
-                        transition-all duration-200 flex items-center justify-center
-                        ${isSelected ? 'shadow-lg scale-105' : 'bg-metrik-black/40 border border-metrik-silver/20 text-metrik-silver/60 hover:text-metrik-silver hover:border-metrik-silver/40 hover:scale-105'}
-                        ${loading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
-                      `}
-                      style={isSelected ? {
-                        backgroundColor: `${displayColor}20`,
-                        borderWidth: '2px',
-                        borderColor: displayColor,
-                        color: displayColor,
-                        boxShadow: `0 0 15px ${displayColor}30`,
-                      } : {}}
-                    >
-                      {isSelected && (
-                        <div
-                          className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black"
-                          style={{
-                            backgroundColor: displayColor,
-                            color: '#000',
-                            boxShadow: `0 0 8px ${displayColor}50`,
-                          }}
-                        >
-                          {isDriver1Selected ? '1' : '2'}
-                        </div>
-                      )}
-                      {driver.abbreviation}
-                    </button>
-                  );
-                })}
-              </div>
+                  setYear(newYear);
+                }}
+                style={{
+                  width: '100%', padding: '7px 28px 7px 10px',
+                  background: 'var(--panel)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 'var(--r)',
+                  color: 'var(--text)',
+                  fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
+                  outline: 'none', cursor: 'pointer',
+                  appearance: 'none' as any,
+                }}
+              >
+                {Array.from({ length: 2026 - 2003 + 1 }, (_, i) => 2026 - i).map((y) => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
             </div>
+          </div>
+
+          <div style={{ height: 1, background: 'var(--border)', margin: '0 14px' }} />
+
+        {/* Driver grid */}
+        <div style={{ padding: '14px 14px 10px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <span style={{
+              fontFamily: "'JetBrains Mono', monospace", fontSize: 7, letterSpacing: '0.22em', textTransform: 'uppercase', color: 'var(--text-3)',
+            }}>
+              Drivers
+            </span>
+            {(driver1 || driver2) && (
+              <button
+                onClick={() => { setDriver1(''); setDriver2(''); }}
+                style={{
+                  fontFamily: "'JetBrains Mono', monospace", fontSize: 7, letterSpacing: '0.1em', textTransform: 'uppercase',
+                  color: 'var(--accent)', opacity: 0.7, background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                }}
+              >
+                Clear
+              </button>
+            )}
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 4 }}>
+            {drivers.map((driver) => {
+              const isDriver1Selected = driver1 === driver.abbreviation;
+              const isDriver2Selected = driver2 === driver.abbreviation;
+              const isSelected = isDriver1Selected || isDriver2Selected;
+              const driverColor = getDriverColor(driver.team || 'Unknown');
+
+              let displayColor = driverColor;
+              if (isDriver2Selected && driver1) {
+                const driver1Team = drivers.find(d => d.abbreviation === driver1)?.team;
+                if (driver1Team && areTeammates(driver.team, driver1Team)) {
+                  displayColor = '#000000';
+                }
+              }
+
+              return (
+                <button
+                  key={driver.abbreviation}
+                  onClick={() => toggleDriverSelection(driver.abbreviation)}
+                  disabled={loading}
+                  style={{
+                    position: 'relative', padding: '6px 2px',
+                    fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, fontSize: 9,
+                    textAlign: 'center',
+                    border: `1px solid ${isSelected ? displayColor : 'var(--border)'}`,
+                    borderRadius: 'var(--r)',
+                    background: isSelected ? `${displayColor}22` : 'transparent',
+                    color: isSelected ? displayColor : 'var(--text-2)',
+                    cursor: loading ? 'not-allowed' : 'pointer', outline: 'none',
+                    opacity: loading ? 0.5 : 1,
+                    transition: 'all 0.12s',
+                  }}
+                >
+                  {isSelected && (
+                    <div
+                      style={{
+                        position: 'absolute', top: -6, right: -4, width: 14, height: 14, borderRadius: '50%',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 8, fontWeight: 700,
+                        background: displayColor, color: 'var(--bg)',
+                      }}
+                    >
+                      {isDriver1Selected ? '1' : '2'}
+                    </div>
+                  )}
+                  {driver.abbreviation}
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        {error && (
-          <div className="mb-4 backdrop-blur-xl bg-red-500/10 border border-red-500/50 rounded-xl p-4 transition-all duration-300">
-            <p className="text-red-400 font-rajdhani font-bold text-center">{error}</p>
+        {/* Hint */}
+        <div style={{ margin: '0 14px', padding: '12px 0', borderTop: '1px solid var(--border)' }}>
+          <p style={{
+            margin: 0,
+            fontFamily: "'JetBrains Mono', monospace", fontSize: 10, lineHeight: 1.6,
+            color: 'var(--text-3)', letterSpacing: '0.02em',
+          }}>
+            Select two drivers to compare their head-to-head record for the season.
+          </p>
+        </div>
+
+        {/* Championship standings — an actual staggered starting-grid
+            layout: odd positions (pole side) in the left column, even
+            positions in the right column offset downward, same checkerboard
+            stagger as a real F1 grid. */}
+        {standingsList.length > 0 && (
+          <div style={{ margin: '0 14px 14px', paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+            <span style={{
+              display: 'block', marginBottom: 10,
+              fontFamily: "'JetBrains Mono', monospace", fontSize: 7, letterSpacing: '0.22em', textTransform: 'uppercase', color: 'var(--text-3)',
+            }}>
+              Championship
+            </span>
+            <div style={{ display: 'flex', gap: 5 }}>
+              {[0, 1].map(col => (
+                <div key={col} style={{
+                  flex: 1, display: 'flex', flexDirection: 'column', gap: 4,
+                  marginTop: col === 1 ? 12 : 0,
+                }}>
+                  {standingsList.filter((_, i) => i % 2 === col).map(entry => {
+                    const isSelected = driver1 === entry.code || driver2 === entry.code;
+                    const color = getDriverColor(entry.team);
+                    return (
+                      <button
+                        key={entry.code}
+                        onClick={() => toggleDriverSelection(entry.code)}
+                        disabled={loading}
+                        style={{
+                          position: 'relative',
+                          display: 'flex', flexDirection: 'column', alignItems: 'center',
+                          padding: '3px 2px',
+                          background: isSelected ? `${color}18` : 'transparent',
+                          border: `1px solid ${isSelected ? color : 'var(--border)'}`,
+                          borderRadius: 'var(--r)',
+                          cursor: loading ? 'not-allowed' : 'pointer', outline: 'none',
+                          transition: 'all 0.12s',
+                        }}
+                      >
+                        <span style={{
+                          position: 'absolute', top: 2, left: 3,
+                          fontFamily: "'JetBrains Mono', monospace", fontSize: 6, color: 'var(--text-3)',
+                        }}>
+                          {entry.position}
+                        </span>
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 9, color }}>
+                          {entry.code}
+                        </span>
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, fontSize: 7, color: 'var(--text-2)' }}>
+                          {entry.points}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
-        {/* 🔥 MAIN CONTENT GRID RESPONSIVE */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
-          {renderDriverCard(driver1Data, 'Select first driver', false)}
+        {/* Legal links — pinned to the bottom of the scrollable left panel */}
+        <div style={{ margin: '0 14px 14px', paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+          <LegalLinks color="var(--text-3)" hoverColor="var(--text)" fontSize={8} />
+        </div>
+        </div>
 
-          {h2hData ? (
+        {/* ── RIGHT CONTENT (driver cards + race log) ─────────────────────── */}
+        <div style={{
+          flex: 1, minWidth: 0,
+          overflow: isMobile ? 'visible' : 'hidden',
+          padding: 12, display: 'flex', flexDirection: 'column', background: 'var(--bg)',
+        }}>
+          {error && (
+            <div style={{ marginBottom: 12, flexShrink: 0, background: 'rgba(255,107,107,0.10)', border: '1px solid rgba(255,107,107,0.35)', borderRadius: 'var(--r)', padding: '10px 14px' }}>
+              <p style={{ color: '#ff6b6b', fontFamily: "'JetBrains Mono', monospace", fontSize: 11, textAlign: 'center', margin: 0 }}>{error}</p>
+            </div>
+          )}
+
+          <div style={{ flexShrink: 0, display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: 12 }}>
+            <div style={{ overflowY: isMobile ? 'visible' : 'auto' }}>
+              {renderDriverCard(driver1Data, 'Select first driver', false)}
+            </div>
+
+            <div style={{ overflowY: isMobile ? 'visible' : 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {h2hData ? (
             <div className="space-y-4">
-              <div className="backdrop-blur-xl bg-gradient-to-r from-metrik-turquoise/10 to-cyan-500/10 border border-metrik-turquoise/50 rounded-xl p-3 sm:p-4 text-center">
-                <h3 className="text-lg font-rajdhani font-black text-metrik-turquoise uppercase mb-1">{h2hData.year} Season</h3>
-                <p className="text-sm text-metrik-silver">{h2hData.totalRaces} Races</p>
+              <div style={{ background: 'var(--accent-10)', border: '1px solid var(--accent-30)', borderRadius: 'var(--r2)', padding: 14, textAlign: 'center' }}>
+                <h3 style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 800, fontSize: 17, textTransform: 'uppercase', color: 'var(--accent)', margin: '0 0 2px' }}>{h2hData.year} Season</h3>
+                <p style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: 'var(--text-2)', margin: 0 }}>{h2hData.totalRaces} Races</p>
               </div>
 
-              {['Qualifying', 'Race'].map((type) => {
+              {(() => {
+                // Teammates share a team color — driver 2 gets black instead
+                // (not white, unlike the old dark-theme version) since the
+                // page background is cream now.
+                const driver2BarColor = areTeammates(h2hData.driver1.team, h2hData.driver2.team)
+                  ? '#000000'
+                  : getDriverColor(h2hData.driver2.team);
+                return ['Qualifying', 'Race'].map((type) => {
                 const isQuali = type === 'Qualifying';
-                
+
                 let wins1, wins2;
-                
+
                 if (isQuali) {
                   wins1 = h2hData.driver1.stats.qualiWins;
                   wins2 = h2hData.driver2.stats.qualiWins;
@@ -913,63 +1198,142 @@ export default function StatisticsPage() {
                   wins1 = correctedRace.wins1;
                   wins2 = correctedRace.wins2;
                 }
-                
+
                 const { percent1, percent2 } = getPercentage(wins1, wins2);
 
                 return (
-                  <div key={type} className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-xl p-3 sm:p-4">
-                    <div className="flex items-center justify-center gap-2 mb-4">
-                      {isQuali ? <Target className="text-metrik-turquoise" size={18} /> : <Flag className="text-metrik-turquoise" size={18} />}
-                      <h3 className="text-sm font-rajdhani font-black text-metrik-turquoise uppercase">{type} H2H</h3>
+                  <div key={type} style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 'var(--r2)', padding: 14 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 14 }}>
+                      {isQuali ? <Target size={16} style={{ color: 'var(--accent)' }} /> : <Flag size={16} style={{ color: 'var(--accent)' }} />}
+                      <h3 style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--accent)', margin: 0, fontWeight: 700 }}>{type} H2H</h3>
                     </div>
 
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-3xl font-rajdhani font-black" style={{ color: getDriverColor(h2hData.driver1.team) }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                      <span style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 800, fontSize: 28, color: getDriverColor(h2hData.driver1.team) }}>
                         {wins1}
                       </span>
-                      <span className="text-3xl font-rajdhani font-black" 
-                        style={{ color: areTeammates(h2hData.driver1.team, h2hData.driver2.team) ? '#FFFFFF' : getDriverColor(h2hData.driver2.team) }}>
+                      <span style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 800, fontSize: 28, color: driver2BarColor }}>
                         {wins2}
                       </span>
                     </div>
 
-                    <div className="h-6 bg-metrik-black/50 rounded-full overflow-hidden border border-metrik-turquoise/30 flex">
-                      <div className="flex items-center justify-center transition-all duration-500" 
-                        style={{ width: `${percent1}%`, backgroundColor: getDriverColor(h2hData.driver1.team) }}>
-                        <span className="text-xs font-rajdhani font-bold text-white">{percent1.toFixed(0)}%</span>
+                    <div style={{ height: 22, background: 'var(--bg)', borderRadius: 'var(--r)', overflow: 'hidden', border: '1px solid var(--border)', display: 'flex' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: `${percent1}%`, background: getDriverColor(h2hData.driver1.team), transition: 'width 0.4s' }}>
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 700, color: '#fff' }}>{percent1.toFixed(0)}%</span>
                       </div>
-                      <div className="flex items-center justify-center transition-all duration-500" 
-                        style={{ 
-                          width: `${percent2}%`, 
-                          backgroundColor: areTeammates(h2hData.driver1.team, h2hData.driver2.team) ? '#FFFFFF' : getDriverColor(h2hData.driver2.team) 
-                        }}>
-                        <span className="text-xs font-rajdhani font-bold text-black">{percent2.toFixed(0)}%</span>
+                      <div style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', width: `${percent2}%`, transition: 'width 0.4s',
+                        background: driver2BarColor,
+                      }}>
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 700, color: driver2BarColor === '#000000' ? '#fff' : '#000' }}>{percent2.toFixed(0)}%</span>
                       </div>
                     </div>
                   </div>
                 );
-              })}
+                });
+              })()}
             </div>
           ) : (
-            <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-xl p-12 sm:p-20 flex flex-col items-center justify-center">
-              <BarChart3 className="text-metrik-silver/50 mb-4" size={48} />
-              <p className="text-metrik-silver font-rajdhani text-lg text-center">
+            <div style={{
+              background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 'var(--r2)',
+              padding: '60px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <BarChart3 size={40} style={{ color: 'var(--text-3)', marginBottom: 16 }} />
+              <p style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: 'var(--text-2)', textAlign: 'center', margin: 0 }}>
                 {loading ? 'Loading H2H...' : driver1 && driver2 ? 'Loading...' : 'Select two drivers'}
               </p>
             </div>
           )}
+            </div>
 
-          {renderDriverCard(driver2Data, 'Select second driver', true)}
+            <div style={{ overflowY: isMobile ? 'visible' : 'auto' }}>
+              {renderDriverCard(driver2Data, 'Select second driver', true)}
+            </div>
+          </div>
+
+          {/* Race-by-race log — back under the driver cards (bounded by this
+              column's width, not the full page) like the original layout;
+              it gets its own internal scroll (both directions) rather than
+              trying to force everything onto one screen. */}
+          {h2hData && h2hData.raceLog.length > 0 && (
+            <div style={{
+              ...(isMobile ? { maxHeight: 320 } : { flex: 1, minHeight: 0 }),
+              minWidth: 0,
+              marginTop: 12, overflow: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--r2)',
+            }}>
+              <table style={{ borderCollapse: 'collapse', minWidth: '100%' }}>
+            <thead>
+              <tr style={{ position: 'sticky', top: 0, zIndex: 5, background: 'var(--surface)' }}>
+                <th style={{
+                  position: 'sticky', left: 0, zIndex: 6, background: 'var(--surface)',
+                  width: 90, padding: '8px 14px', textAlign: 'left',
+                  borderBottom: '1px solid var(--border-hi)', borderRight: '1px solid var(--border-hi)',
+                  fontFamily: "'JetBrains Mono', monospace", fontSize: 7,
+                  color: 'var(--text-3)', letterSpacing: '0.18em', textTransform: 'uppercase',
+                }}>
+                  Race
+                </th>
+                {h2hData.raceLog.map(r => (
+                  <th key={r.round} style={{
+                    minWidth: 60, padding: '8px 4px', textAlign: 'center',
+                    borderBottom: '1px solid var(--border-hi)',
+                    borderRight: '1px solid var(--border)',
+                    fontFamily: "'JetBrains Mono', monospace", fontSize: 8,
+                    color: 'var(--text-3)', letterSpacing: '0.02em', fontWeight: 400,
+                  }}>
+                    {r.raceName.replace(' Grand Prix', '')}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                { code: h2hData.driver1.code, color: getDriverColor(h2hData.driver1.team), pick: (r: RaceLogEntry) => r.pos1 },
+                {
+                  code: h2hData.driver2.code,
+                  color: areTeammates(h2hData.driver1.team, h2hData.driver2.team) ? '#000000' : getDriverColor(h2hData.driver2.team),
+                  pick: (r: RaceLogEntry) => r.pos2,
+                },
+              ].map(({ code, color, pick }) => (
+                <tr key={code} style={{ borderBottom: '1px solid var(--border-hi)' }}>
+                  <td style={{
+                    position: 'sticky', left: 0, zIndex: 2,
+                    background: 'var(--bg)', borderRight: '1px solid var(--border-hi)',
+                    padding: '8px 14px',
+                    fontFamily: "'Rajdhani', sans-serif", fontWeight: 800, fontSize: 13, color,
+                  }}>
+                    {code}
+                  </td>
+                  {h2hData.raceLog.map(r => {
+                    const pos = pick(r);
+                    return (
+                      <td key={r.round} style={{
+                        textAlign: 'center', padding: '8px 4px',
+                        borderRight: '1px solid var(--border)',
+                        fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700,
+                        color: pos == null ? 'var(--text-3)' : color,
+                      }}>
+                        {pos == null ? 'DNF' : `P${pos}`}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+            </div>
+          )}
         </div>
+      </div>
       </div>
 
       {/* 🔥 UPGRADE MODAL */}
+      <AuthModal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} />
       <UpgradeModal
         isOpen={showUpgradeModal}
         onClose={() => setShowUpgradeModal(false)}
         reason="current_season"
       />
-    </div>
     </>
   );
 }

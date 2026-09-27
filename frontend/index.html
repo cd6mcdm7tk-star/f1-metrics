@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
 <head>
 <meta charset="UTF-8" />
 <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -13,45 +13,50 @@
 <!-- DNS Prefetch -->
 <link rel="dns-prefetch" href="https://api.openf1.org" />
 
+<!--
+  No description/keywords/robots/author/canonical/og:*/twitter:* tags here on
+  purpose — <SEO> (react-helmet-async) renders all of those, on every one of
+  the app's real routes, with page-specific content. Helmet only manages tags
+  it renders itself: it can't detect or replace ones already sitting in this
+  static file, so duplicating any of them here would just produce two of
+  each per built page (once Helmet mounts, or once scripts/prerender.mjs
+  bakes its output into the static file) — and per the OG spec the FIRST tag
+  wins, which would silently discard the page-specific one every route now
+  sets in favour of this generic fallback. The <title> below is the one safe
+  exception: document.title has no duplication mode, so it's kept as a
+  last-resort fallback (matching SEO.tsx's DEFAULTS) for the rare case a
+  future route forgets to render <SEO> at all, or prerendering fails and
+  falls back to this plain, un-rendered shell.
+-->
 <title>METRIK DELTA - Professional F1 Telemetry Analysis</title>
-<meta name="description" content="Professional F1 telemetry analysis platform with detailed charts, GPS animations, pit wall strategy and championship data 2018-2026. Compare drivers lap by lap." />
-<meta name="keywords" content="f1 telemetry, formula 1 analysis, f1 data, f1 standings, f1 results, grand prix results, f1 telemetry comparison, race strategy f1, télémétrie f1" />
-<meta name="robots" content="index, follow" />
-<meta name="author" content="METRIK DELTA" />
-<meta name="theme-color" content="#00D2BE" />
+<meta name="theme-color" content="#5e1018" />
 
-<!-- Open Graph -->
-<meta property="og:type" content="website" />
-<meta property="og:url" content="https://metrikdelta.com/" />
-<meta property="og:title" content="METRIK DELTA - Professional F1 Telemetry Analysis" />
-<meta property="og:description" content="Professional F1 telemetry analysis platform with detailed charts, GPS animations, pit wall strategy and championship data 2018-2026." />
-<meta property="og:image" content="https://metrikdelta.com/og-image.png" />
-<meta property="og:site_name" content="METRIK DELTA" />
-
-<!-- Twitter Card -->
-<meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="METRIK DELTA - Professional F1 Telemetry Analysis" />
-<meta name="twitter:description" content="Professional F1 telemetry analysis platform with detailed charts, GPS animations, pit wall strategy and championship data 2018-2026." />
-<meta name="twitter:image" content="https://metrikdelta.com/og-image.png" />
-
-<!-- JSON-LD Organization -->
+<!-- JSON-LD -->
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
-  "@type": "WebSite",
+  "@type": "WebApplication",
   "name": "METRIK DELTA",
   "url": "https://metrikdelta.com",
-  "description": "Professional F1 telemetry analysis platform with detailed charts, GPS animations, pit wall strategy and championship data.",
-  "potentialAction": {
-    "@type": "SearchAction",
-    "target": "https://metrikdelta.com/telemetry?q={search_term_string}",
-    "query-input": "required name=search_term_string"
+  "description": "Compare Formula 1 drivers lap by lap — speed, throttle, braking and gear telemetry, tire strategy and full head-to-head statistics from 2018 to 2026.",
+  "applicationCategory": "SportsApplication",
+  "operatingSystem": "Web",
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "EUR",
+    "description": "Free access to historical F1 seasons. PRO plan (current season, unlimited requests) from 1.99€/month."
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "METRIK DELTA",
+    "url": "https://metrikdelta.com"
   }
 }
 </script>
 
 <!-- Google Fonts -->
-<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 </head>
 <body>
 <div id="root"></div>

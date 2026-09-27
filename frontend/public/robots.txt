@@ -1,16 +1,7 @@
-# robots.txt pour METRIK DELTA
 User-agent: *
 Allow: /
 
-# Sitemaps
+Disallow: /success
+Disallow: /cancel
+
 Sitemap: https://metrikdelta.com/sitemap.xml
-Sitemap: https://metrikdelta.com/sitemap-fr.xml
-Sitemap: https://metrikdelta.com/sitemap-en.xml
-Sitemap: https://metrikdelta.com/sitemap-es.xml
-
-# Crawl-delay
-Crawl-delay: 1
-
-# Disallow admin/private pages (si tu en as)
-Disallow: /admin/
-Disallow: /api/

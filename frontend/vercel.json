@@ -3,6 +3,14 @@
   "installCommand": "npm install --legacy-peer-deps",
   "rewrites": [
     {
+      "source": "/app",
+      "destination": "/app/index.html"
+    },
+    {
+      "source": "/stats",
+      "destination": "/stats/index.html"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

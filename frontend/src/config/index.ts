@@ -3,8 +3,12 @@
  * Auto-détecte local/production pour l'URL backend
  */
 
-// Détection environnement
-const isDevelopment = import.meta.env.DEV || window.location.hostname === 'localhost';
+// Détection environnement — uniquement basée sur le mode de build Vite.
+// Un fallback sur window.location.hostname === 'localhost' cassait la
+// prerendering : `vite preview` sert aussi un build de prod sur localhost,
+// ce qui ferait pointer un vrai build de prod vers un backend local absent
+// (donc absent aussi côté serveur de build Vercel).
+const isDevelopment = import.meta.env.DEV;
 
 // URLs Backend — lues depuis les variables d'environnement
 const BACKEND_URLS = {

@@ -1,469 +1,616 @@
-import { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Loader2, Gauge, X, Link, Check } from 'lucide-react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
-import SEO from '../components/SEO';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Check, Link, Zap } from 'lucide-react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useSubscription } from '../hooks/useSubscription';
 import { useTelemetryCache } from '../hooks/useTelemetryCache';
+import { useAuth } from '../contexts/AuthContext';
+import { getBackendUrl } from '../config';
+import { supabase } from '../lib/supabase';
 import UpgradeModal from '../components/UpgradeModal';
+import AuthModal from '../components/AuthModal';
+import SEO from '../components/SEO';
+import SessionExplorer from '../components/SessionExplorer';
+import LegalLinks from '../components/LegalLinks';
+import { useIsMobile } from '../hooks/useIsMobile';
+import type { LapSelection } from '../components/SessionExplorer';
+import TelemetryView from '../components/TelemetryView';
+import TelemetryViewMulti from '../components/TelemetryViewMulti';
 import {
   getDrivers,
   getGrandsPrix,
-  getTelemetryComparison
+  getTelemetryComparison,
+  getTelemetryMulti,
 } from '../services/backend.service';
-import type { TelemetryData } from '../types/telemetry';
-import CompactSelectors from '../components/CompactSelectors';
-import SessionView from '../components/SessionView';
-import TelemetryView from '../components/TelemetryView';
+import type { TelemetryData, TelemetryDataMulti, LapRef } from '../types/telemetry';
+type ViewType = 'trace' | 'laps';
+import { Loader2 } from 'lucide-react';
 
-interface LapSelection {
-  driver: string;
-  lapNumber: number;
+// ── Team colour map ────────────────────────────────────────────────────────────
+
+// Recalibrated for the cream data-zone background, staying as close as
+// possible to each team's real livery color — validated against WCAG
+// contrast (all 12 pass >=3:1) with the original hue preserved throughout;
+// only lightness/chroma shift where the official color was too washed-out
+// to read on a light background (see dataviz skill / validate_palette.js).
+// Haas is deliberately a near-neutral dark grey (their real livery color is
+// grey, not a hue) — this fails the categorical "chroma floor" check by
+// design; it reads fine in practice since it's the only achromatic entry
+// among 11 saturated hues. Colorblind-safety is best-effort, not fully
+// solved: Kick Sauber green vs Audi red, Aston Martin vs Ferrari, and
+// Williams vs Red Bull (both blues) sit below the ideal separation floor.
+// Every color is always paired with the driver-code text elsewhere in the
+// UI, which is the required fallback for pairs this close — never rely on
+// color alone to tell drivers apart in a printed/screenshotted view.
+const TEAM_COLORS: Record<string, string> = {
+  'red bull': '#3671C6', 'ferrari': '#E8002D', 'mercedes': '#008E87',
+  'mclaren': '#EA4E00', 'alpine': '#CE5C91', 'aston martin': '#006A3D',
+  'racing bulls': '#527AFF', 'rb': '#527AFF', 'alphatauri': '#527AFF',
+  'haas': '#555555', 'kick sauber': '#008D00', 'sauber': '#008D00',
+  'alfa romeo': '#C92D4B', 'williams': '#0088DE',
+  'cadillac': '#0E49B1', 'audi': '#BB0A30',
+};
+
+const TEAMS_2026: Record<string, string> = {
+  VER: 'Red Bull Racing', HAD: 'Red Bull Racing',
+  LEC: 'Ferrari',         HAM: 'Ferrari',
+  RUS: 'Mercedes',        ANT: 'Mercedes',
+  NOR: 'McLaren',         PIA: 'McLaren',
+  ALO: 'Aston Martin',    STR: 'Aston Martin',
+  GAS: 'Alpine',          COL: 'Alpine',
+  ALB: 'Williams',        SAI: 'Williams',
+  OCO: 'Haas',            BEA: 'Haas',
+  LAW: 'Racing Bulls',    LIN: 'Racing Bulls',
+  HUL: 'Audi',            BOR: 'Audi',
+  PER: 'Cadillac',        BOT: 'Cadillac',
+};
+
+function getTeamColor(teamName: string): string {
+  const name = teamName.toLowerCase();
+  for (const [key, color] of Object.entries(TEAM_COLORS)) {
+    if (name.includes(key)) return color;
+  }
+  return '#f2e6d8';
 }
 
+// ── Empty state ───────────────────────────────────────────────────────────────
+
+function EmptyState({ message, loading }: { message: string; loading?: boolean }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 14, opacity: 0.45 }}>
+      {loading
+        ? <Loader2 size={26} className="animate-spin" style={{ color: 'var(--accent)' }} />
+        : <div style={{ width: 36, height: 36, borderRadius: '50%', border: '2px solid rgba(242,230,216,0.2)' }} />
+      }
+      <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--text-2)', letterSpacing: '0.08em' }}>{message}</p>
+    </div>
+  );
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
 export default function TelemetryPage() {
-  const navigate = useNavigate();
-  const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
-
-  // --- URL-backed initial values ---
-  const [year, setYearRaw] = useState(() => parseInt(searchParams.get('y') || '2025'));
-  const [selectedGP, setSelectedGPRaw] = useState(() => parseInt(searchParams.get('gp') || '1'));
-  const [sessionType, setSessionTypeRaw] = useState(() => searchParams.get('s') || 'Q');
-  const [driver1, setDriver1Raw] = useState(() => searchParams.get('d1') || '');
-  const [driver2, setDriver2Raw] = useState(() => searchParams.get('d2') || '');
-
-  const [drivers, setDrivers] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [telemetryData, setTelemetryData] = useState<TelemetryData | null>(null);
+  const navigate = useNavigate();
+  const isMobile = useIsMobile();
+  const { user, signOut } = useAuth();
   const { canAccessYear, isPremium, canMakeRequest, incrementRequest } = useSubscription();
-  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
-  const [grandsPrix, setGrandsPrix] = useState<any[]>([]);
-
-  const [activeTab, setActiveTab] = useState<'session' | 'telemetry'>('session');
-
-  const [selection1, setSelection1] = useState<LapSelection | null>(() => {
-    const ld1 = searchParams.get('ld1');
-    const l1 = searchParams.get('l1');
-    return ld1 && l1 ? { driver: ld1, lapNumber: parseInt(l1) } : null;
-  });
-  const [selection2, setSelection2] = useState<LapSelection | null>(() => {
-    const ld2 = searchParams.get('ld2');
-    const l2 = searchParams.get('l2');
-    return ld2 && l2 ? { driver: ld2, lapNumber: parseInt(l2) } : null;
-  });
-  const [telemetryReady, setTelemetryReady] = useState(false);
-  const [selectedLapsCount, setSelectedLapsCount] = useState(0);
-
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [toastVisible, setToastVisible] = useState(false);
-  const [driverTeams, setDriverTeams] = useState<Record<string, string>>({});
-  const [urlCopied, setUrlCopied] = useState(false);
-
   const { getCached, setCached, getTelemetryKey } = useTelemetryCache();
 
-  // --- URL sync (write) — skip first render ---
+  // ── UI state ────────────────────────────────────────────────────────────────
+  const [activeView, setActiveView] = useState<ViewType>(
+    () => (searchParams.get('v') as ViewType) || 'laps',
+  );
+  const [authModalOpen, setAuthModalOpen]     = useState(false);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [urlCopied, setUrlCopied]             = useState(false);
+
+  // ── Session selectors ───────────────────────────────────────────────────────
+  const [year,        setYearRaw]    = useState(() => parseInt(searchParams.get('y')  || '2026'));
+  const [selectedGP,  setGPRaw]      = useState<number | null>(() => {
+    const gp = searchParams.get('gp'); return gp ? parseInt(gp) : null;
+  });
+  const [sessionType, setSessionRaw] = useState<string | null>(() => searchParams.get('s') || null);
+  const [driver1,     setD1Raw]      = useState(() => searchParams.get('d1') || '');
+  const [driver2,     setD2Raw]      = useState(() => searchParams.get('d2') || '');
+
+  // ── Data ────────────────────────────────────────────────────────────────────
+  const [drivers,     setDrivers]    = useState<any[]>([]);
+  const [grandsPrix,  setGrandsPrix] = useState<any[]>([]);
+  const [driverTeams, setDriverTeams] = useState<Record<string, string>>({});
+  const [loading,     setLoading]    = useState(false);
+
+  // ── Session laps ─────────────────────────────────────────────────────────────
+  const [selectedLap1, setSelectedLap1] = useState<number | null>(() => {
+    const la = searchParams.get('la'); return la ? parseInt(la) : null;
+  });
+  const [selectedLap2, setSelectedLap2] = useState<number | null>(() => {
+    const lb = searchParams.get('lb'); return lb ? parseInt(lb) : null;
+  });
+
+  // ── Telemetry ────────────────────────────────────────────────────────────────
+  const [telemetryData,      setTelemetryData]      = useState<TelemetryData | null>(null);
+  const [multiTelemetryData, setMultiTelemetryData] = useState<TelemetryDataMulti | null>(null);
+  const [comparedDrivers,    setComparedDrivers]    = useState<string[]>(() => {
+    const cmp = searchParams.get('cmp');
+    return cmp ? cmp.split(',').filter(Boolean) : [];
+  });
+  const [multiLoading,       setMultiLoading]       = useState(false);
+
+  // ── Derived ──────────────────────────────────────────────────────────────────
+  const getDriverColor = useCallback(
+    (code: string) => getTeamColor(driverTeams[code] || ''),
+    [driverTeams],
+  );
+  const areTeammates = useCallback((a: string, b: string) => {
+    const t1 = driverTeams[a], t2 = driverTeams[b];
+    return !!(t1 && t2 && t1.toLowerCase() === t2.toLowerCase());
+  }, [driverTeams]);
+
+  // ── URL sync ─────────────────────────────────────────────────────────────────
   const urlSyncReady = useRef(false);
   useEffect(() => {
     if (!urlSyncReady.current) { urlSyncReady.current = true; return; }
-    const params: Record<string, string> = {
-      y: year.toString(),
-      gp: selectedGP.toString(),
-      s: sessionType,
-    };
-    if (driver1) params.d1 = driver1;
-    if (driver2) params.d2 = driver2;
-    if (selection1) { params.ld1 = selection1.driver; params.l1 = selection1.lapNumber.toString(); }
-    if (selection2) { params.ld2 = selection2.driver; params.l2 = selection2.lapNumber.toString(); }
-    setSearchParams(params, { replace: true });
-  }, [year, selectedGP, sessionType, driver1, driver2, selection1, selection2]);
+    const p: Record<string, string> = { y: String(year), v: activeView };
+    if (selectedGP != null) p.gp = String(selectedGP);
+    if (sessionType) p.s = sessionType;
+    if (driver1) p.d1 = driver1;
+    if (driver2) p.d2 = driver2;
+    if (selectedLap1) p.la = String(selectedLap1);
+    if (selectedLap2) p.lb = String(selectedLap2);
+    if (comparedDrivers.length > 0) p.cmp = comparedDrivers.join(',');
+    setSearchParams(p, { replace: true });
+  }, [year, selectedGP, sessionType, driver1, driver2, selectedLap1, selectedLap2, activeView, comparedDrivers]);
 
-  const showToast = (message: string) => {
-    setToastMessage(message);
-    setToastVisible(true);
-    setTimeout(() => setToastVisible(false), 3000);
-  };
-
-  const getTeamColor = (teamName: string): string => {
-    const name = teamName.toLowerCase();
-    const teamColors: Record<string, string> = {
-      'red bull': '#3671C6', 'ferrari': '#E8002D', 'mercedes': '#27F4D2',
-      'mclaren': '#FF8700', 'alpine': '#FF87BC', 'aston martin': '#229971',
-      'racing bulls': '#6692FF', 'rb': '#6692FF', 'alphatauri': '#6692FF',
-      'haas': '#B6BABD', 'kick sauber': '#00E701', 'sauber': '#00E701',
-      'alfa romeo': '#C92D4B', 'williams': '#00A0DE', 'racing point': '#F596C8',
-      'renault': '#FFF500', 'cadillac': '#003DA5', 'audi': '#BB0A30',
-    };
-    for (const [key, color] of Object.entries(teamColors)) {
-      if (name.includes(key)) return color;
-    }
-    return '#00E5CC';
-  };
-
-  const getDriverColor = (driverCode: string): string => getTeamColor(driverTeams[driverCode] || 'Unknown');
-
-  const areTeammates = (d1: string, d2: string): boolean => {
-    const t1 = driverTeams[d1], t2 = driverTeams[d2];
-    if (!t1 || !t2) return false;
-    return t1.toLowerCase() === t2.toLowerCase();
-  };
-
-  const TEAMS_2026: Record<string, string> = {
-    VER: 'Red Bull Racing', HAD: 'Red Bull Racing',
-    LEC: 'Ferrari',         HAM: 'Ferrari',
-    RUS: 'Mercedes',        ANT: 'Mercedes',
-    NOR: 'McLaren',         PIA: 'McLaren',
-    ALO: 'Aston Martin',    STR: 'Aston Martin',
-    GAS: 'Alpine',          COL: 'Alpine',
-    ALB: 'Williams',        SAI: 'Williams',
-    OCO: 'Haas',            BEA: 'Haas',
-    LAW: 'Racing Bulls',    LIN: 'Racing Bulls',
-    HUL: 'Audi',            BOR: 'Audi',
-    PER: 'Cadillac',        BOT: 'Cadillac',
-  };
-
-  useEffect(() => {
-    setSelectedGPRaw(1);
-    setSessionTypeRaw('Q');
+  // ── Reset helpers ─────────────────────────────────────────────────────────────
+  const resetData = useCallback(() => {
     setTelemetryData(null);
-    setActiveTab('session');
-    setTelemetryReady(false);
-    setSelectedLapsCount(0);
-    setSelection1(null);
-    setSelection2(null);
-    setDriver1Raw('');
-    setDriver2Raw('');
-  }, [year]);
+    setMultiTelemetryData(null);
+    setComparedDrivers([]);
+  }, []);
 
+  // ── Year → reset GP + session + drivers ──────────────────────────────────────
+  const firstYearRef = useRef(true);
   useEffect(() => {
-    loadDrivers();
-    setSelection1(null);
-    setSelection2(null);
-    setTelemetryData(null);
-    setTelemetryReady(false);
-    setSelectedLapsCount(0);
-  }, [year, selectedGP, sessionType]);
+    // Skip on mount — this would otherwise wipe out everything just restored
+    // from the URL (gp/session/drivers/comparison) before it's ever shown.
+    if (firstYearRef.current) { firstYearRef.current = false; return; }
+    setGPRaw(null); setSessionRaw(null); setD1Raw(''); setD2Raw('');
+    setSelectedLap1(null); setSelectedLap2(null);
+    resetData();
+  }, [year]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── GP list ───────────────────────────────────────────────────────────────────
   useEffect(() => {
     getGrandsPrix(year).then(d => setGrandsPrix(d.grands_prix || [])).catch(() => {});
   }, [year]);
 
+  // ── Load drivers + pre-fetch telemetry ─────────────────────────────────────────
+  const firstGpLoadRef = useRef(true);
   useEffect(() => {
-    if (selection1 && selection2) loadTelemetry();
-  }, [selection1, selection2]);
-
-  const loadDrivers = async () => {
-    try {
-      const data = await getDrivers(year, selectedGP, sessionType);
-      setDrivers(data);
-      const teamsMap: Record<string, string> = {};
-      data.forEach((d: any) => { if (d.abbreviation && d.team) teamsMap[d.abbreviation] = d.team; });
-      if (year === 2026) {
-        Object.entries(TEAMS_2026).forEach(([code, team]) => { if (!teamsMap[code]) teamsMap[code] = team; });
-      }
-      setDriverTeams(teamsMap);
-      if (data.length > 0) {
-        const d1 = searchParams.get('d1') || data[0].abbreviation;
-        const d2 = searchParams.get('d2') || data[1]?.abbreviation || data[0].abbreviation;
-        if (!driver1) setDriver1Raw(d1);
-        if (!driver2) setDriver2Raw(d2);
-        const fastestKey = getTelemetryKey(year, selectedGP, sessionType, d1, undefined, d2, undefined);
-        if (!getCached(fastestKey)) {
-          getTelemetryComparison(year, selectedGP, sessionType, d1, d2)
-            .then(prefetched => setCached(fastestKey, prefetched))
-            .catch(() => {});
+    if (selectedGP == null || !sessionType) { setDrivers([]); return; }
+    const gp = selectedGP, st = sessionType;
+    let cancelled = false;
+    // Skip the reset on the very first time gp+session become available — that's
+    // just the initial URL restoring its own state (including a possibly-restored
+    // multi-driver comparison), not a real change to clear.
+    if (firstGpLoadRef.current) { firstGpLoadRef.current = false; } else { resetData(); }
+    async function run() {
+      try {
+        const data = await getDrivers(year, gp, st);
+        if (cancelled) return;
+        setDrivers(data);
+        const teamsMap: Record<string, string> = {};
+        data.forEach((d: any) => { if (d.abbreviation && d.team) teamsMap[d.abbreviation] = d.team; });
+        if (year === 2026) {
+          Object.entries(TEAMS_2026).forEach(([code, team]) => { if (!teamsMap[code]) teamsMap[code] = team; });
         }
-      }
-    } catch (e) {
-      console.error('Error loading drivers:', e);
+        setDriverTeams(teamsMap);
+        if (data.length >= 2) {
+          const d1 = driver1 || data[0].abbreviation;
+          const d2 = driver2 || data[1].abbreviation;
+          if (!driver1) setD1Raw(d1);
+          if (!driver2) setD2Raw(d2);
+          // Pre-fetch fastest laps into cache (no request counter increment)
+          const key = getTelemetryKey(year, gp, st, d1, undefined, d2, undefined);
+          if (!getCached(key)) {
+            getTelemetryComparison(year, gp, st, d1, d2)
+              .then(pre => { if (!cancelled) setCached(key, pre); })
+              .catch(() => {});
+          }
+        }
+      } catch (e) { console.error('loadDrivers:', e); }
     }
-  };
+    run();
+    return () => { cancelled = true; };
+  }, [year, selectedGP, sessionType]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const loadTelemetry = async () => {
-    if (!selection1 || !selection2) return;
+  // ── Load telemetry (legacy 2-driver path) ─────────────────────────────────────
+  useEffect(() => {
+    if (!driver1 || !driver2) return;
+    if (selectedGP == null || !sessionType) return;
+    // A multi-driver comparison is active (or being restored) — d1/d2 are just
+    // its first two drivers, not a real 2-driver comparison, so don't waste a
+    // request fetching legacy data that will never be shown.
+    if (comparedDrivers.length > 0) return;
+    const gp = selectedGP, st = sessionType;
+    let cancelled = false;
+    const key = getTelemetryKey(year, gp, st, driver1, selectedLap1 ?? undefined, driver2, selectedLap2 ?? undefined);
+    const cached = getCached<TelemetryData>(key);
+    if (cached) { setTelemetryData(cached); return; }
     if (!canMakeRequest) { setShowUpgradeModal(true); return; }
-
-    const cacheKey = getTelemetryKey(year, selectedGP, sessionType, selection1.driver, selection1.lapNumber, selection2.driver, selection2.lapNumber);
-    const cached = getCached<TelemetryData>(cacheKey);
-    if (cached) {
-      setTelemetryData(cached);
-      setTelemetryReady(true);
-      setSelectedLapsCount(2);
-      setActiveTab('telemetry');
-      prefetchFastestLaps();
-      return;
-    }
-
     setLoading(true);
-    setTelemetryReady(false);
-    try {
-      const data = await getTelemetryComparison(year, selectedGP, sessionType, selection1.driver, selection2.driver, selection1.lapNumber, selection2.lapNumber);
+    getTelemetryComparison(
+      year, gp, st,
+      driver1, driver2,
+      selectedLap1 ?? undefined, selectedLap2 ?? undefined,
+    ).then(data => {
+      if (cancelled) return;
       setTelemetryData(data);
-      setTelemetryReady(true);
-      setSelectedLapsCount(2);
-      setActiveTab('telemetry');
-      setCached(cacheKey, data);
+      setCached(key, data);
       incrementRequest();
-      prefetchFastestLaps();
-    } catch (e) {
-      console.error('Error loading telemetry:', e);
-      setTelemetryReady(false);
-      setSelectedLapsCount(0);
-    } finally {
-      setLoading(false);
-    }
-  };
+    }).catch(e => console.error('loadTelemetry:', e))
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; setLoading(false); };
+  }, [driver1, driver2, selectedLap1, selectedLap2, year, selectedGP, sessionType, comparedDrivers]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const prefetchFastestLaps = async () => {
-    if (!driver1 || !driver2) return;
-    const key = getTelemetryKey(year, selectedGP, sessionType, driver1, undefined, driver2, undefined);
-    if (getCached(key)) return;
-    getTelemetryComparison(year, selectedGP, sessionType, driver1, driver2)
-      .then(data => setCached(key, data))
-      .catch(() => {});
-  };
+  // ── Restore a multi-driver comparison from the URL on load ───────────────────
+  const restoredMultiRef = useRef(false);
+  useEffect(() => {
+    if (restoredMultiRef.current) return;
+    if (!comparedDrivers.length || selectedGP == null || !sessionType) return;
+    restoredMultiRef.current = true;
+    const gp = selectedGP, st = sessionType;
+    let cancelled = false;
+    (async () => {
+      if (!canMakeRequest) { setShowUpgradeModal(true); return; }
+      setMultiLoading(true);
+      try {
+        const laps: LapRef[] = comparedDrivers.map(d => ({ year, gp, session: st, driver: d }));
+        const data = await getTelemetryMulti(laps);
+        if (cancelled) return;
+        setMultiTelemetryData(data);
+        incrementRequest();
+      } catch (e) {
+        console.error('restoreMultiTelemetry:', e);
+      } finally {
+        if (!cancelled) setMultiLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [comparedDrivers, selectedGP, sessionType, year, canMakeRequest, incrementRequest]);
 
-  const handleLapClick = (driver: string, lapNumber: number) => {
-    if (selection1?.driver === driver && selection1?.lapNumber === lapNumber) {
-      setSelection1(null); setTelemetryData(null); setTelemetryReady(false); setSelectedLapsCount(0);
-      showToast(`${driver} Lap ${lapNumber} removed`); return;
-    }
-    if (selection2?.driver === driver && selection2?.lapNumber === lapNumber) {
-      setSelection2(null); setTelemetryData(null); setTelemetryReady(false); setSelectedLapsCount(0);
-      showToast(`${driver} Lap ${lapNumber} removed`); return;
-    }
-    if (!selection1) { setSelection1({ driver, lapNumber }); showToast(`${driver} Lap ${lapNumber} added`); }
-    else if (!selection2) { setSelection2({ driver, lapNumber }); showToast(`${driver} Lap ${lapNumber} added`); }
-    else { setSelection1({ driver, lapNumber }); showToast(`${driver} Lap ${lapNumber} replaced`); }
-  };
+  // ── Year guard ────────────────────────────────────────────────────────────────
+  const handleYearChange = useCallback((y: number) => {
+    if (y !== 2026 && !canAccessYear(y)) { setShowUpgradeModal(true); return; }
+    setYearRaw(y);
+  }, [canAccessYear]);
 
-  const handleCompareFastestLaps = () => {
-    setSelection1(null); setSelection2(null);
-    showToast(`Comparing fastest laps: ${driver1} vs ${driver2}`);
-    if (driver1 && driver2 && canMakeRequest) loadTelemetryFastestLaps();
-  };
+  // ── Compare specific laps (from SessionExplorer lap selection) ──────────────
+  const handleCompareLaps = useCallback(async (laps: LapSelection[]) => {
+    if (!laps.length || selectedGP == null || !sessionType) return;
+    const gp = selectedGP, st = sessionType;
+    const uniqueDrivers = [...new Set(laps.map(l => l.driver))];
+    setComparedDrivers(uniqueDrivers);
+    setD1Raw(uniqueDrivers[0]);
+    setD2Raw(uniqueDrivers[1] || '');
+    setSelectedLap1(null);
+    setSelectedLap2(null);
+    setActiveView('trace');
 
-  const loadTelemetryFastestLaps = async () => {
-    if (!driver1 || !driver2) return;
     if (!canMakeRequest) { setShowUpgradeModal(true); return; }
-    const cacheKey = getTelemetryKey(year, selectedGP, sessionType, driver1, undefined, driver2, undefined);
-    const cached = getCached<TelemetryData>(cacheKey);
-    if (cached) {
-      setTelemetryData(cached); setTelemetryReady(true); setSelectedLapsCount(2); setActiveTab('telemetry'); return;
-    }
-    setLoading(true); setTelemetryReady(false);
+    setMultiLoading(true);
+    setMultiTelemetryData(null);
     try {
-      const data = await getTelemetryComparison(year, selectedGP, sessionType, driver1, driver2);
-      setTelemetryData(data); setTelemetryReady(true); setSelectedLapsCount(2); setActiveTab('telemetry');
-      setCached(cacheKey, data); incrementRequest();
+      const lapRefs: LapRef[] = laps.map(l => ({
+        year, gp, session: st, driver: l.driver, lap: l.lapNumber,
+      }));
+      const data = await getTelemetryMulti(lapRefs);
+      setMultiTelemetryData(data);
+      incrementRequest();
     } catch (e) {
-      console.error('Error loading telemetry:', e); setTelemetryReady(false); setSelectedLapsCount(0);
-    } finally { setLoading(false); }
-  };
+      console.error('compareLaps:', e);
+    } finally {
+      setMultiLoading(false);
+    }
+  }, [year, selectedGP, sessionType, canMakeRequest, incrementRequest]);
 
-  const clearSelection = (slot: 1 | 2) => {
-    if (slot === 1) setSelection1(null); else setSelection2(null);
-    setTelemetryData(null); setTelemetryReady(false); setSelectedLapsCount(0);
-  };
+  // ── Compare N drivers (from SessionExplorer) ─────────────────────────────────
+  const handleCompare = useCallback(async (driversToCompare: string[]) => {
+    if (!driversToCompare.length || selectedGP == null || !sessionType) return;
+    const gp = selectedGP, st = sessionType;
+    setComparedDrivers(driversToCompare);
+    setD1Raw(driversToCompare[0]);
+    setD2Raw(driversToCompare[1] || '');
+    setSelectedLap1(null);
+    setSelectedLap2(null);
+    setActiveView('trace');
 
-  const handleShareUrl = () => {
+    if (!canMakeRequest) { setShowUpgradeModal(true); return; }
+    setMultiLoading(true);
+    setMultiTelemetryData(null);
+    try {
+      const laps: LapRef[] = driversToCompare.map(d => ({
+        year, gp, session: st, driver: d,
+      }));
+      const data = await getTelemetryMulti(laps);
+      setMultiTelemetryData(data);
+      incrementRequest();
+    } catch (e) {
+      console.error('multiTelemetry:', e);
+    } finally {
+      setMultiLoading(false);
+    }
+  }, [year, selectedGP, sessionType, canMakeRequest, incrementRequest]);
+
+  // ── Share ─────────────────────────────────────────────────────────────────────
+  const handleShare = useCallback(() => {
     navigator.clipboard.writeText(window.location.href).then(() => {
-      setUrlCopied(true);
-      setTimeout(() => setUrlCopied(false), 2000);
+      setUrlCopied(true); setTimeout(() => setUrlCopied(false), 2000);
     });
-  };
+  }, []);
 
-  const setYear = (v: number) => setYearRaw(v);
-  const setSelectedGP = (v: number) => setSelectedGPRaw(v);
-  const setSessionType = (v: string) => setSessionTypeRaw(v);
-  const setDriver1 = (v: string) => setDriver1Raw(v);
-  const setDriver2 = (v: string) => setDriver2Raw(v);
+  // ── Customer portal ───────────────────────────────────────────────────────────
+  const handleManageSubscription = useCallback(async () => {
+    if (!user) return;
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) return;
+      const res = await fetch(`${getBackendUrl()}/api/customer-portal/${user.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.portal_url) window.location.href = data.portal_url;
+    } catch (e) { console.error('portal:', e); }
+  }, [user]);
+  void handleManageSubscription; // used by future account menu
+
+  // ── Derived ───────────────────────────────────────────────────────────────────
+  const effectiveD1 = telemetryData?.driver1 || driver1;
+  const effectiveD2 = telemetryData?.driver2 || driver2;
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // RENDER
+  // ─────────────────────────────────────────────────────────────────────────────
+  const isExplorer = activeView === 'laps';
 
   return (
     <>
-      <SEO
-        path="/telemetry"
-        title={t('telemetry.title') + ' - METRIK DELTA'}
-        description={t('telemetry.title')}
-        keywords="f1 telemetry, télémétrie f1, telemetría f1, f1 data analysis, analyse données f1"
-      />
-      <div className="min-h-screen bg-metrik-black text-white">
-        <div className="container mx-auto px-3 sm:px-6 py-4 sm:py-8">
+    <SEO
+      path="/app"
+      title="F1 Telemetry Comparison — Speed, Throttle & Brake Charts | METRIK DELTA"
+      description="Compare any two Formula 1 drivers' telemetry lap by lap: speed, throttle, braking, gear shifts, sector times and tire strategy for every session from 2018 to 2026."
+      keywords="f1 telemetry comparison, formula 1 speed trace, f1 throttle brake data, f1 lap comparison, f1 sector times, f1 tire strategy, télémétrie f1"
+      structuredData={{
+        "@context": "https://schema.org",
+        "@type": "WebPage",
+        "name": "F1 Telemetry Comparison",
+        "description": "Compare Formula 1 drivers' telemetry lap by lap — speed, throttle, braking, gear and tire strategy.",
+        "url": "https://metrikdelta.com/app",
+        "breadcrumb": {
+          "@type": "BreadcrumbList",
+          "itemListElement": [
+            { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://metrikdelta.com" },
+            { "@type": "ListItem", "position": 2, "name": "Telemetry", "item": "https://metrikdelta.com/app" }
+          ]
+        }
+      }}
+    />
+    <div className="data-zone" style={{
+      ...(isMobile ? { minHeight: '100vh', height: 'auto' } : { height: '100vh', overflow: 'hidden' }),
+      display: 'grid',
+      gridTemplateRows: isMobile ? 'auto 1fr' : '44px 1fr',
+      gridTemplateColumns: 'minmax(0, 1fr)',
+    }}>
 
-          {/* Header */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 mb-6 sm:mb-8">
+      {/* ── TOP BAR ────────────────────────────────────────────────────────── */}
+      <header style={{
+        display: 'flex', alignItems: 'center', gap: isMobile ? 6 : 10,
+        flexWrap: isMobile ? 'wrap' : 'nowrap',
+        paddingLeft: 12, paddingRight: 10,
+        paddingTop: isMobile ? 8 : 0, paddingBottom: isMobile ? 8 : 0,
+        borderBottom: '1px solid var(--border)',
+        background: 'var(--bg)', flexShrink: 0,
+        position: 'relative',
+      }}>
+        {!isExplorer && (
+          <button
+            onClick={() => setActiveView('laps')}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 5,
+              padding: '3px 8px', marginRight: 2,
+              fontFamily: 'JetBrains Mono, monospace',
+              fontSize: 9, letterSpacing: '0.1em',
+              color: 'var(--text-2)', background: 'transparent',
+              border: '1px solid var(--border)', borderRadius: 'var(--r)',
+              cursor: 'pointer', outline: 'none',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.color = 'var(--text)'; e.currentTarget.style.borderColor = 'var(--border-hi)'; }}
+            onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-2)'; e.currentTarget.style.borderColor = 'var(--border)'; }}
+          >
+            ←
+          </button>
+        )}
+
+        <span className="font-rajdhani font-black text-sm tracking-[0.12em]">
+          <span style={{ color: 'var(--text)' }}>METRIK</span>
+          <span style={{ color: 'var(--accent)' }}> DELTA</span>
+        </span>
+
+        {/* Telemetry / Statistics — top-level feature switch, distinct from
+            the trace/laps view tabs within Telemetry itself. Absolutely
+            centered so it stays put regardless of what's in the side slots. */}
+        <div style={{
+          display: 'flex',
+          order: isMobile ? 3 : undefined,
+          flexBasis: isMobile ? '100%' : undefined,
+          justifyContent: isMobile ? 'center' : undefined,
+          position: isMobile ? 'static' : 'absolute',
+          left: isMobile ? undefined : '50%', transform: isMobile ? undefined : 'translateX(-50%)',
+          border: '1px solid var(--border)', borderRadius: 'var(--r)', overflow: 'hidden',
+        }}>
+          <span style={{
+            padding: '3px 9px',
+            fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: '0.1em',
+            background: 'var(--accent-10)', color: 'var(--accent)',
+          }}>
+            Telemetry
+          </span>
+          <button
+            onClick={() => navigate('/stats')}
+            style={{
+              padding: '3px 9px',
+              fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: '0.1em',
+              background: 'transparent', color: 'var(--text-2)',
+              border: 'none', borderLeft: '1px solid var(--border)',
+              cursor: 'pointer', outline: 'none',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.color = 'var(--text)'; }}
+            onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-2)'; }}
+          >
+            Statistics
+          </button>
+        </div>
+
+        {!isMobile && <div style={{ flex: 1 }} />}
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 2 : 0, marginLeft: isMobile ? 'auto' : 0 }}>
+        {isPremium && (
+          <span style={{
+            display: 'flex', alignItems: 'center', gap: 3,
+            padding: '1px 6px', borderRadius: 'var(--r)',
+            fontSize: 9, fontFamily: 'Rajdhani, sans-serif', fontWeight: 900,
+            background: 'var(--accent-10)', color: 'var(--accent)',
+            border: '1px solid var(--accent-20)', marginRight: isMobile ? 0 : 4,
+          }}>
+            <Zap size={9} />PRO
+          </span>
+        )}
+
+        <button
+          onClick={handleShare}
+          style={{ padding: 6, border: 'none', background: 'transparent', cursor: 'pointer', color: urlCopied ? 'var(--accent)' : 'var(--text-2)', outline: 'none' }}
+          title="Copy link"
+          onMouseEnter={e => { if (!urlCopied) e.currentTarget.style.color = 'var(--text)'; }}
+          onMouseLeave={e => { if (!urlCopied) e.currentTarget.style.color = 'var(--text-2)'; }}
+        >
+          {urlCopied ? <Check size={14} /> : <Link size={14} />}
+        </button>
+
+        {user ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, color: 'var(--text-2)' }}>
+              {user.email?.split('@')[0]}
+            </span>
             <button
-              onClick={() => activeTab === 'telemetry' ? setActiveTab('session') : navigate('/')}
-              className="flex items-center gap-2 text-metrik-silver hover:text-metrik-turquoise transition-colors group"
-            >
-              <ArrowLeft className="group-hover:-translate-x-1 transition-transform" size={18} />
-              <span className="font-rajdhani font-bold uppercase tracking-wide text-sm sm:text-base">Back</span>
-            </button>
-            <div className="flex items-center gap-2 sm:gap-3">
-              <Gauge className="text-metrik-turquoise" size={24} />
-              <h1 className="text-2xl sm:text-4xl font-rajdhani font-black bg-gradient-to-r from-white to-metrik-turquoise bg-clip-text text-transparent">
-                TELEMETRY ANALYSIS
-              </h1>
-            </div>
-            <button
-              onClick={handleShareUrl}
-              className="flex items-center gap-2 px-3 py-1.5 bg-metrik-card/80 border border-metrik-turquoise/30 rounded-lg text-xs font-rajdhani font-bold text-metrik-silver hover:text-white hover:border-metrik-turquoise/60 transition-all"
-              title="Copy shareable link"
-            >
-              {urlCopied ? <Check size={14} className="text-green-400" /> : <Link size={14} />}
-              <span className="hidden sm:inline">{urlCopied ? 'Copied!' : 'Share'}</span>
-            </button>
-          </div>
-
-          {/* TABS NAVIGATION */}
-          <div className="bg-metrik-black border border-metrik-turquoise/20 rounded-xl mb-4 sm:mb-6 overflow-hidden">
-            <div className="flex items-stretch">
-              <button
-                onClick={() => setActiveTab('session')}
-                className={`relative flex-1 px-4 py-3 sm:px-8 sm:py-4 font-rajdhani font-bold text-xs sm:text-sm uppercase tracking-wider transition-all duration-300 ${activeTab === 'session' ? 'text-metrik-turquoise' : 'text-metrik-silver/70 hover:text-white'}`}
-              >
-                <span className="hidden sm:inline">Session View</span>
-                <span className="sm:hidden">Session</span>
-                {activeTab === 'session' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-metrik-turquoise" />}
-              </button>
-
-              <div className="w-px bg-metrik-turquoise/10" />
-
-              <button
-                onClick={() => { if (telemetryReady) setActiveTab('telemetry'); }}
-                disabled={!telemetryReady}
-                className={`relative flex-1 px-4 py-3 sm:px-8 sm:py-4 font-rajdhani font-bold text-xs sm:text-sm uppercase tracking-wider transition-all duration-300 ${!telemetryReady ? 'cursor-not-allowed text-metrik-silver/30' : activeTab === 'telemetry' ? 'text-metrik-turquoise' : 'text-metrik-silver/70 hover:text-white'}`}
-              >
-                <div className="flex items-center justify-center gap-2 sm:gap-3">
-                  <span>Telemetry</span>
-                  {selectedLapsCount > 0 && (
-                    <span className="px-1.5 py-0.5 sm:px-2 text-[10px] sm:text-xs font-black rounded-full bg-orange-500/90 text-white">
-                      {selectedLapsCount}
-                    </span>
-                  )}
-                  {loading && <Loader2 className="animate-spin text-metrik-turquoise" size={12} />}
-                </div>
-                {activeTab === 'telemetry' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-metrik-turquoise" />}
-              </button>
-            </div>
-          </div>
-
-          {/* CompactSelectors */}
-          {activeTab === 'session' && (
-            <CompactSelectors
-              year={year}
-              onYearChange={(newYear) => {
-                if (newYear >= 2026 && !canAccessYear(newYear)) { setShowUpgradeModal(true); return; }
-                setYear(newYear);
+              onClick={() => signOut()}
+              style={{
+                fontFamily: 'JetBrains Mono, monospace', fontSize: 9,
+                border: '1px solid var(--border)', borderRadius: 'var(--r)',
+                padding: '2px 7px', background: 'transparent', color: 'var(--text-2)', cursor: 'pointer', outline: 'none',
               }}
-              selectedGP={selectedGP}
-              sessionType={sessionType}
-              driver1={driver1}
-              driver2={driver2}
-              drivers={drivers}
-              grandsPrix={grandsPrix}
-              onGPChange={setSelectedGP}
-              onSessionChange={setSessionType}
-              onDriver1Change={setDriver1}
-              onDriver2Change={setDriver2}
-              onCompareFastestLaps={handleCompareFastestLaps}
-              loading={loading}
-              selection1={selection1}
-              selection2={selection2}
-              getDriverColor={getDriverColor}
-              areTeammates={areTeammates}
-              isPremium={isPremium}
-            />
-          )}
+            >
+              Sign out
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setAuthModalOpen(true)}
+            style={{
+              fontFamily: 'JetBrains Mono, monospace', fontSize: 9,
+              border: '1px solid var(--border)', borderRadius: 'var(--r)',
+              padding: '3px 8px', background: 'transparent', color: 'var(--text-2)', cursor: 'pointer', outline: 'none',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.color = 'var(--text)'; e.currentTarget.style.borderColor = 'var(--border-hi)'; }}
+            onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-2)'; e.currentTarget.style.borderColor = 'var(--border)'; }}
+          >
+            Sign in
+          </button>
+        )}
+        </div>
+      </header>
 
-          {/* Selection indicator */}
-          {activeTab === 'session' && (selection1 || selection2) && (
-            <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-xl p-3 sm:p-4 mb-4 sm:mb-6">
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 sm:gap-6">
-                {selection1 ? (
-                  <div className="flex items-center gap-2 sm:gap-3 px-3 py-2 sm:px-4 bg-metrik-black/50 border border-metrik-turquoise/50 rounded-lg">
-                    <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full flex-shrink-0" style={{ backgroundColor: getDriverColor(selection1.driver) }} />
-                    <span className="font-rajdhani font-bold text-sm sm:text-base">{selection1.driver} - Lap {selection1.lapNumber}</span>
-                    <button onClick={() => clearSelection(1)} className="ml-auto text-metrik-silver hover:text-white transition-colors"><X size={14} className="sm:w-4 sm:h-4" /></button>
-                  </div>
-                ) : (
-                  <div className="px-3 py-2 sm:px-4 bg-metrik-black/30 border border-metrik-silver/20 rounded-lg text-center">
-                    <span className="font-rajdhani text-metrik-silver text-sm sm:text-base">Select first lap</span>
-                  </div>
-                )}
-                <span className="text-metrik-silver font-rajdhani font-bold text-center text-sm sm:text-base">VS</span>
-                {selection2 ? (
-                  <div className="flex items-center gap-2 sm:gap-3 px-3 py-2 sm:px-4 bg-metrik-black/50 border border-metrik-turquoise/50 rounded-lg">
-                    <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full flex-shrink-0" style={{ backgroundColor: getDriverColor(selection2.driver) }} />
-                    <span className="font-rajdhani font-bold text-sm sm:text-base">{selection2.driver} - Lap {selection2.lapNumber}</span>
-                    <button onClick={() => clearSelection(2)} className="ml-auto text-metrik-silver hover:text-white transition-colors"><X size={14} className="sm:w-4 sm:h-4" /></button>
-                  </div>
-                ) : (
-                  <div className="px-3 py-2 sm:px-4 bg-metrik-black/30 border border-metrik-silver/20 rounded-lg text-center">
-                    <span className="font-rajdhani text-metrik-silver text-sm sm:text-base">Select second lap</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
 
-          {/* Content */}
-          <div className={activeTab === 'session' ? 'mt-6 sm:mt-8' : 'mt-0'}>
-            {activeTab === 'session' ? (
-              driver1 || driver2 ? (
-                <SessionView
-                  year={year}
-                  selectedGP={selectedGP}
-                  sessionType={sessionType}
-                  driver1={driver1}
-                  driver2={driver2}
-                  onLapClick={handleLapClick}
-                  selection1={selection1}
-                  selection2={selection2}
+      {/* ── BODY ────────────────────────────────────────────────────────────── */}
+      <main style={{ overflow: isMobile ? 'visible' : 'hidden', display: 'flex', flexDirection: 'column', background: 'var(--bg)' }}>
+
+        {/* TRACE — chart stack */}
+        {activeView === 'trace' && (
+          <div style={{ flex: 1, overflowY: 'auto', padding: 12 }}>
+            {/* Multi path: used whenever the compare button was clicked */}
+            {comparedDrivers.length > 0 ? (
+              multiTelemetryData ? (
+                <TelemetryViewMulti
+                  telemetryData={multiTelemetryData}
                   getDriverColor={getDriverColor}
                   areTeammates={areTeammates}
+                  loading={multiLoading}
                 />
               ) : (
-                <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-xl p-12 sm:p-20 text-center">
-                  <Gauge className="text-metrik-silver/50 mx-auto mb-3 sm:mb-4" size={48} />
-                  <p className="text-metrik-silver font-rajdhani text-base sm:text-xl">Select at least one driver to view lap times</p>
-                </div>
+                <EmptyState loading={multiLoading} message="Loading telemetry…" />
               )
+            ) : telemetryData ? (
+              /* Legacy 2-driver path (direct controlbar selectors) */
+              <TelemetryView
+                telemetryData={telemetryData}
+                driver1={effectiveD1}
+                driver2={effectiveD2}
+                sessionType={sessionType}
+                lapNumber={selectedLap1}
+                getDriverColor={getDriverColor}
+                areTeammates={areTeammates}
+                loading={loading}
+              />
             ) : (
-              telemetryData ? (
-                <TelemetryView
-                  telemetryData={telemetryData}
-                  driver1={selection1?.driver || driver1}
-                  driver2={selection2?.driver || driver2}
-                  sessionType={sessionType}
-                  lapNumber={selection1?.lapNumber || null}
-                  getDriverColor={getDriverColor}
-                  areTeammates={areTeammates}
-                  loading={loading}
-                />
-              ) : (
-                <div className="backdrop-blur-xl bg-metrik-card/95 border border-metrik-turquoise/30 rounded-xl p-12 sm:p-20 text-center">
-                  <Gauge className="text-metrik-silver/50 mx-auto mb-3 sm:mb-4" size={48} />
-                  <p className="text-metrik-silver font-rajdhani text-base sm:text-xl mb-3 sm:mb-4">
-                    {loading ? 'Loading telemetry data...' : 'Select 2 laps in Session View to compare'}
-                  </p>
-                  {loading && <Loader2 className="animate-spin text-metrik-turquoise mx-auto" size={28} />}
-                </div>
-              )
+              <EmptyState
+                loading={loading}
+                message="Select drivers in Explorer first"
+              />
             )}
           </div>
+        )}
 
-          <UpgradeModal isOpen={showUpgradeModal} onClose={() => setShowUpgradeModal(false)} reason="current_season" />
+        {/* LAPS — session explorer (GP Tempo layout) */}
+        {activeView === 'laps' && (
+          <SessionExplorer
+            year={year}
+            onYearChange={handleYearChange}
+            selectedGP={selectedGP}
+            onGPChange={setGPRaw}
+            grandsPrix={grandsPrix}
+            sessionType={sessionType}
+            onSessionChange={setSessionRaw}
+            drivers={drivers}
+            getDriverColor={getDriverColor}
+            areTeammates={areTeammates}
+            initialDriver1={driver1}
+            initialDriver2={driver2}
+            onCompare={handleCompare}
+            onCompareLaps={handleCompareLaps}
+          />
+        )}
 
-          {toastVisible && toastMessage && (
-            <div className="fixed bottom-4 sm:bottom-8 left-1/2 transform -translate-x-1/2 z-50 animate-slide-up px-4 max-w-[90vw] sm:max-w-none">
-              <div className="bg-metrik-black/95 backdrop-blur-md border border-metrik-turquoise/40 rounded-lg px-4 py-2 sm:px-5 sm:py-2.5 shadow-2xl">
-                <p className="text-[10px] sm:text-xs font-rajdhani font-bold text-metrik-silver tracking-wide text-center">{toastMessage}</p>
-              </div>
-            </div>
-          )}
+      </main>
+
+      {/* ── Legal links ──────────────────────────────────────────────────────
+          Fixed to the corner on desktop (page never scrolls, so it can't
+          overlap anything); on mobile the page does scroll, so a fixed
+          position would sit on top of content forever — render it inline
+          at the end of the scrollable flow instead. */}
+      {isMobile ? (
+        <div style={{ padding: '14px 16px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'center' }}>
+          <LegalLinks color="var(--text-3)" hoverColor="var(--text)" fontSize={8} />
         </div>
-      </div>
+      ) : (
+        <div style={{ position: 'fixed', bottom: 8, left: 12, zIndex: 40 }}>
+          <LegalLinks color="var(--text-3)" hoverColor="var(--text)" fontSize={8} />
+        </div>
+      )}
+
+      {/* ── Modals ─────────────────────────────────────────────────────────── */}
+      <AuthModal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} />
+      <UpgradeModal isOpen={showUpgradeModal} onClose={() => setShowUpgradeModal(false)} reason="current_season" />
+    </div>
     </>
   );
 }

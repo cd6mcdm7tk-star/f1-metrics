@@ -1,128 +1,131 @@
 import React from 'react';
 
+const accent = '#f2e6d8';
+const text = '#f2e6d8';
+const text3 = 'rgba(242,230,216,0.32)';
+const border = 'rgba(242,230,216,0.10)';
+
+const h3: React.CSSProperties = {
+  fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 16,
+  letterSpacing: '0.02em', textTransform: 'uppercase', color: text, margin: '0 0 8px',
+};
+const p: React.CSSProperties = { margin: '0 0 8px', fontSize: 13, lineHeight: 1.6 };
+const ul: React.CSSProperties = { margin: '4px 0 0', paddingLeft: 20, fontSize: 13, lineHeight: 1.7 };
+const strong: React.CSSProperties = { color: text, fontWeight: 700 };
+const link: React.CSSProperties = { color: accent, textDecoration: 'underline' };
+const section: React.CSSProperties = { marginBottom: 22 };
+
 const TermsContent: React.FC = () => {
   return (
-    <div className="space-y-6 text-gray-300">
-      <p className="text-gray-400 text-sm">Last updated: January 2025</p>
+    <div>
+      <p style={{ ...p, color: text3, fontSize: 11 }}>Last updated: September 27, 2026</p>
 
-      <section>
-        <h3 className="text-xl font-semibold text-white mb-3">1. Acceptance of Terms</h3>
-        <p>
-          By accessing and using METRIK DELTA, you accept and agree to be bound by the terms 
-          and provision of this agreement. If you do not agree to these terms, please do not 
-          use our service.
+      <section style={section}>
+        <h3 style={h3}>1. Acceptance of Terms</h3>
+        <p style={p}>
+          By accessing or using METRIK DELTA, you agree to be bound by these Terms. If you do not
+          agree, please do not use the service.
         </p>
       </section>
 
-      <section>
-        <h3 className="text-xl font-semibold text-white mb-3">2. Use of Service</h3>
-        <p>
-          METRIK DELTA provides Formula 1 telemetry analysis and visualization services. 
-          You agree to use this service only for lawful purposes and in accordance with these Terms.
+      <section style={section}>
+        <h3 style={h3}>2. Use of Service</h3>
+        <p style={p}>
+          METRIK DELTA provides Formula 1 telemetry analysis and statistics visualization. You agree to
+          use it only for lawful purposes.
         </p>
-        <ul className="list-disc list-inside mt-2 ml-4 space-y-1">
-          <li>Do not use the service for any illegal activities</li>
-          <li>Do not attempt to reverse engineer or hack the platform</li>
-          <li>Do not resell or redistribute our data without permission</li>
+        <ul style={ul}>
+          <li>No illegal activity</li>
+          <li>No reverse engineering, scraping, or attempting to bypass access controls</li>
+          <li>No reselling or redistributing the data or the service without permission</li>
         </ul>
       </section>
 
-      <section>
-        <h3 className="text-xl font-semibold text-white mb-3">3. User Accounts</h3>
-        <p>
-          You are responsible for maintaining the confidentiality of your account credentials 
-          and for all activities that occur under your account. You must immediately notify us 
-          of any unauthorized use of your account.
+      <section style={section}>
+        <h3 style={h3}>3. User Accounts</h3>
+        <p style={p}>
+          You're responsible for keeping your account credentials confidential and for all activity
+          under your account. Notify us immediately of any unauthorized use.
         </p>
       </section>
 
-      <section>
-        <h3 className="text-xl font-semibold text-white mb-3">4. Subscriptions and Payments</h3>
-        <p className="mb-2">
-          We offer Free, Premium, and Pro subscription tiers:
-        </p>
-        <ul className="list-disc list-inside ml-4 space-y-1">
-          <li><strong>Free:</strong> Limited to 5 requests per day</li>
-          <li><strong>Premium (€4.99/month):</strong> Unlimited requests and additional features</li>
-          <li><strong>Pro (€14.99/month):</strong> All Premium features plus advanced analytics</li>
+      <section style={section}>
+        <h3 style={h3}>4. Subscriptions and Payments</h3>
+        <p style={p}>METRIK DELTA offers two tiers:</p>
+        <ul style={ul}>
+          <li><span style={strong}>Free</span> — limited daily requests, historical seasons only</li>
+          <li><span style={strong}>PRO</span> — €1.99/month or €14.99/year (both include a 7-day free trial), unlimited requests, current-season access</li>
         </ul>
-        <p className="mt-3">
-          All payments are processed securely through Stripe. Subscriptions automatically renew 
-          unless cancelled. Prices are subject to change with 30 days advance notice.
+        <p style={{ ...p, marginTop: 10 }}>
+          Payments are processed by Stripe; we never store your card details. Subscriptions renew
+          automatically at the end of each period unless cancelled before it ends. Prices may change
+          with at least 30 days' notice to active subscribers.
         </p>
       </section>
 
-      <section>
-        <h3 className="text-xl font-semibold text-white mb-3">5. Cancellation and Refunds</h3>
-        <p>
-          You may cancel your subscription at any time from your account settings. Cancellations 
-          take effect at the end of the current billing period. For refund information, please 
-          see our Refund Policy.
+      <section style={section}>
+        <h3 style={h3}>5. Trial, Cancellation and Refunds</h3>
+        <p style={p}>
+          Cancel any time from your account settings — during the 7-day trial, cancelling means you're
+          never charged. Cancelling after the trial stops future renewals; you keep PRO access until the
+          end of the period already paid for. Amounts already charged are not refunded, except where
+          required by law.
         </p>
       </section>
 
-      <section>
-        <h3 className="text-xl font-semibold text-white mb-3">6. Intellectual Property</h3>
-        <p>
-          All content, features, and functionality of METRIK DELTA are owned by us and are 
-          protected by international copyright, trademark, and other intellectual property laws.
+      <section style={section}>
+        <h3 style={h3}>6. Intellectual Property</h3>
+        <p style={p}>
+          The METRIK DELTA name, interface, and original content are ours. The underlying F1 data is
+          sourced from third parties (section 7) and remains subject to their own terms.
         </p>
       </section>
 
-      <section>
-        <h3 className="text-xl font-semibold text-white mb-3">7. Data Attribution</h3>
-        <p>
-          METRIK DELTA uses data from FastF1 and Ergast API. All Formula 1 trademarks, names, 
-          and data are property of Formula One World Championship Limited. We are not affiliated 
-          with or endorsed by Formula 1.
+      <section style={section}>
+        <h3 style={h3}>7. Data Attribution</h3>
+        <p style={p}>
+          METRIK DELTA uses data from the FastF1 library, the OpenF1 API, and the Ergast/Jolpica API.
+          Formula 1 trademarks, names, and official data belong to Formula One World Championship
+          Limited. METRIK DELTA is an independent project and is not affiliated with, endorsed by, or
+          sponsored by Formula 1.
         </p>
       </section>
 
-      <section>
-        <h3 className="text-xl font-semibold text-white mb-3">8. Limitation of Liability</h3>
-        <p>
-          METRIK DELTA is provided "as is" without warranties of any kind. We are not liable 
-          for any damages arising from your use of the service, including but not limited to 
-          data inaccuracies, service interruptions, or financial losses.
+      <section style={section}>
+        <h3 style={h3}>8. Limitation of Liability</h3>
+        <p style={p}>
+          METRIK DELTA is provided "as is," without warranty of any kind. Underlying F1 data can be
+          incomplete, delayed, or occasionally incorrect at the source. We're not liable for damages
+          arising from data inaccuracies, service interruptions, or reliance on the service for any
+          purpose (including betting or wagering, which we do not endorse).
         </p>
       </section>
 
-      <section>
-        <h3 className="text-xl font-semibold text-white mb-3">9. Changes to Terms</h3>
-        <p>
-          We reserve the right to modify these Terms at any time. We will notify users of 
-          material changes via email or through the service. Continued use after changes 
-          constitutes acceptance of the updated Terms.
+      <section style={section}>
+        <h3 style={h3}>9. Changes to Terms</h3>
+        <p style={p}>
+          We may modify these Terms at any time. Material changes will be notified via email or a
+          notice on the service. Continued use after a change means you accept the update.
         </p>
       </section>
 
-      <section>
-        <h3 className="text-xl font-semibold text-white mb-3">10. Governing Law</h3>
-        <p>
-          These Terms are governed by the laws of France. Any disputes shall be resolved in 
-          the courts of France.
-        </p>
+      <section style={section}>
+        <h3 style={h3}>10. Governing Law</h3>
+        <p style={p}>These Terms are governed by French law. Disputes fall under the jurisdiction of the French courts.</p>
       </section>
 
-      <section>
-        <h3 className="text-xl font-semibold text-white mb-3">11. Contact</h3>
-        <p>
-          For questions about these Terms, contact us at:{' '}
-          <a 
-            href="mailto:contact@metrikdelta.com" 
-            className="text-[#40DCA5] hover:text-[#2A9D8F] transition-colors underline"
-          >
-            contact@metrikdelta.com
-          </a>
-        </p>
+      <section style={{ ...section, marginBottom: 0 }}>
+        <h3 style={h3}>11. Contact</h3>
+        <div style={{ padding: '12px 14px', background: 'rgba(0,0,0,0.15)', border: `1px solid ${border}`, borderRadius: 'var(--r)' }}>
+          <p style={{ ...p, color: text, margin: 0 }}>
+            <span style={strong}>Email:</span>{' '}
+            <a href="mailto:contact@metrikdelta.com" style={link}>contact@metrikdelta.com</a>
+          </p>
+          <p style={{ ...p, color: text, margin: '4px 0 0' }}>
+            <span style={strong}>Operator:</span> METRIK DELTA — individual auto-entrepreneur, France
+          </p>
+        </div>
       </section>
-
-      <div className="mt-8 pt-6 border-t border-white/10">
-        <p className="text-gray-500 text-sm">
-          By using METRIK DELTA, you acknowledge that you have read, understood, and agree 
-          to be bound by these Terms of Service.
-        </p>
-      </div>
     </div>
   );
 };

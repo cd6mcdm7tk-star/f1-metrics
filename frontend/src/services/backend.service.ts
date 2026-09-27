@@ -1,10 +1,10 @@
-import type { TelemetryData } from '../types/telemetry';
+import type { TelemetryData, TelemetryDataMulti, LapRef } from '../types/telemetry';
 import type { EnhancedAnimationData, RaceAnimationData } from '../types/animation';
 import type { RaceData, PitStopsData, RaceEventsData } from '../types/pitwall';
 import type { PositionEvolution, StrategyComparison } from '../types/pitwall';
 import type { DriverStanding, ConstructorStanding, Circuit } from '../types/championship';
 
-const API_BASE_URL = `${import.meta.env.VITE_API_URL_EU || import.meta.env.VITE_API_URL}/api`;
+const API_BASE_URL = import.meta.env.VITE_API_URL_EU || `${import.meta.env.VITE_API_URL}/api`;
 
 class BackendService {
   async getSchedule(year: number) {
@@ -141,6 +141,16 @@ class BackendService {
     if (!response.ok) throw new Error('Failed to fetch circuits');
     return response.json();
   }
+
+  async getTelemetryMulti(laps: LapRef[]): Promise<TelemetryDataMulti> {
+    const response = await fetch(`${API_BASE_URL}/telemetry/multi`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ laps }),
+    });
+    if (!response.ok) throw new Error('Failed to fetch multi-lap telemetry');
+    return response.json();
+  }
 }
 
 // Instance principale
@@ -176,3 +186,4 @@ export const getConstructorStandings = (year: number) => backendService.getConst
 export const getRaceResults = (year: number, gpRound: number) => backendService.getRaceResults(year, gpRound);
 export const getStandingsAfterRace = (year: number, gpRound: number) => backendService.getStandingsAfterRace(year, gpRound);
 export const getCircuits = (year: number) => backendService.getCircuits(year);
+export const getTelemetryMulti = (laps: LapRef[]) => backendService.getTelemetryMulti(laps);

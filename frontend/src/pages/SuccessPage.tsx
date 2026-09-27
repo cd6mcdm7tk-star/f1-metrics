@@ -1,147 +1,115 @@
-import { useEffect, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
-import { CheckCircle, Loader2, Zap, Radio, Activity, Database } from 'lucide-react'
-import { useAuth } from '../contexts/AuthContext'
-import { Helmet } from 'react-helmet-async'
+import { useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
+
+const P = {
+  bg:        '#5e1018',
+  text:      '#f2e6d8',
+  textSub:   'rgba(242,230,216,0.55)',
+  textGhost: 'rgba(242,230,216,0.28)',
+  border:    'rgba(242,230,216,0.18)',
+};
 
 export default function SuccessPage() {
-  const [searchParams] = useSearchParams()
-  const navigate = useNavigate()
-  const { user } = useAuth()
-  const [loading, setLoading] = useState(true)
-  const [verified, setVerified] = useState(false)
-  const sessionId = searchParams.get('session_id')
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const sessionId = searchParams.get('session_id');
 
   useEffect(() => {
-    const verifyPayment = async () => {
-      if (!sessionId) {
-        setLoading(false)
-        return
-      }
-
-      try {
-        // Attendre 3 secondes pour laisser le webhook se traiter
-        await new Promise(resolve => setTimeout(resolve, 3000))
-        setVerified(true)
-        setLoading(false)
-      } catch (error) {
-        console.error('Error verifying payment:', error)
-        setLoading(false)
-      }
-    }
-
-    verifyPayment()
-  }, [sessionId])
+    const verify = async () => {
+      if (sessionId) await new Promise(r => setTimeout(r, 3000));
+      setLoading(false);
+    };
+    verify();
+  }, [sessionId]);
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-metrik-black flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="w-16 h-16 text-metrik-turquoise animate-spin mx-auto mb-4" />
-          <p className="text-white text-xl font-rajdhani font-bold">Activation de votre abonnement...</p>
-        </div>
+      <div style={{ height: '100dvh', background: P.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 20 }}>
+        <div style={{ width: 24, height: 24, border: `1.5px solid ${P.textGhost}`, borderTopColor: P.text, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, letterSpacing: '0.24em', textTransform: 'uppercase', color: P.textSub }}>
+          Activating subscription…
+        </span>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
-    )
+    );
   }
 
   return (
     <>
-    <Helmet><meta name="robots" content="noindex, nofollow" /></Helmet>
-    <div className="min-h-screen bg-metrik-black flex items-center justify-center p-4 sm:p-6">
-      <div className="max-w-3xl w-full backdrop-blur-xl bg-metrik-card/95 border-2 border-metrik-turquoise/50 rounded-xl p-6 sm:p-8 md:p-12 text-center shadow-2xl shadow-metrik-turquoise/20">
-        
-        {/* Success Icon with glow effect */}
-        <div className="mb-6 sm:mb-8 flex justify-center">
-          <div className="relative">
-            <div className="absolute inset-0 bg-metrik-turquoise/30 rounded-full animate-ping"></div>
-            <div className="absolute inset-0 bg-metrik-turquoise/20 rounded-full blur-xl"></div>
-            <CheckCircle className="w-20 h-20 sm:w-24 sm:h-24 text-metrik-turquoise relative" strokeWidth={2} />
-          </div>
+      <Helmet><meta name="robots" content="noindex, nofollow" /></Helmet>
+      <div style={{
+        height: '100dvh', background: P.bg,
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        fontFamily: "'Rajdhani', sans-serif",
+        textAlign: 'center', padding: '40px 24px',
+        position: 'relative',
+      }}>
+
+        {/* Top wordmark */}
+        <div style={{ position: 'absolute', top: 28, left: 36 }}>
+          <span style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 13, letterSpacing: '0.22em', textTransform: 'uppercase', color: P.text }}>
+            METRIK DELTA
+          </span>
         </div>
 
-        {/* Title */}
-        <h1 className="text-3xl sm:text-4xl md:text-5xl font-rajdhani font-black text-white mb-3 sm:mb-4">
-          Welcome to METRIK PRO! 🏎️
+        {/* Content */}
+        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, letterSpacing: '0.30em', textTransform: 'uppercase', color: P.textSub }}>
+          Subscription activated
+        </span>
+
+        <h1 style={{ fontWeight: 700, fontSize: 'clamp(28px, 4vw, 48px)', letterSpacing: '0.06em', textTransform: 'uppercase', color: P.text, margin: '16px 0 0', lineHeight: 1 }}>
+          Welcome to Pro.
         </h1>
 
-        {/* Subtitle */}
-        <p className="text-metrik-silver text-base sm:text-lg mb-6 sm:mb-8 max-w-2xl mx-auto">
-          Your subscription has been activated. You now have full access to the 2026 season and all premium features!
+        <p style={{ fontWeight: 400, fontSize: 'clamp(13px, 1.2vw, 15px)', letterSpacing: '0.04em', color: P.textSub, margin: '16px 0 0', maxWidth: 340, lineHeight: 1.6 }}>
+          Full telemetry access across the entire F1 calendar — every driver, every lap, every session.
         </p>
 
-        {/* Features Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-6 sm:mb-8">
+        {/* Divider */}
+        <div style={{ width: 1, height: 40, background: `linear-gradient(to bottom, transparent, ${P.textGhost}, transparent)`, margin: '36px 0' }} />
+
+        {/* Feature list */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 48, textAlign: 'left' }}>
           {[
-            {
-              icon: <Activity className="w-5 h-5 sm:w-6 sm:h-6" />,
-              title: '2026 Season Access',
-              description: 'Real-time data from current season'
-            },
-            {
-              icon: <Radio className="w-5 h-5 sm:w-6 sm:h-6" />,
-              title: 'Live Timing',
-              description: 'Follow races as they happen'
-            },
-            {
-              icon: <Zap className="w-5 h-5 sm:w-6 sm:h-6" />,
-              title: 'Full Telemetry',
-              description: 'Detailed lap-by-lap analysis'
-            },
-            {
-              icon: <Database className="w-5 h-5 sm:w-6 sm:h-6" />,
-              title: 'Historical Data',
-              description: 'Full access to 1950-2025'
-            }
-          ].map((feature, index) => (
-            <div
-              key={index}
-              className="bg-metrik-black/50 border border-metrik-turquoise/20 rounded-lg p-4 sm:p-5 text-left hover:border-metrik-turquoise/40 transition-all"
-            >
-              <div className="flex items-start gap-3">
-                <div className="p-2 bg-metrik-turquoise/10 rounded-lg text-metrik-turquoise flex-shrink-0">
-                  {feature.icon}
-                </div>
-                <div>
-                  <h3 className="font-rajdhani font-bold text-white text-sm sm:text-base mb-1">
-                    {feature.title}
-                  </h3>
-                  <p className="text-metrik-silver text-xs sm:text-sm">
-                    {feature.description}
-                  </p>
-                </div>
-              </div>
+            '2026 season — real-time data',
+            'Full telemetry, lap by lap',
+            'Historical access 1950–2025',
+            'Unlimited comparisons',
+          ].map(f => (
+            <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ width: 3, height: 3, borderRadius: '50%', background: P.textSub, flexShrink: 0 }} />
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: '0.10em', color: P.textSub }}>
+                {f}
+              </span>
             </div>
           ))}
         </div>
 
-        {/* PRO Badge */}
-        <div className="inline-flex items-center gap-2 px-4 sm:px-6 py-2 sm:py-3 bg-gradient-to-r from-metrik-turquoise to-cyan-500 text-metrik-black font-rajdhani font-black text-sm sm:text-base rounded-full mb-6 sm:mb-8 shadow-lg shadow-metrik-turquoise/30">
-          <Zap className="w-4 h-4 sm:w-5 sm:h-5" />
-          METRIK PRO ACTIVATED
-        </div>
-
-        {/* CTA Button */}
+        {/* CTA */}
         <button
-          onClick={() => navigate('/')}
-          className="w-full sm:w-auto px-6 sm:px-10 py-3 sm:py-4 bg-metrik-turquoise hover:bg-metrik-turquoise/90 text-metrik-black font-rajdhani font-black text-base sm:text-lg rounded-lg transition-all hover:scale-105 shadow-lg shadow-metrik-turquoise/30"
+          onClick={() => navigate('/app')}
+          style={{
+            fontFamily: "'JetBrains Mono', monospace", fontWeight: 400, fontSize: 10,
+            letterSpacing: '0.26em', textTransform: 'uppercase',
+            color: P.textSub, background: 'transparent',
+            border: `1px solid ${P.border}`,
+            padding: '12px 44px', cursor: 'pointer',
+            transition: 'border-color 0.2s, color 0.2s', outline: 'none',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = P.text; e.currentTarget.style.color = P.text; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = P.border; e.currentTarget.style.color = P.textSub; }}
         >
-          Start Exploring →
+          Enter
         </button>
 
-        {/* Footer Info */}
-        <p className="text-xs sm:text-sm text-metrik-silver/60 mt-6 sm:mt-8">
-          A confirmation email has been sent to your address
-        </p>
-
-        {/* Manage Subscription Link */}
-        <button
-          onClick={() => navigate('/')}
-          className="text-xs sm:text-sm text-metrik-turquoise hover:text-metrik-turquoise/80 mt-3 sm:mt-4 font-rajdhani font-bold underline"
-        >
-          Manage your subscription in Profile menu
-        </button>
+        {/* Footer */}
+        <span style={{ position: 'absolute', bottom: 28, fontFamily: "'JetBrains Mono', monospace", fontSize: 8, letterSpacing: '0.16em', textTransform: 'uppercase', color: P.textGhost }}>
+          A confirmation has been sent to your email
+        </span>
       </div>
-    </div>
     </>
-  )
+  );
 }

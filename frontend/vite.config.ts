@@ -11,9 +11,9 @@ export default defineConfig({
       manifest: {
         name: 'Metrik Delta',
         short_name: 'Metrik Delta',
-        description: 'Real-time F1 analytics & Live Timing',
-        theme_color: '#0a0a0f',
-        background_color: '#0a0a0f',
+        description: 'F1 telemetry comparison and driver statistics',
+        theme_color: '#5e1018',
+        background_color: '#5e1018',
         display: 'standalone',
         orientation: 'portrait',
         scope: '/',
@@ -24,10 +24,20 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // Ne cacher que HTML, CSS, images, fonts — PAS les JS chunks
-        globPatterns: ['**/*.{html,css,ico,png,svg,woff2}'],
-        skipWaiting: false,
-        clientsClaim: false,
+        globPatterns: ['**/*.{css,ico,png,svg,woff2}'],
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true,
+        runtimeCaching: [
+          {
+            urlPattern: ({ request }: { request: Request }) => request.mode === 'navigate',
+            handler: 'NetworkFirst' as const,
+            options: {
+              cacheName: 'pages-cache',
+              networkTimeoutSeconds: 3,
+            },
+          },
+        ],
       },
     }),
   ],
@@ -36,7 +46,6 @@ export default defineConfig({
       output: {
         manualChunks: {
           'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          'three-vendor': ['three', '@react-three/fiber', '@react-three/drei'],
           'chart-vendor': ['recharts']
         }
       }
