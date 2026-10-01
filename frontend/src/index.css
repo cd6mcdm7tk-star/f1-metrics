@@ -57,7 +57,9 @@
 
   --text:         #1c0407;
   --text-2:       rgba(28,4,7,0.58);
-  --text-3:       rgba(28,4,7,0.34);
+  /* 0.62 clears WCAG AA (4.5:1) for small text (label-section, LegalLinks
+     footer buttons) against surface/bg/panel — 0.34 measured ~2.2:1. */
+  --text-3:       rgba(28,4,7,0.62);
 
   --chart-grid:   rgba(94,16,24,0.18);
 

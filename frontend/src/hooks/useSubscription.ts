@@ -1,11 +1,18 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 
+// Computed, not hardcoded — the gate used to be a literal `2026`, which
+// would've silently kept gating 2026 forever (and never gating 2027) once
+// the calendar actually moved past it. Deriving it from the real clock
+// means free users automatically gain each season once it's no longer the
+// current one, with no annual code change needed.
+export const CURRENT_SEASON_YEAR = new Date().getFullYear()
+
 /**
  * Hook pour gérer l'accès aux fonctionnalités PRO
- * 
- * FREE : Accès à 2018-2025, pas de Live Timing
- * PRO : Accès à toutes les années (2018-2026), Live Timing
+ *
+ * FREE : Accès à toutes les saisons passées, pas de Live Timing
+ * PRO : Accès à la saison en cours, Live Timing
  */
 export function useSubscription() {
   const { user, isPremium, premiumLoading } = useAuth()
@@ -20,16 +27,16 @@ export function useSubscription() {
 
   /**
    * Vérifier si l'utilisateur peut accéder à une année donnée
-   * FREE : 2018-2025
-   * PRO : 2018-2026+
+   * FREE : années passées
+   * PRO : saison en cours (et au-delà)
    */
   const canAccessYear = (year: number): boolean => {
     // Les années historiques sont toujours accessibles
-    if (year < 2026) {
+    if (year < CURRENT_SEASON_YEAR) {
       return true
     }
-    
-    // 2026+ nécessite PRO
+
+    // Saison en cours (et au-delà) nécessite PRO
     return isPremium || false
   }
 
@@ -46,7 +53,7 @@ export function useSubscription() {
    */
   const getUpgradeReason = (feature: 'current_season' | 'live_timing'): string => {
     if (feature === 'current_season') {
-      return 'Access to the 2026 season requires METRIK PRO'
+      return `Access to the ${CURRENT_SEASON_YEAR} season requires METRIK PRO`
     }
     if (feature === 'live_timing') {
       return 'Live Timing is available with METRIK PRO'
@@ -58,15 +65,14 @@ export function useSubscription() {
    * Vérifier si une année est la saison en cours (nécessite PRO)
    */
   const isCurrentSeason = (year: number): boolean => {
-    const currentYear = new Date().getFullYear()
-    return year === currentYear
+    return year === CURRENT_SEASON_YEAR
   }
 
   /**
    * Obtenir le label à afficher pour une année
    */
   const getYearLabel = (year: number): string => {
-    if (year < 2026) {
+    if (year < CURRENT_SEASON_YEAR) {
       return year.toString()
     }
     

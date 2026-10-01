@@ -58,8 +58,16 @@ function blendToWhite(hex: string, blend: number): string {
   return `#${nr.toString(16).padStart(2, '0')}${ng.toString(16).padStart(2, '0')}${nb.toString(16).padStart(2, '0')}`;
 }
 
-// Teammates share a team colour, so a later teammate in the list gets a
-// distinct neutral colour instead (matches the legacy 2-driver views).
+// A later teammate doesn't reuse the team colour (indistinguishable from
+// their teammate's line), but every later teammate used to fall back to
+// the SAME black — so with 2+ teammate pairs selected at once, drivers
+// from DIFFERENT teams all rendered as identical black lines. Each team
+// needing a differentiator now gets its own colour from this palette
+// instead, assigned in the order that team's teammate pairing first shows
+// up in the selection (first team to need one → black, second → purple,
+// etc.), picked to not collide with any TEAM_COLORS entry.
+const TEAMMATE_PALETTE = ['#000000', '#6B2D8E', '#7B4B27', '#B8860B', '#4A5568', '#8B3A62'];
+
 // Same driver appearing twice (different laps) still blends toward white.
 function buildColors(
   drivers: DriverMeta[],
@@ -68,16 +76,28 @@ function buildColors(
 ): string[] {
   const seen: Record<string, number> = {};
   const colors: string[] = [];
+  const teammateColorByAnchor = new Map<string, string>();
 
   drivers.forEach((d, i) => {
     const dupeCount = seen[d.driver] ?? 0;
     seen[d.driver] = dupeCount + 1;
 
-    const isTeammateOfEarlier = drivers
-      .slice(0, i)
-      .some(prev => prev.driver !== d.driver && areTeammates(prev.driver, d.driver));
+    // The earliest-appearing driver this one shares a team with — the
+    // "anchor" that every teammate of the same team keys their
+    // differentiator color off of, so they all agree on one color.
+    const anchor = drivers.slice(0, i).find(prev => prev.driver !== d.driver && areTeammates(prev.driver, d.driver));
 
-    const base = isTeammateOfEarlier ? '#000000' : getColor(d.driver);
+    let base: string;
+    if (anchor) {
+      let color = teammateColorByAnchor.get(anchor.driver);
+      if (!color) {
+        color = TEAMMATE_PALETTE[teammateColorByAnchor.size % TEAMMATE_PALETTE.length];
+        teammateColorByAnchor.set(anchor.driver, color);
+      }
+      base = color;
+    } else {
+      base = getColor(d.driver);
+    }
     colors.push(dupeCount === 0 ? base : blendToWhite(base, Math.min(dupeCount * 0.2, 0.5)));
   });
 
@@ -94,11 +114,24 @@ const SECTOR_KEYS = ['s1', 's2', 's3'] as const;
 
 // ── Chart margin constants (must match JSX below) ────────────────────────────
 const MARGIN = { top: 8, right: 20, left: 52, bottom: 12 };
+// Mobile-only: the desktop margin/axis-width leaves ~100px of dead space
+// before the plot starts, which reads as fine on a wide desktop card but eats
+// nearly a third of a narrow phone screen. Used only in the <LineChart>
+// margin prop and the YAxis width below — never in the crosshair/loupe-zoom
+// pixel math above, which is a hover-driven desktop interaction that mobile
+// doesn't use.
+const MOBILE_MARGIN = { top: 8, right: 8, left: 4, bottom: 12 };
+const MOBILE_Y_AXIS_WIDTH = 34;
 
 // ── Component ────────────────────────────────────────────────────────────────
 
 export default function TelemetryViewMulti({ telemetryData, getDriverColor, areTeammates, loading }: Props) {
   const isMobile = useIsMobile();
+  // Used only for the charts' own margin/axis-width JSX props below — the
+  // crosshair/loupe-zoom math further down intentionally keeps using the
+  // desktop MARGIN constant directly (see comment on MOBILE_MARGIN above).
+  const chartMargin = isMobile ? MOBILE_MARGIN : MARGIN;
+  const yAxisWidth = isMobile ? MOBILE_Y_AXIS_WIDTH : 48;
   const n = telemetryData.drivers.length;
   // Beyond 2 drivers the LIVE panel's fixed-width sidebar runs out of room —
   // shrink labels/values and switch delta to a shorter format so nothing
@@ -577,10 +610,10 @@ export default function TelemetryViewMulti({ telemetryData, getDriverColor, areT
               <div className="label-section ml-1 mb-0.5 flex-shrink-0" style={{ color: 'var(--text-2)' }}>SPEED km/h</div>
               <div ref={(el) => { zoomWrapRefs.current[0] = el; }} className="flex-1 min-h-0" style={{ width: zoomChartIdx === 0 ? `${RENDER_SCALE * 100}%` : '100%' }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData} syncId="multi" margin={MARGIN}>
+                  <LineChart data={chartData} syncId="multi" margin={chartMargin}>
                     <CartesianGrid {...GRID} />
                     <XAxis {...xAxisPropsFor(0)} hide />
-                    <YAxis stroke="transparent" tick={zoomChartIdx === 0 ? false : TICK} tickLine={false} tickFormatter={fmtSpeed} domain={speedYDomain} width={48} />
+                    <YAxis stroke="transparent" tick={zoomChartIdx === 0 ? false : TICK} tickLine={false} tickFormatter={fmtSpeed} domain={speedYDomain} width={yAxisWidth} />
                     {corners.map((c, i) => (
                       <ReferenceLine
                         key={i} x={c.distance} {...CORNER_LINE}
@@ -601,10 +634,10 @@ export default function TelemetryViewMulti({ telemetryData, getDriverColor, areT
               <div className="label-section ml-1 mb-0.5 flex-shrink-0" style={{ color: 'var(--text-2)' }}>THROTTLE %</div>
               <div ref={(el) => { zoomWrapRefs.current[1] = el; }} className="flex-1 min-h-0" style={{ width: zoomChartIdx === 1 ? `${RENDER_SCALE * 100}%` : '100%' }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData} syncId="multi" margin={MARGIN}>
+                  <LineChart data={chartData} syncId="multi" margin={chartMargin}>
                     <CartesianGrid {...GRID} />
                     <XAxis {...xAxisPropsFor(1)} hide />
-                    <YAxis stroke="transparent" tick={zoomChartIdx === 1 ? false : TICK} tickLine={false} tickFormatter={fmtPct} domain={[0, 100]} width={48} />
+                    <YAxis stroke="transparent" tick={zoomChartIdx === 1 ? false : TICK} tickLine={false} tickFormatter={fmtPct} domain={[0, 100]} width={yAxisWidth} />
                     {corners.map((c, i) => <ReferenceLine key={i} x={c.distance} {...CORNER_LINE} />)}
                     {Array.from({ length: n }, (_, i) => (
                       <Line key={i} type="monotone" dataKey={`thr${i}`} stroke={colors[i]} strokeWidth={i === 0 ? 1.5 : 1.2}
@@ -620,10 +653,10 @@ export default function TelemetryViewMulti({ telemetryData, getDriverColor, areT
               <div className="label-section ml-1 mb-0.5 flex-shrink-0" style={{ color: 'var(--text-2)' }}>BRAKE</div>
               <div ref={(el) => { zoomWrapRefs.current[2] = el; }} className="flex-1 min-h-0" style={{ width: zoomChartIdx === 2 ? `${RENDER_SCALE * 100}%` : '100%' }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData} syncId="multi" margin={MARGIN}>
+                  <LineChart data={chartData} syncId="multi" margin={chartMargin}>
                     <CartesianGrid {...GRID} />
                     <XAxis {...xAxisPropsFor(2)} hide />
-                    <YAxis stroke="transparent" tick={false} domain={[0, 1]} width={48} />
+                    <YAxis stroke="transparent" tick={false} domain={[0, 1]} width={yAxisWidth} />
                     {corners.map((c, i) => <ReferenceLine key={i} x={c.distance} {...CORNER_LINE} />)}
                     {Array.from({ length: n }, (_, i) => (
                       <Line key={i} type="stepAfter" dataKey={`brk${i}`} stroke={colors[i]} strokeWidth={i === 0 ? 2 : 1.5}
@@ -639,10 +672,10 @@ export default function TelemetryViewMulti({ telemetryData, getDriverColor, areT
               <div className="label-section ml-1 mb-0.5 flex-shrink-0" style={{ color: 'var(--text-2)' }}>GEAR</div>
               <div ref={(el) => { zoomWrapRefs.current[3] = el; }} className="flex-1 min-h-0" style={{ width: zoomChartIdx === 3 ? `${RENDER_SCALE * 100}%` : '100%' }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData} syncId="multi" margin={MARGIN}>
+                  <LineChart data={chartData} syncId="multi" margin={chartMargin}>
                     <CartesianGrid {...GRID} />
                     <XAxis {...xAxisPropsFor(3)} hide />
-                    <YAxis stroke="transparent" tick={zoomChartIdx === 3 ? false : TICK} tickLine={false} tickFormatter={fmtGear} domain={[1, 8]} ticks={[1, 2, 3, 4, 5, 6, 7, 8]} width={48} />
+                    <YAxis stroke="transparent" tick={zoomChartIdx === 3 ? false : TICK} tickLine={false} tickFormatter={fmtGear} domain={[1, 8]} ticks={[1, 2, 3, 4, 5, 6, 7, 8]} width={yAxisWidth} />
                     {corners.map((c, i) => <ReferenceLine key={i} x={c.distance} {...CORNER_LINE} />)}
                     {Array.from({ length: n }, (_, i) => (
                       <Line key={i} type="stepAfter" dataKey={`gear${i}`} stroke={colors[i]} strokeWidth={i === 0 ? 1.5 : 1.2}
@@ -660,10 +693,10 @@ export default function TelemetryViewMulti({ telemetryData, getDriverColor, areT
               </div>
               <div ref={(el) => { zoomWrapRefs.current[4] = el; }} className="flex-1 min-h-0" style={{ width: zoomChartIdx === 4 ? `${RENDER_SCALE * 100}%` : '100%' }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData} syncId="multi" margin={MARGIN}>
+                  <LineChart data={chartData} syncId="multi" margin={chartMargin}>
                     <CartesianGrid {...GRID} />
                     <XAxis {...xAxisPropsFor(4)} hide />
-                    <YAxis stroke="transparent" tick={zoomChartIdx === 4 ? false : TICK} tickLine={false} tickFormatter={(v: number) => v.toFixed(1)} width={48} />
+                    <YAxis stroke="transparent" tick={zoomChartIdx === 4 ? false : TICK} tickLine={false} tickFormatter={(v: number) => v.toFixed(1)} width={yAxisWidth} />
                     {corners.map((c, i) => <ReferenceLine key={i} x={c.distance} {...CORNER_LINE} />)}
                     <ReferenceLine y={0} stroke={colors[fastestIdx]} strokeWidth={1.5} />
                     {Array.from({ length: n }, (_, i) => i !== fastestIdx && (
@@ -680,10 +713,10 @@ export default function TelemetryViewMulti({ telemetryData, getDriverColor, areT
               <div className="label-section ml-1 mb-0.5 flex-shrink-0" style={{ color: 'var(--text-2)' }}>RPM</div>
               <div ref={(el) => { zoomWrapRefs.current[5] = el; }} className="flex-1 min-h-0" style={{ width: zoomChartIdx === 5 ? `${RENDER_SCALE * 100}%` : '100%' }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData} syncId="multi" margin={MARGIN}>
+                  <LineChart data={chartData} syncId="multi" margin={chartMargin}>
                     <CartesianGrid {...GRID} />
                     <XAxis {...xAxisPropsFor(5)} />
-                    <YAxis stroke="transparent" tick={zoomChartIdx === 5 ? false : TICK} tickLine={false} tickFormatter={fmtRpm} domain={['dataMin - 300', 'dataMax + 300']} width={48} />
+                    <YAxis stroke="transparent" tick={zoomChartIdx === 5 ? false : TICK} tickLine={false} tickFormatter={fmtRpm} domain={['dataMin - 300', 'dataMax + 300']} width={yAxisWidth} />
                     {corners.map((c, i) => <ReferenceLine key={i} x={c.distance} {...CORNER_LINE} />)}
                     {Array.from({ length: n }, (_, i) => (
                       <Line key={i} type="monotone" dataKey={`rpm${i}`} stroke={colors[i]} strokeWidth={i === 0 ? 1.5 : 1.2}

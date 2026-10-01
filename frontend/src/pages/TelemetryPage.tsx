@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Check, Link, Zap } from 'lucide-react';
+import { Check, Link, Zap, Download } from 'lucide-react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { useSubscription } from '../hooks/useSubscription';
+import { useSubscription, CURRENT_SEASON_YEAR } from '../hooks/useSubscription';
 import { useTelemetryCache } from '../hooks/useTelemetryCache';
 import { useAuth } from '../contexts/AuthContext';
 import { getBackendUrl } from '../config';
@@ -93,7 +93,7 @@ export default function TelemetryPage() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const { user, signOut } = useAuth();
-  const { canAccessYear, isPremium, canMakeRequest, incrementRequest } = useSubscription();
+  const { canAccessYear, isPremium, canMakeRequest, incrementRequest, isReady: subscriptionReady } = useSubscription();
   const { getCached, setCached, getTelemetryKey } = useTelemetryCache();
 
   // ── UI state ────────────────────────────────────────────────────────────────
@@ -103,9 +103,11 @@ export default function TelemetryPage() {
   const [authModalOpen, setAuthModalOpen]     = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [urlCopied, setUrlCopied]             = useState(false);
+  const [exportingPng, setExportingPng]       = useState(false);
+  const [exportDone, setExportDone]           = useState(false);
 
   // ── Session selectors ───────────────────────────────────────────────────────
-  const [year,        setYearRaw]    = useState(() => parseInt(searchParams.get('y')  || '2026'));
+  const [year,        setYearRaw]    = useState(() => parseInt(searchParams.get('y')  || String(CURRENT_SEASON_YEAR)));
   const [selectedGP,  setGPRaw]      = useState<number | null>(() => {
     const gp = searchParams.get('gp'); return gp ? parseInt(gp) : null;
   });
@@ -280,10 +282,25 @@ export default function TelemetryPage() {
   }, [comparedDrivers, selectedGP, sessionType, year, canMakeRequest, incrementRequest]);
 
   // ── Year guard ────────────────────────────────────────────────────────────────
+  // Was `y !== 2026 && !canAccessYear(y)` — that exempted exactly the one
+  // year (2026, the current season) this guard exists to gate, so free
+  // users could switch straight into it with no paywall at all.
   const handleYearChange = useCallback((y: number) => {
-    if (y !== 2026 && !canAccessYear(y)) { setShowUpgradeModal(true); return; }
+    if (y >= CURRENT_SEASON_YEAR && !canAccessYear(y)) { setShowUpgradeModal(true); return; }
     setYearRaw(y);
   }, [canAccessYear]);
+
+  // A `y=<current season>` URL (or the default year itself, which is the
+  // current season) restores straight into state before any paywall check
+  // — once subscription status is actually known, bounce back to the
+  // latest free year if this viewer isn't entitled (same pattern as
+  // StatisticsPage).
+  useEffect(() => {
+    if (subscriptionReady && year >= CURRENT_SEASON_YEAR && !canAccessYear(year)) {
+      setYearRaw(CURRENT_SEASON_YEAR - 1);
+      setShowUpgradeModal(true);
+    }
+  }, [subscriptionReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Compare specific laps (from SessionExplorer lap selection) ──────────────
   const handleCompareLaps = useCallback(async (laps: LapSelection[]) => {
@@ -349,6 +366,40 @@ export default function TelemetryPage() {
     });
   }, []);
 
+  // ── PNG export ───────────────────────────────────────────────────────────────
+  const handleExportPng = useCallback(async () => {
+    const target = document.getElementById('telemetry-export-target');
+    if (!target || exportingPng) return;
+    setExportingPng(true);
+    try {
+      // Dynamic import — html2canvas is ~200KB and only ever needed once the
+      // user actually clicks this button, not on every /app page load.
+      const { default: html2canvas } = await import('html2canvas');
+      const bg = getComputedStyle(target).getPropertyValue('--bg').trim() || '#3d0c10';
+      const canvas = await html2canvas(target, {
+        backgroundColor: bg,
+        scale: 2, // export at 2x for a crisp image, not the display's raw pixel size
+        useCORS: true,
+        // The target scrolls internally (overflowY: auto) — without these,
+        // html2canvas only captures whatever fit in the visible viewport and
+        // silently crops everything below the fold (e.g. the RPM chart).
+        height: target.scrollHeight,
+        windowHeight: target.scrollHeight,
+      });
+      const link = document.createElement('a');
+      const drivers = comparedDrivers.length > 0 ? comparedDrivers.join('-') : [driver1, driver2].filter(Boolean).join('-');
+      link.download = `metrikdelta-telemetry-${year}-${drivers || 'comparison'}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+      setExportDone(true);
+      setTimeout(() => setExportDone(false), 2000);
+    } catch (err) {
+      console.error('PNG export failed:', err);
+    } finally {
+      setExportingPng(false);
+    }
+  }, [exportingPng, comparedDrivers, driver1, driver2, year]);
+
   // ── Customer portal ───────────────────────────────────────────────────────────
   const handleManageSubscription = useCallback(async () => {
     if (!user) return;
@@ -379,7 +430,7 @@ export default function TelemetryPage() {
     <SEO
       path="/app"
       title="F1 Telemetry Comparison — Speed, Throttle & Brake Charts | METRIK DELTA"
-      description="Compare any two Formula 1 drivers' telemetry lap by lap: speed, throttle, braking, gear shifts, sector times and tire strategy for every session from 2018 to 2026."
+      description={`Compare any two Formula 1 drivers' telemetry lap by lap: speed, throttle, braking, gear shifts, sector times and tire strategy for every session from 2018 to ${CURRENT_SEASON_YEAR}.`}
       keywords="f1 telemetry comparison, formula 1 speed trace, f1 throttle brake data, f1 lap comparison, f1 sector times, f1 tire strategy, télémétrie f1"
       structuredData={{
         "@context": "https://schema.org",
@@ -497,6 +548,19 @@ export default function TelemetryPage() {
           {urlCopied ? <Check size={14} /> : <Link size={14} />}
         </button>
 
+        {activeView === 'trace' && (multiTelemetryData || telemetryData) && (
+          <button
+            onClick={handleExportPng}
+            disabled={exportingPng}
+            style={{ padding: 6, border: 'none', background: 'transparent', cursor: exportingPng ? 'not-allowed' : 'pointer', color: exportDone ? 'var(--accent)' : 'var(--text-2)', outline: 'none', opacity: exportingPng ? 0.5 : 1 }}
+            title="Download charts as PNG"
+            onMouseEnter={e => { if (!exportDone) e.currentTarget.style.color = 'var(--text)'; }}
+            onMouseLeave={e => { if (!exportDone) e.currentTarget.style.color = 'var(--text-2)'; }}
+          >
+            {exportDone ? <Check size={14} /> : <Download size={14} />}
+          </button>
+        )}
+
         {user ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, color: 'var(--text-2)' }}>
@@ -536,7 +600,7 @@ export default function TelemetryPage() {
 
         {/* TRACE — chart stack */}
         {activeView === 'trace' && (
-          <div style={{ flex: 1, overflowY: 'auto', padding: 12 }}>
+          <div id="telemetry-export-target" style={{ flex: 1, overflowY: 'auto', padding: 12, background: 'var(--bg)' }}>
             {/* Multi path: used whenever the compare button was clicked */}
             {comparedDrivers.length > 0 ? (
               multiTelemetryData ? (

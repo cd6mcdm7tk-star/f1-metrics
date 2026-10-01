@@ -55,8 +55,13 @@
 }
 </script>
 
-<!-- Google Fonts -->
-<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<!-- Google Fonts — loaded async (preload + swap-to-stylesheet on load) so the
+     ~800ms round trip to fonts.googleapis.com doesn't block first paint.
+     &display=swap in the URL still makes the fonts themselves swap in
+     without a FOIT once loaded; this just stops the stylesheet fetch itself
+     from blocking render before then. -->
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap"></noscript>
 </head>
 <body>
 <div id="root"></div>

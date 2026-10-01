@@ -19,6 +19,15 @@ const SESSION_LABELS: Record<string, string> = {
   Q: 'Qualifying', R: 'Race', S: 'Sprint', SQ: 'Sprint Qualifying',
 };
 
+// A later teammate doesn't reuse the team colour (indistinguishable from
+// their teammate's line), but every later teammate used to fall back to
+// the SAME black — so with 2+ teammate pairs selected at once, drivers
+// from DIFFERENT teams all rendered as identical black lines. Each team
+// needing a differentiator now gets its own colour from this palette
+// instead (first team to need one → black, second → purple, etc.), picked
+// to not collide with any real team's own color.
+const TEAMMATE_PALETTE = ['#000000', '#6B2D8E', '#7B4B27', '#B8860B', '#4A5568', '#8B3A62'];
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function fmtTime(s: number | null | undefined): string {
@@ -51,6 +60,7 @@ function SelectField({ label, value, onChange, options, placeholder, disabled }:
         value={value}
         disabled={disabled}
         onChange={e => onChange(e.target.value)}
+        aria-label={label}
         style={{
           width: '100%', padding: '7px 28px 7px 10px',
           background: 'var(--panel)',
@@ -243,14 +253,28 @@ export default function SessionExplorer({
   }, [loadDriver]);
 
   // ── Resolve a plotted driver's color — a later teammate gets a distinct
-  //    neutral marker instead of the identical team color ────────────────────
+  //    neutral marker instead of the identical team color, with each team
+  //    needing one getting its own color from TEAMMATE_PALETTE instead of
+  //    every team's extra driver colliding on the same black ─────────────────
+  const teammateColorByCode = useMemo(() => {
+    const map: Record<string, string> = {};
+    const colorByAnchor = new Map<string, string>();
+    selectedDrivers.forEach((code, idx) => {
+      const anchor = selectedDrivers.slice(0, idx).find(prev => prev !== code && areTeammates(prev, code));
+      if (!anchor) return;
+      let color = colorByAnchor.get(anchor);
+      if (!color) {
+        color = TEAMMATE_PALETTE[colorByAnchor.size % TEAMMATE_PALETTE.length];
+        colorByAnchor.set(anchor, color);
+      }
+      map[code] = color;
+    });
+    return map;
+  }, [selectedDrivers, areTeammates]);
+
   const resolveColor = useCallback((code: string) => {
-    const idx = selectedDrivers.indexOf(code);
-    const isTeammateOfEarlier = idx > 0 && selectedDrivers
-      .slice(0, idx)
-      .some(prev => prev !== code && areTeammates(prev, code));
-    return isTeammateOfEarlier ? '#000000' : getDriverColor(code);
-  }, [selectedDrivers, areTeammates, getDriverColor]);
+    return teammateColorByCode[code] ?? getDriverColor(code);
+  }, [teammateColorByCode, getDriverColor]);
 
   // Chart-only superset: keeps a just-deselected driver's line + data around
   // for the length of its retract animation, without it lingering in the

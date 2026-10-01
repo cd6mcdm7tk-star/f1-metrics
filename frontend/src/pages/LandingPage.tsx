@@ -4,6 +4,7 @@ import LegalLinks from '../components/LegalLinks';
 import SEO from '../components/SEO';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { getApiBase } from '../config';
+import { CURRENT_SEASON_YEAR } from '../hooks/useSubscription';
 
 // ── Palette (Marlboro) ────────────────────────────────────────────────────────
 
@@ -24,7 +25,7 @@ const P = {
 
 interface CalendarRace { round: number; location: string; country: string; date_start: string; }
 
-const CALENDAR_YEAR = 2026;
+const CALENDAR_YEAR = CURRENT_SEASON_YEAR;
 
 function getNextRace(calendar: CalendarRace[]): CalendarRace | null {
   const now = new Date();
@@ -81,7 +82,7 @@ export default function LandingPage() {
 
   if (!race) {
     return (
-      <div style={{
+      <main style={{
         height: '100dvh', width: '100vw',
         background: P.bg,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -94,10 +95,10 @@ export default function LandingPage() {
     <SEO
       path="/"
       title="METRIK DELTA - Professional F1 Telemetry Analysis"
-      description="Compare Formula 1 drivers lap by lap — speed, throttle, braking and gear telemetry, tire strategy and full head-to-head statistics from 2018 to 2026."
+      description={`Compare Formula 1 drivers lap by lap — speed, throttle, braking and gear telemetry, tire strategy and full head-to-head statistics from 2018 to ${CURRENT_SEASON_YEAR}.`}
       keywords="f1 telemetry, formula 1 analysis, f1 data, f1 standings, f1 results, grand prix results, f1 telemetry comparison, race strategy f1, télémétrie f1"
     />
-    <div style={{
+    <main style={{
       ...(isMobile ? { minHeight: '100dvh', height: 'auto', overflowX: 'hidden', overflowY: 'visible' }
                    : { height: '100dvh', overflow: 'hidden' }),
       width: '100%',
@@ -285,7 +286,7 @@ export default function LandingPage() {
         </span>
       </div>
 
-    </div>
+    </main>
     </>
   );
 }

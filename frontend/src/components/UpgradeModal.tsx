@@ -1,6 +1,7 @@
 import { X, Zap, Check, Loader2, TrendingUp, Trophy, Radio } from 'lucide-react'
 import { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
+import { CURRENT_SEASON_YEAR } from '../hooks/useSubscription'
 
 interface UpgradeModalProps {
   isOpen: boolean
@@ -72,7 +73,7 @@ export default function UpgradeModal({ isOpen, onClose, reason = 'current_season
   const getReasonContent = () => {
     switch (reason) {
       case 'current_season':
-        return { icon: <Trophy size={32} color={P.accent} />, title: 'Unlock 2026 Season', description: 'Access live data from the current F1 season' }
+        return { icon: <Trophy size={32} color={P.accent} />, title: `Unlock ${CURRENT_SEASON_YEAR} Season`, description: 'Access live data from the current F1 season' }
       case 'live_timing':
         return { icon: <Radio size={32} color={P.accent} />, title: 'Live Timing Locked', description: 'Follow races in real-time with PRO' }
       default:
@@ -211,10 +212,10 @@ export default function UpgradeModal({ isOpen, onClose, reason = 'current_season
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             {[
-              { title: '2026 Season Access', desc: 'Real-time data from current season' },
+              { title: `${CURRENT_SEASON_YEAR} Season Access`, desc: 'Real-time data from current season' },
               { title: 'Live Timing', desc: 'Live data, GPS tracking, sector times & radio' },
-              { title: 'Full Telemetry', desc: 'Detailed lap-by-lap analysis 2026 season' },
-              { title: 'Historical Data', desc: 'Full access to 1950-2025' },
+              { title: 'Full Telemetry', desc: `Detailed lap-by-lap analysis ${CURRENT_SEASON_YEAR} season` },
+              { title: 'Historical Data', desc: `Full access to 1950-${CURRENT_SEASON_YEAR - 1}` },
             ].map(({ title, desc }) => (
               <div key={title} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
                 <Check size={14} color={P.accent} style={{ flexShrink: 0, marginTop: 2 }} />
