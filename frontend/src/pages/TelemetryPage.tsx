@@ -107,7 +107,11 @@ export default function TelemetryPage() {
   const [exportDone, setExportDone]           = useState(false);
 
   // ── Session selectors ───────────────────────────────────────────────────────
-  const [year,        setYearRaw]    = useState(() => parseInt(searchParams.get('y')  || String(CURRENT_SEASON_YEAR)));
+  // Defaults to the latest FREE year (not the current season) so a free
+  // user landing here fresh sees real data immediately instead of being
+  // hit by the upgrade modal before they've done anything — matches
+  // StatisticsPage's default, which never had this problem.
+  const [year,        setYearRaw]    = useState(() => parseInt(searchParams.get('y')  || String(CURRENT_SEASON_YEAR - 1)));
   const [selectedGP,  setGPRaw]      = useState<number | null>(() => {
     const gp = searchParams.get('gp'); return gp ? parseInt(gp) : null;
   });
