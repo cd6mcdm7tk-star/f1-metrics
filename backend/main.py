@@ -497,6 +497,15 @@ async def _openf1_request(path: str, params: dict) -> list:
                     status_code=503,
                     detail="OpenF1 API rate limit atteint. Réessayez dans quelques secondes."
                 )
+            if resp.status_code == 404:
+                # OpenF1 returns a bare 404 (not 200 + []) when a filtered
+                # query matches nothing — e.g. a real, valid session_key for
+                # a session that just hasn't happened yet, so there's no lap
+                # data. Every caller already checks for an empty result and
+                # raises its own clean, specific 404 (e.g. "No completed
+                # laps for driver X") — treating this as empty lets that
+                # existing handling run instead of this raising first.
+                return []
             resp.raise_for_status()
             return resp.json()
 
