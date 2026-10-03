@@ -14,7 +14,26 @@ from psycopg2 import pool
 logger = logging.getLogger(__name__)
 
 
+def _clean_telemetry_data(telemetry_data):
+    # psycopg2 returns JSONB as dict already
+    if isinstance(telemetry_data, str):
+        telemetry_data = json.loads(telemetry_data)
+    # Nettoyer les NaN/Inf dans les données récupérées (listes ou scalaires)
+    if telemetry_data:
+        for key, value in telemetry_data.items():
+            if isinstance(value, list):
+                telemetry_data[key] = [
+                    0.0 if isinstance(v, float) and (math.isnan(v) or math.isinf(v)) else v
+                    for v in value
+                ]
+            elif isinstance(value, float) and (math.isnan(value) or math.isinf(value)):
+                telemetry_data[key] = 0.0
+    return telemetry_data
+
+
 class PostgresDB:
+    MIN_IDLE_CONNECTIONS = 4
+
     def __init__(self):
         self.pool: Optional[pool.ThreadedConnectionPool] = None
         self._connect()
@@ -25,12 +44,23 @@ class PostgresDB:
             logger.warning("DATABASE_URL not set - PostgreSQL disabled, falling back to FastF1")
             return
         try:
+            # The pool only keeps `minconn` idle connections and closes any
+            # extra one handed back — so a burst of parallel requests above
+            # that would each pay a brand-new connection (TCP + TLS + auth,
+            # several round trips) instead of reusing a warm one.
             self.pool = pool.ThreadedConnectionPool(
-                minconn=1,
+                minconn=self.MIN_IDLE_CONNECTIONS,
                 maxconn=10,
                 dsn=database_url,
+                # Keepalives stop idle pooled connections from being silently
+                # dropped along the way, and detect it when they are anyway.
+                keepalives=1,
+                keepalives_idle=30,
+                keepalives_interval=10,
+                keepalives_count=3,
             )
-            self.pool.getconn()  # test the connection
+            conn = self.pool.getconn()  # test the connection
+            self.pool.putconn(conn)
             logger.info("PostgreSQL connected successfully")
         except Exception as e:
             logger.error(f"PostgreSQL connection failed: {e}")
@@ -47,24 +77,38 @@ class PostgresDB:
         """
         if not self.pool:
             return None
-        conn = self.pool.getconn()
-        try:
-            with conn.cursor() as cur:
-                cur.execute(query, params)
-                if fetch == "one":
-                    result = cur.fetchone()
-                elif fetch == "all":
-                    result = cur.fetchall()
-                else:
-                    result = None
-            conn.commit()
-            return result
-        except Exception as e:
-            conn.rollback()
-            logger.error(f"DB error: {e}")
-            raise
-        finally:
-            self.pool.putconn(conn)
+        # Worst case every idle pooled connection is dead (e.g. after a
+        # database restart): each one is discarded in turn until the pool
+        # opens a fresh one.
+        attempts = self.MIN_IDLE_CONNECTIONS + 1
+        for attempt in range(attempts):
+            conn = self.pool.getconn()
+            broken = False
+            try:
+                # Autocommit: every query here is a single statement, so it's
+                # atomic on its own — without it psycopg2 wraps each one in
+                # BEGIN ... COMMIT, two extra round trips to the database.
+                conn.autocommit = True
+                with conn.cursor() as cur:
+                    cur.execute(query, params)
+                    if fetch == "one":
+                        return cur.fetchone()
+                    if fetch == "all":
+                        return cur.fetchall()
+                    return None
+            except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
+                # An idle pooled connection the server (or a proxy in between)
+                # has since dropped — discard it and retry on another one.
+                broken = True
+                if attempt == attempts - 1:
+                    logger.error(f"DB error: {e}")
+                    raise
+                logger.warning(f"DB connection lost, retrying: {e}")
+            except Exception as e:
+                logger.error(f"DB error: {e}")
+                raise
+            finally:
+                self.pool.putconn(conn, close=broken)
 
     # ------------------------------------------------------------------
     # DDL
@@ -170,20 +214,49 @@ class PostgresDB:
         if row is None:
             return None
         telemetry_data, lap_number = row
-        # psycopg2 returns JSONB as dict already
-        if isinstance(telemetry_data, str):
-            telemetry_data = json.loads(telemetry_data)
-        # Nettoyer les NaN/Inf dans les données récupérées (listes ou scalaires)
-        if telemetry_data:
-            for key, value in telemetry_data.items():
-                if isinstance(value, list):
-                    telemetry_data[key] = [
-                        0.0 if isinstance(v, float) and (math.isnan(v) or math.isinf(v)) else v
-                        for v in value
-                    ]
-                elif isinstance(value, float) and (math.isnan(value) or math.isinf(value)):
-                    telemetry_data[key] = 0.0
-        return {"telemetry_data": telemetry_data, "lap_number": lap_number}
+        return {"telemetry_data": _clean_telemetry_data(telemetry_data), "lap_number": lap_number}
+
+    def get_telemetry_with_metadata(self, refs: list[tuple]) -> dict[tuple, dict]:
+        """
+        Batch read for several laps in one round trip: each lap's telemetry
+        plus its lap-time/sector metadata (what get_telemetry followed by
+        get_lap_metadata return, per lap — previously two queries per lap).
+
+        refs: (year, gp_round, session_type, driver_code, lap_type) tuples.
+        Returns {ref: {'telemetry_data', 'lap_number', 'lap_time',
+        'sector1_time', 'sector2_time', 'sector3_time'}} — refs with no
+        stored telemetry are simply absent.
+        """
+        if not refs:
+            return {}
+        rows = self._execute(
+            """
+            SELECT t.year, t.gp_round, t.session_type, t.driver_code, t.lap_type,
+                   t.telemetry_data, t.lap_number,
+                   l.lap_time, l.sector1_time, l.sector2_time, l.sector3_time
+            FROM unnest(%s::int[], %s::int[], %s::text[], %s::text[], %s::text[])
+                 AS r(year, gp_round, session_type, driver_code, lap_type)
+            JOIN telemetry t
+              ON t.year = r.year AND t.gp_round = r.gp_round AND t.session_type = r.session_type
+             AND t.driver_code = r.driver_code AND t.lap_type = r.lap_type
+            LEFT JOIN laps l
+              ON l.year = t.year AND l.gp_round = t.gp_round AND l.session_type = t.session_type
+             AND l.driver_code = t.driver_code AND l.lap_number = t.lap_number
+            """,
+            tuple(list(col) for col in zip(*refs)),
+            fetch="all",
+        )
+        out = {}
+        for year, gp_round, session_type, driver_code, lap_type, data, lap_number, lt, s1, s2, s3 in rows or []:
+            out[(year, gp_round, session_type, driver_code, lap_type)] = {
+                "telemetry_data": _clean_telemetry_data(data),
+                "lap_number": lap_number,
+                "lap_time": lt,
+                "sector1_time": s1,
+                "sector2_time": s2,
+                "sector3_time": s3,
+            }
+        return out
 
     def save_telemetry(
         self,

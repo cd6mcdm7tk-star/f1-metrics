@@ -1,3 +1,4 @@
+import asyncio
 import redis
 import json
 import os
@@ -131,6 +132,50 @@ class RedisCache:
             logger.error(f"❌ JSON encode error for {key}: {e}")
             return False
     
+    def get_raw(self, key: str) -> Optional[str]:
+        """
+        Valeur JSON brute (non désérialisée) — pour la renvoyer telle quelle
+        dans la réponse HTTP plutôt que de la décoder puis la ré-encoder,
+        ce qui coûte cher sur les gros payloads (télémétrie multi-tours).
+        """
+        if not self.client:
+            value = self._mem_get(key)
+            return None if value is None else json.dumps(value)
+
+        try:
+            value = self.client.get(key)
+            if value is not None:
+                logger.info(f"✅ Cache HIT: {key}")
+            return value
+        except redis.RedisError as e:
+            logger.error(f"❌ Redis GET error for {key}: {e}")
+            return None
+
+    def set_raw(self, key: str, serialized: str, ttl: int = 3600) -> bool:
+        """Comme set(), pour une valeur déjà sérialisée en JSON."""
+        if not self.client:
+            self._mem_set(key, json.loads(serialized), ttl)
+            return True
+
+        try:
+            self.client.setex(key, ttl, serialized)
+            logger.info(f"💾 Cache SET: {key} (TTL: {ttl}s)")
+            return True
+        except redis.RedisError as e:
+            logger.error(f"❌ Redis SET error for {key}: {e}")
+            return False
+
+    # Versions async : le client Redis est synchrone, et chaque appel fait un
+    # aller-retour réseau — appelé directement dans un endpoint async, il
+    # bloque toute la boucle d'événements (donc toutes les autres requêtes en
+    # cours) pendant ce temps. Exécutées dans un thread, elles ne bloquent que
+    # la requête qui les attend.
+    async def aget(self, key: str) -> Optional[Any]:
+        return await asyncio.to_thread(self.get, key)
+
+    async def aget_raw(self, key: str) -> Optional[str]:
+        return await asyncio.to_thread(self.get_raw, key)
+
     def delete(self, key: str) -> bool:
         """Supprime une clé du cache"""
         if not self.client:

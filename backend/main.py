@@ -3,13 +3,15 @@ from pydantic import BaseModel
 from typing import Optional, List
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
+from starlette.background import BackgroundTask
 from app.utils.services.redis_cache import redis_cache
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 import asyncio
 import datetime
+import json
 import logging
 import math
 import traceback
@@ -76,6 +78,12 @@ async def startup_event():
     # Ingestion gérée par Railway Cron Job séparé (python jobs/schedule_ingest.py)
     print("[Scheduler] Ingestion handled by dedicated Railway Cron Job", flush=True)
 
+    # Seulement avec Redis (prod) : en local, le cache mémoire repart à zéro
+    # à chaque rechargement du serveur, et chaque prewarm consommerait ~30
+    # requêtes du quota horaire Jolpica pour rien.
+    if redis_cache.client:
+        app.state.season_prewarm = asyncio.create_task(_prewarm_seasons())
+
 
 # Root endpoint
 @app.get("/")
@@ -120,7 +128,7 @@ def _fetch_grands_prix_sync(year: int) -> list[dict]:
 
 async def _get_grands_prix_cached(year: int) -> list[dict]:
     cache_key = f"grands_prix:{year}"
-    cached = redis_cache.get(cache_key)
+    cached = await redis_cache.aget(cache_key)
     if cached:
         return cached.get("grands_prix", [])
     grands_prix = await asyncio.to_thread(_fetch_grands_prix_sync, year)
@@ -195,7 +203,7 @@ async def get_drivers(request: Request, year: int, gp_round: int, session_type: 
         
         # 🔥 ÉTAPE 1 : Vérifier Redis cache
         cache_key = f"drivers:{year}:{gp_round}:{session_type}"
-        cached_data = redis_cache.get(cache_key)
+        cached_data = await redis_cache.aget(cache_key)
         
         if cached_data:
             log_success("/api/drivers", cache_hit=True)
@@ -530,7 +538,12 @@ async def _openf1_get_session_key(year: int, gp_round: int, session_type: str) -
         "year": year,
         "session_name": session_name,
     })
-    race_sessions = [s for s in all_sessions if "test" not in s.get("meeting_name", "").lower()]
+    # Cancelled events stay in OpenF1's session list (2026: Sakhir, Jeddah) —
+    # never a valid match for a round on our calendar.
+    race_sessions = [
+        s for s in all_sessions
+        if "test" not in s.get("meeting_name", "").lower() and not s.get("is_cancelled")
+    ]
     if not race_sessions:
         raise HTTPException(status_code=404, detail=f"No {session_name} sessions found for {year}")
 
@@ -561,14 +574,17 @@ async def _openf1_get_session_key(year: int, gp_round: int, session_type: str) -
         logger.warning(f"Date-based session resolution failed for {year} R{gp_round}: {e}")
 
     if session_key is None:
-        # Fallback — positional match (only if date resolution above failed)
-        race_sessions_by_date = sorted(race_sessions, key=lambda s: s.get("date_start", ""))
-        if gp_round < 1 or gp_round > len(race_sessions_by_date):
-            raise HTTPException(
-                status_code=404,
-                detail=f"Round {gp_round} not found for {year} {session_name} ({len(race_sessions_by_date)} sessions found)"
-            )
-        session_key = race_sessions_by_date[gp_round - 1]["session_key"]
+        # No positional fallback: OpenF1's list and our FastF1 calendar don't
+        # contain the same events (cancelled GPs, late additions), so "the
+        # Nth session" silently lands on a different race — and since the
+        # result below is saved permanently, that wrong race stuck for good
+        # (2026 R16 Kuala Lumpur resolved to Madrid before OpenF1 had
+        # published Kuala Lumpur's sessions). Not cached, so it resolves
+        # correctly as soon as OpenF1 publishes the session.
+        raise HTTPException(
+            status_code=404,
+            detail=f"{session_name} for {year} round {gp_round} isn't available yet"
+        )
 
     # Save to both PostgreSQL (permanent) and Redis (TTL fallback)
     if db.available:
@@ -948,16 +964,19 @@ class TelemetryMultiRequest(BaseModel):
     laps: List[LapRef]
 
 
-def _fetch_raw_lap_from_db(year: int, gp: int, session: str, driver: str, lap_number) -> dict | None:
-    """Fetch raw telemetry arrays for one lap from PostgreSQL. Returns None if unavailable."""
+def _db_lap_ref(lap_ref: LapRef) -> tuple:
+    """A lap's key in the telemetry table: (year, gp_round, session_type, driver_code, lap_type)."""
+    lap_type = "fastest" if lap_ref.lap is None else f"lap_{lap_ref.lap}"
+    return (lap_ref.year, lap_ref.gp, lap_ref.session, lap_ref.driver, lap_type)
+
+
+def _raw_lap_from_db_row(lap_ref: LapRef, row: dict) -> dict | None:
+    """Raw telemetry arrays for one lap, from its row in
+    db.get_telemetry_with_metadata(). Returns None if the stored data is unusable."""
     try:
-        lap_type = "fastest" if lap_number is None else f"lap_{lap_number}"
-        t = db.get_telemetry(year, gp, session, driver, lap_type)
-        if t is None:
-            return None
-        actual_lap = t["lap_number"]
-        meta = db.get_lap_metadata(year, gp, session, driver, actual_lap) or {}
-        d = t["telemetry_data"]
+        actual_lap = row["lap_number"]
+        meta = row
+        d = row["telemetry_data"]
 
         dist_arr = np.array(d["distance"], dtype=float)
         _, idx = np.unique(dist_arr, return_index=True)
@@ -984,21 +1003,16 @@ def _fetch_raw_lap_from_db(year: int, gp: int, session: str, driver: str, lap_nu
             "lap_number": actual_lap,
         }
     except Exception as e:
-        logger.warning(f"DB fetch failed for {driver} {year} R{gp} {session}: {e}")
+        logger.warning(f"DB data unusable for {lap_ref.driver} {lap_ref.year} R{lap_ref.gp} {lap_ref.session}: {e}")
         return None
 
 
 async def _fetch_raw_lap(lap_ref: LapRef) -> dict:
-    """Fetch raw telemetry for one lap. Tries DB → OpenF1 → FastF1."""
+    """Fetch raw telemetry for one lap not stored in PostgreSQL (the DB is
+    read up front for all of a request's laps at once). OpenF1 → FastF1."""
     year, gp, session, driver, lap = lap_ref.year, lap_ref.gp, lap_ref.session, lap_ref.driver, lap_ref.lap
 
-    # 1. PostgreSQL fast path
-    if db.available:
-        result = await asyncio.to_thread(_fetch_raw_lap_from_db, year, gp, session, driver, lap)
-        if result:
-            return result
-
-    # 2. OpenF1 direct (2026+)
+    # 1. OpenF1 direct (2026+)
     if year >= 2026:
         session_key = await _openf1_get_session_key(year, gp, session)
         await asyncio.sleep(0.3)
@@ -1027,7 +1041,7 @@ async def _fetch_raw_lap(lap_ref: LapRef) -> dict:
             "lap_number": lap_info["lap_number"],
         }
 
-    # 3. FastF1 fallback
+    # 2. FastF1 fallback
     def _ff1_fetch():
         sess = fastf1.get_session(year, gp, session)
         sess.load()
@@ -1096,16 +1110,41 @@ async def get_telemetry_multi(request: Request, body: TelemetryMultiRequest):
     cache_key = "tel:multi:" + hashlib.md5(
         _json.dumps([l.model_dump() for l in body.laps], sort_keys=True).encode()
     ).hexdigest()[:16]
-    cached = redis_cache.get(cache_key)
+    # Served as the stored JSON text directly — decoding it only for FastAPI
+    # to re-encode the exact same thing costs real time at this payload size.
+    cached = await redis_cache.aget_raw(cache_key)
     if cached:
-        return cached
+        return Response(content=cached, media_type="application/json")
 
-    # Fetch all laps sequentially (rate-limit safety for OpenF1)
+    # PostgreSQL for every requested lap in a single query, alongside the
+    # circuit's corner positions from Redis — both needed, neither depends on
+    # the other, so one round trip instead of one per lap plus one.
+    ref = body.laps[0]
+    corners_key = f"circuit:corners:{ref.year}:{ref.gp}"
+    db_rows, circuit_data = await asyncio.gather(
+        asyncio.to_thread(db.get_telemetry_with_metadata, [_db_lap_ref(l) for l in body.laps])
+        if db.available else asyncio.sleep(0, result={}),
+        redis_cache.aget(corners_key),
+        return_exceptions=True,
+    )
+    if isinstance(db_rows, BaseException):
+        logger.warning(f"DB telemetry unavailable: {db_rows}")
+        db_rows = {}
+    if isinstance(circuit_data, BaseException):
+        circuit_data = None
+
+    # Laps not in the DB: fetched one by one, spaced out between OpenF1
+    # calls (rate-limit safety) — a lap served from the DB needs no pause.
     raw_laps: list[dict] = []
-    for i, lap_ref in enumerate(body.laps):
-        if i > 0 and lap_ref.year >= 2026:
-            await asyncio.sleep(0.5)
-        raw = await _fetch_raw_lap(lap_ref)
+    openf1_used = False
+    for lap_ref in body.laps:
+        row = db_rows.get(_db_lap_ref(lap_ref))
+        raw = _raw_lap_from_db_row(lap_ref, row) if row else None
+        if raw is None:
+            if openf1_used and lap_ref.year >= 2026:
+                await asyncio.sleep(0.5)
+            raw = await _fetch_raw_lap(lap_ref)
+            openf1_used = openf1_used or lap_ref.year >= 2026
         raw_laps.append(raw)
 
     # Official FIA corner numbers — static (X, Y) from FastF1 circuit reference data,
@@ -1121,12 +1160,9 @@ async def get_telemetry_multi(request: Request, body: TelemetryMultiRequest):
     corners: list[dict] = []
     rotation: float = 0.0
     try:
-        ref = body.laps[0]
-        corners_key = f"circuit:corners:{ref.year}:{ref.gp}"
-        circuit_data = redis_cache.get(corners_key)
         if circuit_data is None:
             circuit_data = await asyncio.to_thread(_get_circuit_corners_sync, ref.year, ref.gp, ref.session)
-            redis_cache.set(corners_key, circuit_data, ttl=2592000)  # 30 days — circuit layout is static
+            await asyncio.to_thread(redis_cache.set, corners_key, circuit_data, 2592000)  # 30 days — circuit layout is static
 
         raw_corners = circuit_data["corners"]
         rotation = circuit_data["rotation"]
@@ -1174,7 +1210,7 @@ async def get_telemetry_multi(request: Request, body: TelemetryMultiRequest):
 
     # Pre-compute speeds on grid for vectorized cumulative time
     n_laps = len(raw_laps)
-    speeds_grid = np.array([[float(f(d)) for d in common_dist] for f in i_speed])  # (n_laps, N)
+    speeds_grid = np.array([f(common_dist) for f in i_speed], dtype=float)  # (n_laps, N)
 
     # Cumulative lap time per driver
     cum_times = np.zeros((n_laps, N))
@@ -1190,20 +1226,34 @@ async def get_telemetry_multi(request: Request, body: TelemetryMultiRequest):
         if lt and cum_times[j, -1] > 0:
             cum_times[j] *= lt / cum_times[j, -1]
 
-    # Build telemetry array
-    telemetry = []
-    for i, dist in enumerate(common_dist):
-        telemetry.append({
-            "distance":  float(dist),
-            "speeds":    [float(speeds_grid[j, i]) for j in range(n_laps)],
-            "throttles": [float(i_throttle[j](dist)) for j in range(n_laps)],
-            "brakes":    [bool(i_brake[j](dist)) for j in range(n_laps)],
-            "gears":     [int(i_gear[j](dist)) for j in range(n_laps)],
-            "rpms":      [float(i_rpm[j](dist)) for j in range(n_laps)],
-            "deltas":    [float(cum_times[j, i] - cum_times[0, i]) for j in range(n_laps)],
-            "x":         float(i_x(dist)),
-            "y":         float(i_y(dist)),
-        })
+    # Build telemetry array — each series evaluated over the whole grid in one
+    # call, then transposed to per-point lists: scipy's interpolators are
+    # vectorized, and calling them one point at a time (n_laps × N × 4 calls)
+    # was most of this endpoint's CPU time.
+    def _grid(interps) -> np.ndarray:  # (N, n_laps)
+        return np.array([f(common_dist) for f in interps], dtype=float).T
+
+    speeds = speeds_grid.T.tolist()
+    throttles = _grid(i_throttle).tolist()
+    brakes = (_grid(i_brake) != 0).tolist()
+    gears = _grid(i_gear).astype(int).tolist()
+    rpms = _grid(i_rpm).tolist()
+    deltas = (cum_times - cum_times[0]).T.tolist()
+    dists, xs, ys = common_dist.tolist(), i_x(common_dist).tolist(), i_y(common_dist).tolist()
+    telemetry = [
+        {
+            "distance":  dists[i],
+            "speeds":    speeds[i],
+            "throttles": throttles[i],
+            "brakes":    brakes[i],
+            "gears":     gears[i],
+            "rpms":      rpms[i],
+            "deltas":    deltas[i],
+            "x":         xs[i],
+            "y":         ys[i],
+        }
+        for i in range(N)
+    ]
 
     drivers_meta = [
         {
@@ -1214,8 +1264,15 @@ async def get_telemetry_multi(request: Request, body: TelemetryMultiRequest):
     ]
 
     result = {"drivers": drivers_meta, "telemetry": telemetry, "corners": corners, "rotation": rotation}
-    redis_cache.set(cache_key, result, ttl=3600)
-    return result
+    # Serialized once (same settings as FastAPI's own JSON responses) for both
+    # the response and the cache; the cache write happens after the response
+    # is sent, so the user never waits on that round trip.
+    payload = _json.dumps(result, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
+    return Response(
+        content=payload,
+        media_type="application/json",
+        background=BackgroundTask(redis_cache.set_raw, cache_key, payload, 3600),
+    )
 
 
 @app.get("/api/session-laps/{year}/{gp_round}/{session_type}/{driver}")
@@ -1240,59 +1297,72 @@ async def get_session_laps(
             "driver": driver
         })
         
-        # 🔥 ÉTAPE 1 : Vérifier Redis cache
+        # 🔥 ÉTAPE 1 : PostgreSQL (sessions ingérées) et Redis (tout le reste),
+        # interrogés en même temps plutôt que l'un après l'autre — chaque
+        # aller-retour vers l'un ou l'autre coûte cher, autant n'en payer qu'un.
         cache_key = redis_cache.get_cache_key_laps(year, gp_round, session_type, driver)
-        cached_data = redis_cache.get(cache_key)
-        
+        if db.available:
+            cached_data, db_laps = await asyncio.gather(
+                redis_cache.aget(cache_key),
+                asyncio.to_thread(db.get_laps, year, gp_round, session_type, driver),
+                return_exceptions=True,
+            )
+            if isinstance(db_laps, BaseException):
+                logger.warning(f"DB laps unavailable for {driver} {year} R{gp_round} {session_type}: {db_laps}")
+                db_laps = []
+            if isinstance(cached_data, BaseException):
+                cached_data = None
+        else:
+            cached_data, db_laps = await redis_cache.aget(cache_key), []
+
+        # ÉTAPE 2a : PostgreSQL — source de vérité quand la session est ingérée,
+        # donc prioritaire sur une éventuelle entrée Redis plus ancienne. Pas
+        # recopié dans Redis : il serait relu en même temps que la base, il
+        # ne ferait gagner aucun temps.
+        if db_laps:
+            fastest_time = min((l["lap_time"] for l in db_laps if l["lap_time"] is not None), default=None)
+            laps_data = []
+            for l in db_laps:
+                lt = l["lap_time"]
+                is_pb = fastest_time is not None and lt is not None and abs(lt - fastest_time) < 0.001
+                laps_data.append({
+                    "Position":       None,
+                    "Id":             f"{year}_{gp_round}_{l['lap_number']}_{driver}",
+                    "LapNumber":      l["lap_number"],
+                    "LapTime":        lt,
+                    "Sector1Time":    l["sector1_time"],
+                    "Sector2Time":    l["sector2_time"],
+                    "Sector3Time":    l["sector3_time"],
+                    "IsPersonalBest": bool(is_pb),
+                    "IsHotLap":       lt is not None,
+                    "HasTelemetry":   bool(l["telemetry_available"]),
+                    "Team":           None,
+                    "Driver":         driver,
+                    "Compound":       l["compound"],
+                    "AirTemp":        None,
+                    "TrackTemp":      None,
+                    "WindSpeed":      None,
+                })
+            result = {
+                "driver":      driver,
+                "team":        None,
+                "session":     f"{year} R{gp_round} {session_type}",
+                "year":        year,
+                "round":       gp_round,
+                "sessionType": session_type,
+                "totalLaps":   len(laps_data),
+                "laps":        laps_data,
+                "source":      "postgresql",
+            }
+            log_success("/api/session-laps", cache_hit=False)
+            return result
+
+        # ÉTAPE 2b : Redis — sessions non ingérées déjà servies récemment
         if cached_data:
             log_success("/api/session-laps", cache_hit=True)
             return cached_data
 
-        # ÉTAPE 2a : PostgreSQL fast path
-        if db.available:
-            db_laps = await asyncio.to_thread(
-                db.get_laps, year, gp_round, session_type, driver
-            )
-            if db_laps:
-                fastest_time = min((l["lap_time"] for l in db_laps if l["lap_time"] is not None), default=None)
-                laps_data = []
-                for l in db_laps:
-                    lt = l["lap_time"]
-                    is_pb = fastest_time is not None and lt is not None and abs(lt - fastest_time) < 0.001
-                    laps_data.append({
-                        "Position":       None,
-                        "Id":             f"{year}_{gp_round}_{l['lap_number']}_{driver}",
-                        "LapNumber":      l["lap_number"],
-                        "LapTime":        lt,
-                        "Sector1Time":    l["sector1_time"],
-                        "Sector2Time":    l["sector2_time"],
-                        "Sector3Time":    l["sector3_time"],
-                        "IsPersonalBest": bool(is_pb),
-                        "IsHotLap":       lt is not None,
-                        "HasTelemetry":   bool(l["telemetry_available"]),
-                        "Team":           None,
-                        "Driver":         driver,
-                        "Compound":       l["compound"],
-                        "AirTemp":        None,
-                        "TrackTemp":      None,
-                        "WindSpeed":      None,
-                    })
-                result = {
-                    "driver":      driver,
-                    "team":        None,
-                    "session":     f"{year} R{gp_round} {session_type}",
-                    "year":        year,
-                    "round":       gp_round,
-                    "sessionType": session_type,
-                    "totalLaps":   len(laps_data),
-                    "laps":        laps_data,
-                    "source":      "postgresql",
-                }
-                redis_cache.set(cache_key, result, ttl=3600)
-                log_success("/api/session-laps", cache_hit=False)
-                return result
-
-        # ÉTAPE 2b : Cache MISS → OpenF1 (2026+) ou FastF1 (< 2026)
+        # ÉTAPE 2c : Cache MISS → OpenF1 (2026+) ou FastF1 (< 2026)
         if year >= 2026:
             session_key = await _openf1_get_session_key(year, gp_round, session_type)
             driver_num = await _openf1_get_driver_number(session_key, driver)
@@ -2171,6 +2241,168 @@ async def get_strategy_comparison(year: int, gp_round: int):
 
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ======================================================================
+# SEASON BUNDLE — everything the Statistics page needs for one season
+# ======================================================================
+# The page used to call Jolpica straight from each visitor's browser: ~7
+# requests per season change and ~7 more per driver-pair change, each
+# visitor hitting Jolpica's rate limit (429s) on their own. Instead the
+# whole season is assembled here once, shared through Redis, and the page
+# computes every head-to-head locally from it.
+
+JOLPICA_BASE = "https://api.jolpi.ca/ergast/f1"
+# Jolpica allows a ~4 req/s burst (and 500/h sustained) per client IP —
+# every request from this server shares one budget, so they're spaced out.
+_JOLPICA_MIN_INTERVAL = 0.3
+_jolpica_slot_lock = asyncio.Lock()
+_jolpica_next_slot = 0.0
+_season_build_locks: dict[int, asyncio.Lock] = {}
+
+
+async def _jolpica_get(client: httpx.AsyncClient, path: str, params: dict | None = None) -> dict:
+    global _jolpica_next_slot
+    loop = asyncio.get_running_loop()
+    for attempt in range(5):
+        async with _jolpica_slot_lock:
+            now = loop.time()
+            wait = _jolpica_next_slot - now
+            _jolpica_next_slot = max(now, _jolpica_next_slot) + _JOLPICA_MIN_INTERVAL
+        if wait > 0:
+            await asyncio.sleep(wait)
+        resp = await client.get(f"{JOLPICA_BASE}/{path}", params=params, timeout=20)
+        if resp.status_code == 429:
+            await asyncio.sleep(min(2 * 2 ** attempt, 16))
+            continue
+        resp.raise_for_status()
+        return resp.json()["MRData"]
+    raise HTTPException(status_code=503, detail="Jolpica rate limit — try again shortly")
+
+
+def _slim_driver(d: dict) -> dict:
+    return {k: d[k] for k in ("driverId", "code", "givenName", "familyName", "permanentNumber") if k in d}
+
+
+def _slim_result(r: dict) -> dict:
+    """One classification entry, reduced to the fields the page reads —
+    same Jolpica key names, so its parsing code works on it unchanged."""
+    out = {"position": r.get("position"), "Driver": _slim_driver(r["Driver"])}
+    for k in ("points", "grid", "status"):
+        if k in r:
+            out[k] = r[k]
+    if "Constructor" in r:
+        out["Constructor"] = {"name": r["Constructor"]["name"]}
+    if (r.get("FastestLap") or {}).get("rank"):
+        out["FastestLap"] = {"rank": r["FastestLap"]["rank"]}
+    return out
+
+
+async def _jolpica_all_races(client: httpx.AsyncClient, path: str, key: str) -> list[dict]:
+    """Every race of a season-wide endpoint, with each race's full
+    classification under `key`. Jolpica hard-caps these at 100 entries per
+    page whatever `limit` says (a season is ~480 entries), so: first page
+    for the total, the rest in parallel, then merged by round — a single
+    race's classification can itself straddle a page boundary."""
+    first = await _jolpica_get(client, path, {"limit": 100, "offset": 0})
+    total = int(first.get("total", 0))
+    rest = await asyncio.gather(*[
+        _jolpica_get(client, path, {"limit": 100, "offset": off}) for off in range(100, total, 100)
+    ])
+    by_round: dict[int, dict] = {}
+    for page in [first, *rest]:
+        for race in page["RaceTable"]["Races"]:
+            entry = by_round.setdefault(int(race["round"]), {"round": race["round"], "raceName": race["raceName"], key: []})
+            entry[key].extend(_slim_result(r) for r in race.get(key, []))
+    return [by_round[r] for r in sorted(by_round)]
+
+
+async def _build_season_bundle(year: int) -> dict:
+    async with httpx.AsyncClient() as client:
+        results, qualifying, sprints, driver_st, constructor_st = await asyncio.gather(
+            _jolpica_all_races(client, f"{year}/results.json", "Results"),
+            _jolpica_all_races(client, f"{year}/qualifying.json", "QualifyingResults"),
+            _jolpica_all_races(client, f"{year}/sprint.json", "SprintResults"),
+            _jolpica_get(client, f"{year}/driverStandings.json"),
+            _jolpica_get(client, f"{year}/constructorStandings.json"),
+        )
+    driver_lists = driver_st["StandingsTable"]["StandingsLists"]
+    constructor_lists = constructor_st["StandingsTable"]["StandingsLists"]
+    return {
+        "year": year,
+        "results": results,
+        "qualifying": qualifying,
+        "sprints": sprints,
+        "driverStandings": [
+            {
+                "position": s.get("position"),
+                "points": s.get("points"),
+                "Driver": _slim_driver(s["Driver"]),
+                "Constructors": [{"name": c["name"]} for c in s.get("Constructors", [])],
+            }
+            for s in (driver_lists[0]["DriverStandings"] if driver_lists else [])
+        ],
+        "constructorStandings": [
+            {"position": s.get("position"), "points": s.get("points"), "Constructor": {"name": s["Constructor"]["name"]}}
+            for s in (constructor_lists[0]["ConstructorStandings"] if constructor_lists else [])
+        ],
+    }
+
+
+def _season_is_closed(year: int) -> bool:
+    return year < datetime.date.today().year
+
+
+async def _get_season_payload(year: int) -> str:
+    """The season bundle as JSON text — from Redis, else built from Jolpica
+    and cached. One build at a time per season: concurrent requests for a
+    season not cached yet wait for that build instead of each starting one."""
+    cache_key = f"season:v1:{year}"
+    cached = await redis_cache.aget_raw(cache_key)
+    if cached:
+        return cached
+    lock = _season_build_locks.setdefault(year, asyncio.Lock())
+    async with lock:
+        cached = await redis_cache.aget_raw(cache_key)
+        if cached:
+            return cached
+        bundle = await _build_season_bundle(year)
+        payload = json.dumps(bundle, ensure_ascii=False, separators=(",", ":"))
+        # A finished season only ever gets rare corrections; the current one
+        # changes after each race weekend.
+        ttl = 7 * 86400 if _season_is_closed(year) else 3600
+        await asyncio.to_thread(redis_cache.set_raw, cache_key, payload, ttl)
+        return payload
+
+
+@app.get("/api/season/{year}")
+@limiter.limit("30/minute")
+async def get_season(request: Request, year: int):
+    if year < 1950 or year > datetime.date.today().year:
+        raise HTTPException(status_code=404, detail=f"No season {year}")
+    try:
+        payload = await _get_season_payload(year)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Season bundle failed for {year}: {e}")
+        raise HTTPException(status_code=502, detail="Season data source unavailable")
+    return Response(
+        content=payload,
+        media_type="application/json",
+        headers={"Cache-Control": f"public, max-age={86400 if _season_is_closed(year) else 300}"},
+    )
+
+
+async def _prewarm_seasons():
+    """Builds the default season (last one) and the current one at startup
+    if they aren't cached yet, so no visitor waits on that first build."""
+    this_year = datetime.date.today().year
+    for year in (this_year - 1, this_year):
+        try:
+            await _get_season_payload(year)
+        except Exception as e:
+            logger.warning(f"Season prewarm failed for {year}: {e}")
 
 
 @app.get("/api/championship/{year}/drivers")
