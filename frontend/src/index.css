@@ -124,6 +124,20 @@
   pointer-events: none;
 }
 
+/* On-chart attribution (components/Watermark.tsx) */
+.chart-watermark {
+  pointer-events: none;
+  user-select: none;
+}
+.chart-watermark::after {
+  content: 'metrikdelta.com';
+  font-family: 'JetBrains Mono', 'Fira Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: var(--text);
+  opacity: 0.32;
+}
+
 /* Section label — tiny uppercase mono */
 .label-section {
   font-family: 'JetBrains Mono', 'Fira Mono', monospace;

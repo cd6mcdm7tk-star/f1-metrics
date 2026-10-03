@@ -2,6 +2,7 @@ import { Zap, Gauge, MapPin, Target, Activity } from 'lucide-react';
 import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import type { TelemetryData, TelemetryPoint } from '../types/telemetry';
 import { useMemo, useRef, useEffect } from 'react';
+import Watermark from './Watermark';
 
 interface TelemetryViewProps {
   telemetryData: TelemetryData;
@@ -564,6 +565,7 @@ export default function TelemetryView({
                 <Line type="monotone" dataKey="speed2" stroke={driver2Color} strokeWidth={1.5} dot={false} name={driver2} />
               </LineChart>
             </ResponsiveContainer>
+            <Watermark bottom={4} right={24} />
           </div>
 
           {/* Delta */}

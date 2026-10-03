@@ -5,6 +5,7 @@ import {
 import { Loader2, ZoomIn } from 'lucide-react';
 import type { TelemetryDataMulti, DriverMeta } from '../types/telemetry';
 import { useIsMobile } from '../hooks/useIsMobile';
+import Watermark from './Watermark';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -579,6 +580,7 @@ export default function TelemetryViewMulti({ telemetryData, getDriverColor, areT
           >
             {/* Loupe toggle — hover-follow zoom on all 6 synced charts */}
             <button
+              data-export-hide
               onClick={() => setLoupeMode(v => !v)}
               title={loupeMode ? 'Zoom loupe on — click to turn off' : 'Turn on hover-zoom loupe'}
               className="absolute z-40 flex items-center justify-center"
@@ -606,7 +608,8 @@ export default function TelemetryViewMulti({ telemetryData, getDriverColor, areT
             />
 
             {/* Speed */}
-            <div ref={(el) => { chartRowRefs.current[0] = el; }} className="h-[220px] sm:h-[300px] overflow-hidden flex flex-col">
+            <div ref={(el) => { chartRowRefs.current[0] = el; }} className="relative h-[220px] sm:h-[300px] overflow-hidden flex flex-col">
+              <Watermark bottom={4} right={24} />
               <div className="label-section ml-1 mb-0.5 flex-shrink-0" style={{ color: 'var(--text-2)' }}>SPEED km/h</div>
               <div ref={(el) => { zoomWrapRefs.current[0] = el; }} className="flex-1 min-h-0" style={{ width: zoomChartIdx === 0 ? `${RENDER_SCALE * 100}%` : '100%' }}>
                 <ResponsiveContainer width="100%" height="100%">

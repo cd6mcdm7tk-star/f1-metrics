@@ -50,6 +50,11 @@ const TEAM_COLORS: Record<string, string> = {
   'cadillac': '#0E49B1', 'audi': '#BB0A30',
 };
 
+// Readable session names for the exported image's context line.
+const SESSION_NAMES: Record<string, string> = {
+  Q: 'Qualifying', R: 'Race', S: 'Sprint', SQ: 'Sprint Qualifying',
+};
+
 const TEAMS_2026: Record<string, string> = {
   VER: 'Red Bull Racing', HAD: 'Red Bull Racing',
   LEC: 'Ferrari',         HAM: 'Ferrari',
@@ -105,6 +110,9 @@ export default function TelemetryPage() {
   const [urlCopied, setUrlCopied]             = useState(false);
   const [exportingPng, setExportingPng]       = useState(false);
   const [exportDone, setExportDone]           = useState(false);
+  // Drivers currently plotted in the explorer's lap-time chart — needed up
+  // here for the export button (visibility + exported image's context).
+  const [explorerDrivers, setExplorerDrivers] = useState<string[]>([]);
 
   // ── Session selectors ───────────────────────────────────────────────────────
   // Defaults to the latest FREE year (not the current season) so a free
@@ -175,11 +183,17 @@ export default function TelemetryPage() {
   }, []);
 
   // ── Year → reset GP + session + drivers ──────────────────────────────────────
-  const firstYearRef = useRef(true);
+  // Skip on mount — this would otherwise wipe out everything just restored
+  // from the URL (gp/session/drivers/comparison) before it's ever shown.
+  // Compares the actual year value rather than a "first run" boolean flipped
+  // inside the effect: StrictMode's dev-only double invocation would flip
+  // the flag on the first (throwaway) run and make the second look like a
+  // real year change, wiping a deep link's selection (same fix as
+  // StatisticsPage).
+  const prevYearRef = useRef(year);
   useEffect(() => {
-    // Skip on mount — this would otherwise wipe out everything just restored
-    // from the URL (gp/session/drivers/comparison) before it's ever shown.
-    if (firstYearRef.current) { firstYearRef.current = false; return; }
+    if (prevYearRef.current === year) return;
+    prevYearRef.current = year;
     setGPRaw(null); setSessionRaw(null); setD1Raw(''); setD2Raw('');
     setSelectedLap1(null); setSelectedLap2(null);
     resetData();
@@ -191,15 +205,17 @@ export default function TelemetryPage() {
   }, [year]);
 
   // ── Load drivers + pre-fetch telemetry ─────────────────────────────────────────
-  const firstGpLoadRef = useRef(true);
+  const prevGpSessionRef = useRef(`${year}|${selectedGP}|${sessionType}`);
   useEffect(() => {
     if (selectedGP == null || !sessionType) { setDrivers([]); return; }
     const gp = selectedGP, st = sessionType;
     let cancelled = false;
-    // Skip the reset on the very first time gp+session become available — that's
-    // just the initial URL restoring its own state (including a possibly-restored
-    // multi-driver comparison), not a real change to clear.
-    if (firstGpLoadRef.current) { firstGpLoadRef.current = false; } else { resetData(); }
+    // Don't reset when this is just the URL's own restored gp+session
+    // (including a possibly-restored multi-driver comparison) — only on a
+    // real change. Value comparison, not a first-run flag, for the same
+    // StrictMode reason as the year effect above.
+    const key = `${year}|${gp}|${st}`;
+    if (prevGpSessionRef.current !== key) { prevGpSessionRef.current = key; resetData(); }
     async function run() {
       try {
         const data = await getDrivers(year, gp, st);
@@ -370,31 +386,41 @@ export default function TelemetryPage() {
     });
   }, []);
 
+  // ── Derived ───────────────────────────────────────────────────────────────────
+  const effectiveD1 = telemetryData?.driver1 || driver1;
+  const effectiveD2 = telemetryData?.driver2 || driver2;
+
   // ── PNG export ───────────────────────────────────────────────────────────────
+  // Works from both views: the full telemetry trace stack, or the lap-time
+  // chart in the explorer. The exported image gets a branded footer with
+  // this session's context (see utils/exportBrandedPng).
   const handleExportPng = useCallback(async () => {
-    const target = document.getElementById('telemetry-export-target');
+    const isLaps = activeView === 'laps';
+    const target = document.getElementById(isLaps ? 'laps-export-target' : 'telemetry-export-target');
     if (!target || exportingPng) return;
     setExportingPng(true);
     try {
-      // Dynamic import — html2canvas is ~200KB and only ever needed once the
-      // user actually clicks this button, not on every /app page load.
-      const { default: html2canvas } = await import('html2canvas');
-      const bg = getComputedStyle(target).getPropertyValue('--bg').trim() || '#3d0c10';
-      const canvas = await html2canvas(target, {
-        backgroundColor: bg,
-        scale: 2, // export at 2x for a crisp image, not the display's raw pixel size
-        useCORS: true,
-        // The target scrolls internally (overflowY: auto) — without these,
-        // html2canvas only captures whatever fit in the visible viewport and
-        // silently crops everything below the fold (e.g. the RPM chart).
-        height: target.scrollHeight,
-        windowHeight: target.scrollHeight,
+      let driverLabels: string[];
+      if (isLaps) {
+        driverLabels = explorerDrivers;
+      } else if (multiTelemetryData) {
+        const metas = multiTelemetryData.drivers;
+        driverLabels = metas.map(d => (metas.filter(x => x.driver === d.driver).length > 1 ? `${d.driver} L${d.lap}` : d.driver));
+      } else {
+        driverLabels = [effectiveD1, effectiveD2].filter(Boolean);
+      }
+      const gpName = grandsPrix.find(g => g.round === selectedGP)?.name;
+      const sessionName = sessionType ? (SESSION_NAMES[sessionType] ?? sessionType) : null;
+      const context = [
+        String(year), gpName, sessionName, isLaps ? 'Lap times' : null, driverLabels.join(' vs '),
+      ].filter(Boolean).join(' · ');
+      const slug = [year, gpName, sessionType, ...driverLabels].filter(Boolean).join('-').toLowerCase().replace(/[^a-z0-9-]+/g, '');
+
+      const { exportBrandedPng } = await import('../utils/exportBrandedPng');
+      await exportBrandedPng(target, {
+        filename: `metrikdelta-${isLaps ? 'laptimes' : 'telemetry'}-${slug}.png`,
+        context,
       });
-      const link = document.createElement('a');
-      const drivers = comparedDrivers.length > 0 ? comparedDrivers.join('-') : [driver1, driver2].filter(Boolean).join('-');
-      link.download = `metrikdelta-telemetry-${year}-${drivers || 'comparison'}.png`;
-      link.href = canvas.toDataURL('image/png');
-      link.click();
       setExportDone(true);
       setTimeout(() => setExportDone(false), 2000);
     } catch (err) {
@@ -402,7 +428,7 @@ export default function TelemetryPage() {
     } finally {
       setExportingPng(false);
     }
-  }, [exportingPng, comparedDrivers, driver1, driver2, year]);
+  }, [activeView, exportingPng, explorerDrivers, multiTelemetryData, effectiveD1, effectiveD2, grandsPrix, selectedGP, sessionType, year]);
 
   // ── Customer portal ───────────────────────────────────────────────────────────
   const handleManageSubscription = useCallback(async () => {
@@ -419,10 +445,6 @@ export default function TelemetryPage() {
     } catch (e) { console.error('portal:', e); }
   }, [user]);
   void handleManageSubscription; // used by future account menu
-
-  // ── Derived ───────────────────────────────────────────────────────────────────
-  const effectiveD1 = telemetryData?.driver1 || driver1;
-  const effectiveD2 = telemetryData?.driver2 || driver2;
 
   // ─────────────────────────────────────────────────────────────────────────────
   // RENDER
@@ -552,7 +574,7 @@ export default function TelemetryPage() {
           {urlCopied ? <Check size={14} /> : <Link size={14} />}
         </button>
 
-        {activeView === 'trace' && (multiTelemetryData || telemetryData) && (
+        {((activeView === 'trace' && (multiTelemetryData || telemetryData)) || (activeView === 'laps' && explorerDrivers.length > 0)) && (
           <button
             onClick={handleExportPng}
             disabled={exportingPng}
@@ -655,6 +677,7 @@ export default function TelemetryPage() {
             initialDriver2={driver2}
             onCompare={handleCompare}
             onCompareLaps={handleCompareLaps}
+            onSelectedDriversChange={setExplorerDrivers}
           />
         )}
 

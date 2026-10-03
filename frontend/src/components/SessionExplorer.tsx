@@ -9,6 +9,7 @@ import { useIsMobile } from '../hooks/useIsMobile';
 import { getApiBase } from '../config';
 import type { LapData } from '../types/session';
 import { compoundColor } from '../utils/compoundColors';
+import Watermark from './Watermark';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -110,6 +111,8 @@ interface SessionExplorerProps {
   initialDriver2: string;
   onCompare: (drivers: string[]) => void;
   onCompareLaps: (laps: LapSelection[]) => void;
+  /** Lets the parent know which drivers are plotted (drives its PNG export button). */
+  onSelectedDriversChange?: (drivers: string[]) => void;
 }
 
 // ── Custom chart dot (clickable, colored by tire compound, highlights selection) ─
@@ -164,12 +167,14 @@ export default function SessionExplorer({
   initialDriver1, initialDriver2,
   onCompare,
   onCompareLaps,
+  onSelectedDriversChange,
 }: SessionExplorerProps) {
   const isMobile = useIsMobile();
 
   const [selectedDrivers,  setSelectedDrivers]  = useState<string[]>(() =>
     [initialDriver1, initialDriver2].filter(Boolean),
   );
+  useEffect(() => { onSelectedDriversChange?.(selectedDrivers); }, [selectedDrivers]); // eslint-disable-line react-hooks/exhaustive-deps
   const [lapDataMap,   setLapDataMap]   = useState<Map<string, LapData>>(new Map());
   const [loadingSet,   setLoadingSet]   = useState<Set<string>>(new Set());
   const [selectedLapRefs, setSelectedLapRefs] = useState<LapSelection[]>([]);
@@ -711,8 +716,8 @@ export default function SessionExplorer({
         overflow: isMobile ? 'visible' : 'hidden', background: 'var(--bg)',
       }}>
 
-        {/* Chart */}
-        <div style={{
+        {/* Chart — also the PNG export target (TelemetryPage's export button) */}
+        <div id="laps-export-target" style={{
           flexShrink: 0, height: isMobile ? 280 : 420,
           borderBottom: '1px solid var(--border)',
           background: 'var(--surface)', position: 'relative',
@@ -731,6 +736,7 @@ export default function SessionExplorer({
               {/* Outlier toggle — reveal laps normally hidden for being >5s
                   off the comparison's best (pit/SC/red-flag laps) */}
               <button
+                data-export-hide
                 onClick={() => setShowOutliers(v => !v)}
                 title={showOutliers ? 'Hide outlier laps' : 'Show outlier laps (pit, SC, red flag...)'}
                 className="absolute flex items-center justify-center"
@@ -817,6 +823,7 @@ export default function SessionExplorer({
                 </LineChart>
               </ResponsiveContainer>
               </div>
+              <Watermark />
             </>
           )}
         </div>
