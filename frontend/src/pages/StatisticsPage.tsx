@@ -8,6 +8,7 @@ import UpgradeModal from '../components/UpgradeModal';
 import AuthModal from '../components/AuthModal';
 import LegalLinks from '../components/LegalLinks';
 import { useIsMobile } from '../hooks/useIsMobile';
+import { getApiBase } from '../config';
 
 interface DriverStats {
   wins: number;
@@ -87,13 +88,13 @@ const DRIVERS_2026: Record<string, { team: string; fullName: string; number: str
   BOT: { team: 'Cadillac',        fullName: 'Valtteri Bottas',        number: '77' },
 };
 
-// 🌐 ERGAST API HELPER
+// 🌐 ERGAST API HELPER — only for the rare season with no race results yet
+// (see loadDriversForYear); everything else comes from the season bundle.
 const fetchErgastAPI = async (url: string, retries = 4): Promise<any> => {
   const retryBackoff = async (): Promise<any> => {
-    // loadH2H fires 5 of these in parallel (Promise.all), so a burst
-    // commonly gets rate-limited together — a short linear backoff (1-3s)
-    // wasn't enough room for the limit window to actually clear, so
-    // retries kept colliding. Exponential instead.
+    // Jolpica rate-limits bursts, and a short linear backoff (1-3s) wasn't
+    // enough room for the limit window to actually clear, so retries kept
+    // colliding. Exponential instead.
     const waitTime = Math.min(2000 * 2 ** (4 - retries), 10000);
     console.log(`⏳ Rate limit, retrying in ${waitTime}ms...`);
     await new Promise(resolve => setTimeout(resolve, waitTime));
@@ -123,38 +124,50 @@ const fetchErgastAPI = async (url: string, retries = 4): Promise<any> => {
   }
 };
 
-// Jolpica hard-caps race-results-style endpoints at 100 entries per page —
-// a `?limit=1000` in the URL is silently ignored past that. A full season
-// is ~480 entries (24 races × 20 drivers) and a sprint-heavy season can
-// pass 100 too, so without pagination this only ever returns the first
-// ~5 races (or ~5 sprints), with everything after silently missing. This
-// fetches every page and merges each race's results array (keyed by
-// `resultsKey` — 'Results' for results.json, 'SprintResults' for
-// sprint.json) by round, since a single race's results can themselves be
-// split across the page boundary.
-const fetchAllErgastRaces = async (baseUrl: string, resultsKey: 'Results' | 'SprintResults' = 'Results'): Promise<any[]> => {
-  const pageSize = 100;
-  const byRound = new Map<string, any>();
-  let offset = 0;
-  while (true) {
-    const sep = baseUrl.includes('?') ? '&' : '?';
-    const data = await fetchErgastAPI(`${baseUrl}${sep}limit=${pageSize}&offset=${offset}`);
-    if (!data) break;
-    const pageRaces: any[] = data?.MRData?.RaceTable?.Races ?? [];
-    pageRaces.forEach(race => {
-      const existing = byRound.get(race.round);
-      if (existing) {
-        existing[resultsKey] = [...(existing[resultsKey] ?? []), ...(race[resultsKey] ?? [])];
-      } else {
-        byRound.set(race.round, { ...race, [resultsKey]: [...(race[resultsKey] ?? [])] });
-      }
+// Everything the page needs for one season, assembled by the backend from
+// Jolpica (every page of results, qualifying and sprints, plus both final
+// standings) and shared through its cache — same Jolpica field names, cut
+// down to the fields read here. The page used to fetch all this straight
+// from Jolpica itself: ~7 requests per season change, ~7 more per driver
+// pair, and each visitor running into Jolpica's rate limit on their own.
+// Now one request per season, and every head-to-head is computed locally.
+interface SeasonBundle {
+  year: number;
+  results: any[];       // races, each with every driver's entry in Results
+  qualifying: any[];    // races, each with QualifyingResults
+  sprints: any[];       // sprint races, each with SprintResults
+  driverStandings: any[];
+  constructorStandings: any[];
+}
+
+// Kept for the whole visit, so going back to a season already seen is instant.
+const seasonCache = new Map<number, Promise<SeasonBundle>>();
+const fetchSeason = (year: number): Promise<SeasonBundle> => {
+  let pending = seasonCache.get(year);
+  if (!pending) {
+    pending = fetch(`${getApiBase()}/season/${year}`).then(r => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
     });
-    const total = parseInt(data?.MRData?.total ?? '0', 10);
-    offset += pageSize;
-    if (pageRaces.length === 0 || offset >= total) break;
+    pending.catch(() => seasonCache.delete(year)); // a failure is retried next time
+    seasonCache.set(year, pending);
   }
-  return Array.from(byRound.values()).sort((a, b) => parseInt(a.round) - parseInt(b.round));
+  return pending;
 };
+
+// One driver's races in the shape Jolpica's per-driver endpoints
+// (drivers/{id}/results.json, …/qualifying.json) return — each race they
+// took part in, with `key` holding only their own entry — derived from
+// the season-wide data.
+const racesOf = (races: any[], key: 'Results' | 'QualifyingResults', driverId: string): any[] =>
+  races.flatMap(race => {
+    const own = (race[key] ?? []).filter((r: any) => r.Driver.driverId === driverId);
+    return own.length ? [{ ...race, [key]: own }] : [];
+  });
+
+// Official championship points (sprints included) by driverId.
+const officialPoints = (season: SeasonBundle): Record<string, number> =>
+  Object.fromEntries(season.driverStandings.map((s: any) => [s.Driver.driverId, parseFloat(s.points)]));
 
 export default function StatisticsPage() {
   const navigate = useNavigate();
@@ -182,8 +195,9 @@ export default function StatisticsPage() {
   const [driver1Data, setDriver1Data] = useState<DriverInfo | null>(null);
   const [driver2Data, setDriver2Data] = useState<DriverInfo | null>(null);
 
-  // Official points map (driverId → points, includes sprint) — populated once per year
-  const [standingsMap, setStandingsMap] = useState<Record<string, number>>({});
+  // The selected season's full data (null while it loads) — every
+  // comparison below is computed from it, without any further request.
+  const [season, setSeason] = useState<SeasonBundle | null>(null);
   // Full ordered championship standings for the sidebar widget — same fetch
   // as standingsMap, just keeping the whole list instead of only the points.
   const [standingsList, setStandingsList] = useState<{ code: string; name: string; team: string; points: number; position: number }[]>([]);
@@ -312,31 +326,33 @@ export default function StatisticsPage() {
     loadDriversForYear(isYearChange);
   }, [year]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Recomputed from the loaded season whenever the pair (or the season)
+  // changes — synchronous, so switching drivers is instant.
   useEffect(() => {
-    const loadData = async () => {
-      if (driver1 && driver2 && driver1 !== driver2) {
-        setError(null);
-        await loadH2H();
-      } else if (driver1 && !driver2) {
-        setH2HData(null);
-        setDriver2Data(null);
-        const data = await loadDriverStats(driver1);
-        setDriver1Data(data);
-      } else if (driver2 && !driver1) {
-        setH2HData(null);
-        setDriver1Data(null);
-        const data = await loadDriverStats(driver2);
-        setDriver2Data(data);
-      } else {
-        setH2HData(null);
-        setDriver1Data(null);
-        setDriver2Data(null);
-        setError(null);
-      }
-    };
-
-    loadData();
-  }, [driver1, driver2, year]);
+    if (!season) {
+      setH2HData(null);
+      setDriver1Data(null);
+      setDriver2Data(null);
+      return;
+    }
+    if (driver1 && driver2 && driver1 !== driver2) {
+      setError(null);
+      computeH2H(season);
+    } else if (driver1 && !driver2) {
+      setH2HData(null);
+      setDriver2Data(null);
+      setDriver1Data(computeDriverStats(season, driver1));
+    } else if (driver2 && !driver1) {
+      setH2HData(null);
+      setDriver1Data(null);
+      setDriver2Data(computeDriverStats(season, driver2));
+    } else {
+      setH2HData(null);
+      setDriver1Data(null);
+      setDriver2Data(null);
+      setError(null);
+    }
+  }, [driver1, driver2, season]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 🔥 HELPER: Générer un code à 3 lettres pour les pilotes sans code
   const generateDriverCode = (driver: any): string => {
@@ -360,15 +376,23 @@ export default function StatisticsPage() {
   // driver1/driver2 restored from the URL isn't wiped out before it's ever
   // used — same fix as TelemetryPage's mount-wipe bug.
   const loadDriversForYear = async (resetSelection: boolean = true) => {
+    const requestedYear = year;
     try {
       setDrivers([]);
+      setSeason(null);
+      setError(null);
+      setLoading(true);
       if (resetSelection) {
         setDriver1('');
         setDriver2('');
       }
 
       const jolpica_base = 'https://api.jolpi.ca/ergast/f1';
-      const races = await fetchAllErgastRaces(`${jolpica_base}/${year}/results.json`);
+      const bundle = await fetchSeason(requestedYear);
+      // Switched to another season while this one was loading — that one's
+      // own load takes over; this result would overwrite it.
+      if (prevYearRef.current !== requestedYear) return;
+      const races = bundle.results;
 
       const driverCodesSet = new Set<string>();
       const driverInfoMap = new Map<string, any>();
@@ -430,10 +454,8 @@ export default function StatisticsPage() {
             return;
           }
 
-          const entriesData = await fetchErgastAPI(`${jolpica_base}/${year}/driverStandings.json`);
-          const standingsList = entriesData?.MRData?.StandingsTable?.StandingsLists?.[0]?.DriverStandings ?? [];
           const teamByDriverId = new Map<string, string>();
-          standingsList.forEach((s: any) => {
+          bundle.driverStandings.forEach((s: any) => {
             teamByDriverId.set(s.Driver.driverId, s.Constructors?.[0]?.name || 'Unknown');
           });
 
@@ -452,15 +474,8 @@ export default function StatisticsPage() {
         }
       }
 
-      // Fetch official standings (includes sprint points) — one call per year change
-      const standingsData = await fetchErgastAPI(`${jolpica_base}/${year}/driverStandings.json`);
-      const standingsEntries = standingsData?.MRData?.StandingsTable?.StandingsLists?.[0]?.DriverStandings ?? [];
-      const newStandingsMap: Record<string, number> = {};
-      standingsEntries.forEach((s: any) => {
-        newStandingsMap[s.Driver.driverId] = parseFloat(s.points);
-      });
-      setStandingsMap(newStandingsMap);
-      setStandingsList(standingsEntries.map((s: any) => ({
+      // Official standings (includes sprint points)
+      setStandingsList(bundle.driverStandings.map((s: any) => ({
         code: generateDriverCode(s.Driver),
         name: `${s.Driver.givenName} ${s.Driver.familyName}`,
         team: s.Constructors?.[0]?.name || 'Unknown',
@@ -468,11 +483,7 @@ export default function StatisticsPage() {
         position: parseInt(s.position),
       })));
 
-      // Constructor standings — powers the "Championship" hover card, one
-      // call per year change same as the driver standings above.
-      const constructorData = await fetchErgastAPI(`${jolpica_base}/${year}/constructorStandings.json`);
-      const constructorEntries = constructorData?.MRData?.StandingsTable?.StandingsLists?.[0]?.ConstructorStandings ?? [];
-      setConstructorStandings(constructorEntries.map((s: any) => ({
+      setConstructorStandings(bundle.constructorStandings.map((s: any) => ({
         position: parseInt(s.position),
         name: s.Constructor.name,
         points: parseFloat(s.points),
@@ -485,6 +496,7 @@ export default function StatisticsPage() {
       console.log(`✅ Found ${formattedDrivers.length} drivers for ${year}`);
 
       setDrivers(formattedDrivers);
+      setSeason(bundle);
 
       // Only fall back to a default pair when nothing is already picked —
       // otherwise this clobbered a driver pair deep-linked via the URL
@@ -497,29 +509,28 @@ export default function StatisticsPage() {
     } catch (error) {
       console.error('Error loading drivers:', error);
       setError('Failed to load drivers for this season.');
+    } finally {
+      if (prevYearRef.current === requestedYear) setLoading(false);
     }
   };
 
-  // 🔥 LOAD SINGLE DRIVER STATS AVEC ERGAST DIRECT
-  const loadDriverStats = async (driverCode: string) => {
+  // A driver's Jolpica entry (driverId, names…) from their 3-letter code,
+  // among everyone who appears in the season's results or qualifying.
+  const findSeasonDriver = (s: SeasonBundle, code: string): any =>
+    [...s.results.flatMap(race => race.Results ?? []), ...s.qualifying.flatMap(race => race.QualifyingResults ?? [])]
+      .find((r: any) => generateDriverCode(r.Driver) === code)?.Driver;
+
+  // 🔥 SINGLE DRIVER STATS — computed from the loaded season
+  const computeDriverStats = (s: SeasonBundle, driverCode: string): DriverInfo | null => {
     try {
-      const jolpica_base = "https://api.jolpi.ca/ergast/f1";
-      
-      const driversData = await fetchErgastAPI(`${jolpica_base}/${year}/drivers.json`);
-      if (!driversData?.MRData?.DriverTable?.Drivers) return null;
-      
-      const driversList = driversData.MRData.DriverTable.Drivers;
-      const driverInfo = driversList.find((d: any) => generateDriverCode(d) === driverCode);
+      const driverInfo = findSeasonDriver(s, driverCode);
       if (!driverInfo) return null;
-      
+
       const driverId = driverInfo.driverId;
-      
-      const racesData = await fetchErgastAPI(`${jolpica_base}/${year}/drivers/${driverId}/results.json?limit=100`);
-      const races = racesData?.MRData?.RaceTable?.Races || [];
-      
-      const qualiData = await fetchErgastAPI(`${jolpica_base}/${year}/drivers/${driverId}/qualifying.json?limit=100`);
-      const qualiRaces = qualiData?.MRData?.RaceTable?.Races || [];
-      
+      const races = racesOf(s.results, 'Results', driverId);
+      const qualiRaces = racesOf(s.qualifying, 'QualifyingResults', driverId);
+      const standingsMap = officialPoints(s);
+
       const stats: DriverStats = {
         wins: 0,
         podiums: 0,
@@ -597,52 +608,27 @@ export default function StatisticsPage() {
     }
   };
 
-  // 🔥 LOAD H2H AVEC ERGAST DIRECT
-  const loadH2H = async () => {
+  // 🔥 H2H — computed from the loaded season
+  const computeH2H = (s: SeasonBundle) => {
     if (!driver1 || !driver2 || driver1 === driver2) return;
+    const year = s.year;
 
-    setLoading(true);
-    
     try {
-      const jolpica_base = "https://api.jolpi.ca/ergast/f1";
-      
-      console.log(`🔍 Fetching H2H: ${year} - ${driver1} vs ${driver2}`);
-      
-      const driversData = await fetchErgastAPI(`${jolpica_base}/${year}/drivers.json`);
-      if (!driversData?.MRData?.DriverTable?.Drivers) {
-        throw new Error('No drivers data available');
-      }
-      
-      const driversList = driversData.MRData.DriverTable.Drivers;
-      const driver1Info = driversList.find((d: any) => generateDriverCode(d) === driver1);
-      const driver2Info = driversList.find((d: any) => generateDriverCode(d) === driver2);
-      
+      const driver1Info = findSeasonDriver(s, driver1);
+      const driver2Info = findSeasonDriver(s, driver2);
+
       if (!driver1Info || !driver2Info) {
-        // Expected during a year change, not a real failure: this effect
-        // (deps [driver1, driver2, year]) and the one that resets
-        // driver1/driver2 for the new year (deps [year], inside
-        // loadDriversForYear) both fire in the same commit when year
-        // changes, but React runs them with that render's own closure —
-        // so this one can still see the PREVIOUS year's driver codes for
-        // a moment before the reset (and then a fresh default pick)
-        // lands and re-triggers it with valid ones. Bail quietly instead
-        // of logging/surfacing an error for what resolves itself.
+        // Expected right after a year change, not a real failure: a pair
+        // picked in the previous season can be briefly paired with the new
+        // season's data before the selection reset lands. Bail quietly
+        // instead of surfacing an error for what resolves itself.
         return;
       }
-      
+
       const driver1Id = driver1Info.driverId;
       const driver2Id = driver2Info.driverId;
-      
-      const [driver1RacesData, driver2RacesData, driver1QualiData, driver2QualiData, sprintRaces] = await Promise.all([
-        fetchErgastAPI(`${jolpica_base}/${year}/drivers/${driver1Id}/results.json?limit=100`),
-        fetchErgastAPI(`${jolpica_base}/${year}/drivers/${driver2Id}/results.json?limit=100`),
-        fetchErgastAPI(`${jolpica_base}/${year}/drivers/${driver1Id}/qualifying.json?limit=100`),
-        fetchErgastAPI(`${jolpica_base}/${year}/drivers/${driver2Id}/qualifying.json?limit=100`),
-        // A sprint-heavy season can pass the 100-entry hard cap too (6
-        // sprints × 20 drivers = 120, seen on the live 2025 data) — same
-        // pagination fix as the season-wide results.json call.
-        fetchAllErgastRaces(`${jolpica_base}/${year}/sprint.json`, 'SprintResults'),
-      ]);
+      const standingsMap = officialPoints(s);
+      const sprintRaces = s.sprints;
 
       // Sprint H2H — Jolpica has no dedicated "sprint qualifying" endpoint,
       // but each sprint result's own `grid` field IS the sprint-qualifying
@@ -682,10 +668,10 @@ export default function StatisticsPage() {
       }
       setSprintH2H(sprintResult);
 
-      const driver1Races = driver1RacesData?.MRData?.RaceTable?.Races || [];
-      const driver2Races = driver2RacesData?.MRData?.RaceTable?.Races || [];
-      const driver1QualiRaces = driver1QualiData?.MRData?.RaceTable?.Races || [];
-      const driver2QualiRaces = driver2QualiData?.MRData?.RaceTable?.Races || [];
+      const driver1Races = racesOf(s.results, 'Results', driver1Id);
+      const driver2Races = racesOf(s.results, 'Results', driver2Id);
+      const driver1QualiRaces = racesOf(s.qualifying, 'QualifyingResults', driver1Id);
+      const driver2QualiRaces = racesOf(s.qualifying, 'QualifyingResults', driver2Id);
       
       const driver1Stats: any = {
         wins: 0, podiums: 0, poles: 0, poleWins: 0, points: 0, racePoints: 0, dnfs: 0, dnfCauses: [],
@@ -873,10 +859,8 @@ export default function StatisticsPage() {
       setDriver2Data(h2hResult.driver2);
       
     } catch (error: any) {
-      console.error('Error loading H2H:', error);
+      console.error('Error computing H2H:', error);
       setError(error.message || 'Failed to load data');
-    } finally {
-      setLoading(false);
     }
   };
 
