@@ -12,13 +12,16 @@ Schedule             : 0 * * * *  (toutes les heures)
 Logique :
   - Pour chaque session de l'année en cours :
       * Si la session est terminée (date_start + durée estimée < maintenant)
-      * Et si les données ne sont pas encore en PostgreSQL
       * Et si la session a moins de 7 jours (évite de re-checker l'historique lointain)
-      → Lance ingest()
+      * Et si PostgreSQL n'a pas encore TOUS ses tours (comparé à OpenF1)
+      → Lance ingest() — ou, si seuls les pneus manquent, ingest_openf1_compounds()
+
+  `--all` ignore la fenêtre de 7 jours : rattrapage de toute la saison en cours.
 
 Sessions ingérées : Q, R, S, SQ, SS  (pas FP par défaut, peu consultées)
 """
 
+import argparse
 import logging
 import os
 import sys
@@ -32,7 +35,7 @@ import pandas as pd
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from database import db
-from jobs.ingest_session import ingest
+from jobs.ingest_session import ingest, ingest_openf1_compounds
 
 logging.basicConfig(
     level=logging.INFO,
@@ -115,6 +118,10 @@ def openf1_get(endpoint: str, params: dict, retries: int = 3) -> list:
     for attempt in range(retries):
         try:
             r = requests.get(url, params=params, headers=headers, timeout=30)
+            # OpenF1 answers a query matching nothing (e.g. a session with
+            # no laps published yet) with a bare 404 — that's an empty result.
+            if r.status_code == 404:
+                return []
             if r.status_code == 429:
                 import time
                 wait = 2 ** attempt
@@ -131,31 +138,33 @@ def openf1_get(endpoint: str, params: dict, retries: int = 3) -> list:
     raise RuntimeError(f"OpenF1 /{endpoint} failed after {retries} retries")
 
 
-def is_session_ingested(year: int, gp_round: int, session_type: str) -> bool:
-    """Retourne True si la session a des laps en base (télémétrie optionnelle)."""
-    try:
-        lap_row = db._execute(
-            "SELECT COUNT(*) FROM laps WHERE year = %s AND gp_round = %s AND session_type = %s",
-            (year, gp_round, session_type),
-            fetch="one",
-        )
-        return bool(lap_row and lap_row[0] > 0)
-    except Exception as e:
-        logger.warning(f"is_session_ingested check failed: {e}")
-        return False
+def session_status(year: int, gp_round: int, session_type: str, session_key: int) -> str:
+    """'complete', 'missing' (not ingested, or only partly — e.g. caught
+    mid-race, or a driver whose data failed) or 'no_compounds' (every lap is
+    there, only the tyre compounds aren't).
 
-
-def get_meetings_fastf1(year: int) -> list:
-    """Fallback: construit la liste des meetings depuis FastF1."""
-    schedule = fastf1.get_event_schedule(year, include_testing=False)
-    meetings = []
-    for _, row in schedule.iterrows():
-        meetings.append({
-            "meeting_key":  int(row["RoundNumber"]),
-            "meeting_name": str(row["EventName"]),
-            "date_start":   str(row["EventDate"].date()),
-        })
-    return meetings
+    Used to be "has at least one lap in the DB", so a race ingested while
+    OpenF1 was still publishing it (2026 Kuala Lumpur: 48 of 55 laps) never
+    got completed. Now compared with OpenF1's own lap count — restricted to
+    the drivers it lists for the session, exactly what ingestion stores."""
+    row = db._execute(
+        "SELECT COUNT(*), COUNT(compound) FROM laps WHERE year = %s AND gp_round = %s AND session_type = %s",
+        (year, gp_round, session_type),
+        fetch="one",
+    )
+    db_laps, db_compounds = row if row else (0, 0)
+    if db_laps == 0:
+        return "missing"
+    listed = {d.get("driver_number") for d in openf1_get("drivers", {"session_key": session_key})}
+    openf1_laps = sum(
+        1 for lap in openf1_get("laps", {"session_key": session_key})
+        if lap.get("lap_number") is not None and lap.get("driver_number") in listed
+    )
+    if openf1_laps > db_laps:
+        return "missing"
+    if db_compounds == 0:
+        return "no_compounds"
+    return "complete"
 
 
 def get_sessions_fastf1(year: int) -> list:
@@ -207,23 +216,11 @@ def get_round_from_fastf1(year: int, session_date_str: str) -> Optional[int]:
     return None
 
 
-def get_round_number(meetings: list, meeting_key: int) -> Optional[int]:
-    """Fallback: round number depuis la liste OpenF1 triée par date."""
-    race_meetings = sorted(
-        [m for m in meetings if "test" not in m.get("meeting_name", "").lower()],
-        key=lambda m: m["date_start"],
-    )
-    for i, m in enumerate(race_meetings):
-        if m["meeting_key"] == meeting_key:
-            return i + 1
-    return None
-
-
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
-def run():
+def run(whole_season: bool = False):
     if not db.available:
         logger.error("PostgreSQL non disponible — vérifier DATABASE_URL")
         sys.exit(1)
@@ -234,15 +231,6 @@ def run():
     current_year = now.year
 
     logger.info(f"[Schedule] Vérification sessions {current_year} — {now.strftime('%Y-%m-%d %H:%M UTC')}")
-
-    try:
-        meetings = openf1_get("meetings", {"year": current_year})
-    except RuntimeError:
-        logger.warning("OpenF1 /meetings indisponible — fallback FastF1")
-        meetings = get_meetings_fastf1(current_year)
-    if not meetings:
-        logger.info("Aucun meeting trouvé pour l'année en cours")
-        return
 
     try:
         sessions = openf1_get("sessions", {"year": current_year})
@@ -256,10 +244,15 @@ def run():
     ingested = 0
     skipped  = 0
     errors   = 0
+    fixed    = 0
 
     for session in sessions:
         session_name = session.get("session_name", "")
         session_type = SESSION_NAME_MAP.get(session_name)
+
+        # Cancelled events stay in OpenF1's list (2026: Sakhir, Jeddah)
+        if session.get("is_cancelled"):
+            continue
 
         if not session_type or session_type not in SESSIONS_TO_INGEST:
             continue
@@ -281,35 +274,41 @@ def run():
             continue
 
         # Session trop ancienne (> 7 jours) → déjà traitée ou hors scope
-        if now - estimated_end > timedelta(days=7):
+        if not whole_season and now - estimated_end > timedelta(days=7):
             continue
 
-        meeting_key = session.get("meeting_key")
-        gp_round    = get_round_from_fastf1(current_year, date_start_str)
+        # Round par DATE uniquement : un repli « Nième meeting de la liste
+        # OpenF1 » comptait les GP annulés et décalait tous les rounds suivants.
+        gp_round = get_round_from_fastf1(current_year, date_start_str)
         if gp_round is None:
-            gp_round = get_round_number(meetings, meeting_key)
-        if gp_round is None:
-            logger.warning(f"Round introuvable pour meeting_key={meeting_key}, session={session_name}")
+            logger.warning(f"Round introuvable pour {session_name} du {date_start_str[:10]}")
             continue
 
-        if is_session_ingested(current_year, gp_round, session_type):
-            logger.info(f"  ✓ Déjà ingéré : {current_year} R{gp_round} {session_type}")
-            skipped += 1
-            continue
-
-        logger.info(f"  → Ingestion : {current_year} R{gp_round} {session_type} (terminée ~{estimated_end.strftime('%H:%M UTC')})")
+        label = f"{current_year} R{gp_round} {session_type}"
         try:
-            ingest(current_year, gp_round, session_type)
-            ingested += 1
-            logger.info(f"  ✅ Succès : {current_year} R{gp_round} {session_type}")
+            status = session_status(current_year, gp_round, session_type, session["session_key"])
+            if status == "complete":
+                logger.info(f"  ✓ Complet : {label}")
+                skipped += 1
+            elif status == "no_compounds":
+                logger.info(f"  → Pneus manquants : {label}")
+                ingest_openf1_compounds(current_year, gp_round, session_type)
+                fixed += 1
+            else:
+                logger.info(f"  → Ingestion : {label} (terminée ~{estimated_end.strftime('%H:%M UTC')})")
+                ingest(current_year, gp_round, session_type)
+                ingested += 1
+                logger.info(f"  ✅ Succès : {label}")
         except Exception as e:
             errors += 1
-            logger.error(f"  ❌ Échec : {current_year} R{gp_round} {session_type} — {e}")
+            logger.error(f"  ❌ Échec : {label} — {e}")
 
     logger.info(
-        f"[Schedule] Terminé — Ingérés: {ingested}, Déjà à jour: {skipped}, Erreurs: {errors}"
+        f"[Schedule] Terminé — Ingérés: {ingested}, Pneus complétés: {fixed}, Déjà à jour: {skipped}, Erreurs: {errors}"
     )
 
 
 if __name__ == "__main__":
-    run()
+    parser = argparse.ArgumentParser(description="Ingest recently finished sessions")
+    parser.add_argument("--all", action="store_true", help="Check every session of the current season, not just the last 7 days")
+    run(whole_season=parser.parse_args().all)

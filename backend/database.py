@@ -357,6 +357,30 @@ class PostgresDB:
             ),
         )
 
+    def set_lap_compounds(
+        self,
+        year: int,
+        gp_round: int,
+        session_type: str,
+        rows: list[tuple],
+    ) -> int:
+        """Sets the tyre compound of existing laps in one statement.
+        rows: (compound, driver_code, lap_number). Returns laps updated."""
+        if not rows:
+            return 0
+        updated = self._execute(
+            """
+            UPDATE laps l SET compound = v.compound
+            FROM unnest(%s::text[], %s::text[], %s::int[]) AS v(compound, driver_code, lap_number)
+            WHERE l.year = %s AND l.gp_round = %s AND l.session_type = %s
+              AND l.driver_code = v.driver_code AND l.lap_number = v.lap_number
+            RETURNING l.lap_number
+            """,
+            (*(list(col) for col in zip(*rows)), year, gp_round, session_type),
+            fetch="all",
+        )
+        return len(updated or [])
+
     def get_lap_metadata(
         self,
         year: int,

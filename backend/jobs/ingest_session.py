@@ -127,6 +127,10 @@ def _openf1_get(endpoint: str, params: dict, retries: int = 5) -> list:
     for attempt in range(retries):
         try:
             r = requests.get(url, params=params, headers=headers, timeout=60)
+            # OpenF1 answers a query matching nothing with a bare 404, not
+            # an empty list — not worth retrying.
+            if r.status_code == 404:
+                return []
             if r.status_code == 429:
                 wait = 30 * (attempt + 1)
                 logger.warning(f"OpenF1 /{endpoint} attempt {attempt+1} failed: 429, retry in {wait}s")
@@ -210,15 +214,7 @@ def ingest_openf1(year: int, gp_round: int, session_type: str):
     logger.info(f"  session_key = {session_key}")
 
     # --- Drivers ---
-    drivers_raw = _openf1_get("drivers", {"session_key": session_key})
-    # driver_number -> driver_code
-    num_to_code: dict[int, str] = {}
-    for d in drivers_raw:
-        num = d.get("driver_number")
-        code = d.get("name_acronym") or d.get("broadcast_name", "???")[:3]
-        if num:
-            num_to_code[int(num)] = code.upper()
-
+    num_to_code = _openf1_driver_codes(session_key)
     if not num_to_code:
         raise RuntimeError("OpenF1: no drivers found")
 
@@ -241,64 +237,127 @@ def ingest_openf1(year: int, gp_round: int, session_type: str):
         if num is not None:
             laps_by_driver.setdefault(int(num), []).append(lap)
 
+    compounds = _compounds_by_lap(session_key)
+
     # --- Process each driver one at a time (fetch → process → discard) ---
+    failed: list[str] = []
     for driver_num, code in num_to_code.items():
         driver_laps = laps_by_driver.get(driver_num, [])
         if not driver_laps:
             logger.warning(f"  No laps for {code} ({driver_num})")
             continue
+        # One driver failing (e.g. an OpenF1 error on their car data) used to
+        # abort the whole session halfway, leaving the remaining drivers out
+        # for good. Now it skips just that driver — whose missing laps the
+        # scheduler then sees and retries on its next run.
+        try:
+            _ingest_openf1_driver(year, gp_round, session_type, session_key, driver_num, code, driver_laps, compounds)
+        except Exception as e:
+            failed.append(code)
+            logger.error(f"  Driver {code} failed: {e}")
+    if failed:
+        logger.warning(f"  Incomplete — failed drivers: {failed}")
 
-        # Find personal best (minimum lap_duration)
-        valid_laps = [l for l in driver_laps if l.get("lap_duration") is not None]
-        fastest_lap_time = min((l["lap_duration"] for l in valid_laps), default=None)
 
-        car_data, pos_data = _fetch_driver_session_data(session_key, driver_num)
-        logger.info(f"  {code}: {len(car_data)} car_data points, {len(pos_data)} location points")
+def _ingest_openf1_driver(year: int, gp_round: int, session_type: str, session_key: int,
+                          driver_num: int, code: str, driver_laps: list, compounds: dict):
+    # Find personal best (minimum lap_duration)
+    valid_laps = [l for l in driver_laps if l.get("lap_duration") is not None]
+    fastest_lap_time = min((l["lap_duration"] for l in valid_laps), default=None)
 
-        for lap in driver_laps:
-            lap_num = lap.get("lap_number")
-            if lap_num is None:
-                continue
+    car_data, pos_data = _fetch_driver_session_data(session_key, driver_num)
+    logger.info(f"  {code}: {len(car_data)} car_data points, {len(pos_data)} location points")
 
-            lap_time = _to_float(lap.get("lap_duration"))
-            s1 = _to_float(lap.get("duration_sector_1"))
-            s2 = _to_float(lap.get("duration_sector_2"))
-            s3 = _to_float(lap.get("duration_sector_3"))
-            compound = lap.get("compound") or lap.get("tyre_compound")
-            is_pb = (lap_time is not None and fastest_lap_time is not None
-                     and abs(lap_time - fastest_lap_time) < 0.001)
+    for lap in driver_laps:
+        lap_num = lap.get("lap_number")
+        if lap_num is None:
+            continue
 
-            date_start = lap.get("date_start")
-            lap_duration = lap.get("lap_duration")
-            has_telemetry = False
+        lap_time = _to_float(lap.get("lap_duration"))
+        s1 = _to_float(lap.get("duration_sector_1"))
+        s2 = _to_float(lap.get("duration_sector_2"))
+        s3 = _to_float(lap.get("duration_sector_3"))
+        compound = compounds.get((driver_num, lap_num))
+        is_pb = (lap_time is not None and fastest_lap_time is not None
+                 and abs(lap_time - fastest_lap_time) < 0.001)
 
-            if date_start and lap_duration and car_data:
-                try:
-                    tel_data = _extract_lap_telemetry(car_data, pos_data, date_start, lap_duration)
-                    if tel_data:
-                        has_telemetry = True
-                        lap_type = "fastest" if is_pb else f"lap_{lap_num}"
+        date_start = lap.get("date_start")
+        lap_duration = lap.get("lap_duration")
+        has_telemetry = False
+
+        if date_start and lap_duration and car_data:
+            try:
+                tel_data = _extract_lap_telemetry(car_data, pos_data, date_start, lap_duration)
+                if tel_data:
+                    has_telemetry = True
+                    # Stored under its lap number even when it's the personal
+                    # best (it used to be saved as "fastest" only, so picking
+                    # that lap by number missed the DB), plus as "fastest".
+                    db.save_telemetry(
+                        year, gp_round, session_type, code,
+                        lap_num, f"lap_{lap_num}", tel_data
+                    )
+                    if is_pb:
                         db.save_telemetry(
                             year, gp_round, session_type, code,
-                            lap_num, lap_type, tel_data
+                            lap_num, "fastest", tel_data
                         )
-                        if is_pb:
-                            db.save_telemetry(
-                                year, gp_round, session_type, code,
-                                lap_num, "fastest", tel_data
-                            )
-                except Exception as e:
-                    logger.warning(f"  Telemetry slice failed {code} lap {lap_num}: {e}")
+            except Exception as e:
+                logger.warning(f"  Telemetry slice failed {code} lap {lap_num}: {e}")
 
-            db.save_lap(
-                year, gp_round, session_type, code,
-                lap_num, lap_time, s1, s2, s3,
-                compound, is_pb, has_telemetry
-            )
+        db.save_lap(
+            year, gp_round, session_type, code,
+            lap_num, lap_time, s1, s2, s3,
+            compound, is_pb, has_telemetry
+        )
 
-        logger.info(f"  Saved {code}: {len(driver_laps)} laps")
-        # Libérer la mémoire immédiatement après chaque driver
-        del car_data, pos_data
+    logger.info(f"  Saved {code}: {len(driver_laps)} laps")
+
+
+def _openf1_driver_codes(session_key: int) -> dict[int, str]:
+    """driver_number -> 3-letter code, for one session."""
+    num_to_code: dict[int, str] = {}
+    for d in _openf1_get("drivers", {"session_key": session_key}):
+        num = d.get("driver_number")
+        code = d.get("name_acronym") or d.get("broadcast_name", "???")[:3]
+        if num:
+            num_to_code[int(num)] = code.upper()
+    return num_to_code
+
+
+def _compounds_by_lap(session_key: int) -> dict[tuple[int, int], str]:
+    """(driver_number, lap_number) -> tyre compound. OpenF1's /laps has no
+    compound field (reading one there left every 2026 lap without tyres) —
+    it only exists on /stints, as a lap range per stint."""
+    out: dict[tuple[int, int], str] = {}
+    try:
+        stints = _openf1_get("stints", {"session_key": session_key})
+    except Exception as e:
+        logger.warning(f"  Stints unavailable for session {session_key}: {e}")
+        return out
+    for stint in stints:
+        num, compound = stint.get("driver_number"), stint.get("compound")
+        start, end = stint.get("lap_start"), stint.get("lap_end")
+        if num is None or not compound or start is None or end is None:
+            continue
+        for n in range(start, end + 1):
+            out[(int(num), n)] = compound
+    return out
+
+
+def ingest_openf1_compounds(year: int, gp_round: int, session_type: str) -> int:
+    """Fills in the tyre compounds of an already-ingested OpenF1 session,
+    without re-fetching its telemetry. Returns the number of laps updated."""
+    session_key = _openf1_session_key(year, gp_round, session_type)
+    num_to_code = _openf1_driver_codes(session_key)
+    rows = [
+        (compound, num_to_code[num], lap)
+        for (num, lap), compound in _compounds_by_lap(session_key).items()
+        if num in num_to_code
+    ]
+    updated = db.set_lap_compounds(year, gp_round, session_type, rows)
+    logger.info(f"[OpenF1] {year} R{gp_round} {session_type}: tyre compounds set on {updated} laps")
+    return updated
 
 
 def _fetch_driver_session_data(session_key: int, driver_number: int) -> tuple:
