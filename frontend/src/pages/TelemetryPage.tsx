@@ -12,6 +12,7 @@ import SEO from '../components/SEO';
 import SessionExplorer from '../components/SessionExplorer';
 import LegalLinks from '../components/LegalLinks';
 import { useIsMobile } from '../hooks/useIsMobile';
+import { useRememberPageUrl, rememberedUrl } from '../hooks/usePageMemory';
 import type { LapSelection } from '../components/SessionExplorer';
 import TelemetryView from '../components/TelemetryView';
 import TelemetryViewMulti from '../components/TelemetryViewMulti';
@@ -20,6 +21,7 @@ import {
   getGrandsPrix,
   getTelemetryComparison,
   getTelemetryMulti,
+  getCachedTelemetryMulti,
 } from '../services/backend.service';
 import type { TelemetryData, TelemetryDataMulti, LapRef } from '../types/telemetry';
 type ViewType = 'trace' | 'laps';
@@ -100,6 +102,7 @@ export default function TelemetryPage() {
   const { user, signOut } = useAuth();
   const { canAccessYear, isPremium, canMakeRequest, incrementRequest, isReady: subscriptionReady } = useSubscription();
   const { getCached, setCached, getTelemetryKey } = useTelemetryCache();
+  useRememberPageUrl();
 
   // ── UI state ────────────────────────────────────────────────────────────────
   const [activeView, setActiveView] = useState<ViewType>(
@@ -111,8 +114,12 @@ export default function TelemetryPage() {
   const [exportingPng, setExportingPng]       = useState(false);
   const [exportDone, setExportDone]           = useState(false);
   // Drivers currently plotted in the explorer's lap-time chart — needed up
-  // here for the export button (visibility + exported image's context).
-  const [explorerDrivers, setExplorerDrivers] = useState<string[]>([]);
+  // here for the export button (visibility + exported image's context), and
+  // kept in the URL (`ex`) so they survive switching views or pages.
+  const [explorerDrivers, setExplorerDrivers] = useState<string[]>(() => {
+    const ex = searchParams.get('ex');
+    return ex ? ex.split(',').filter(Boolean) : [];
+  });
 
   // ── Session selectors ───────────────────────────────────────────────────────
   // Defaults to the latest FREE year (not the current season) so a free
@@ -148,6 +155,14 @@ export default function TelemetryPage() {
     const cmp = searchParams.get('cmp');
     return cmp ? cmp.split(',').filter(Boolean) : [];
   });
+  // Specific laps being compared (picked in the explorer) — `cl` in the URL
+  // as DRIVER.lap pairs, so the same laps come back rather than fastest laps.
+  const [comparedLaps,       setComparedLaps]       = useState<LapSelection[]>(() =>
+    (searchParams.get('cl') || '').split(',').filter(Boolean).map(pair => {
+      const [driver, lap] = pair.split('.');
+      return { driver, lapNumber: parseInt(lap) };
+    }).filter(l => l.driver && !Number.isNaN(l.lapNumber)),
+  );
   const [multiLoading,       setMultiLoading]       = useState(false);
 
   // ── Derived ──────────────────────────────────────────────────────────────────
@@ -172,14 +187,23 @@ export default function TelemetryPage() {
     if (selectedLap1) p.la = String(selectedLap1);
     if (selectedLap2) p.lb = String(selectedLap2);
     if (comparedDrivers.length > 0) p.cmp = comparedDrivers.join(',');
+    if (comparedLaps.length > 0) p.cl = comparedLaps.map(l => `${l.driver}.${l.lapNumber}`).join(',');
+    // Only when it says more than d1/d2 already do (the explorer's default)
+    if (explorerDrivers.join(',') !== [driver1, driver2].filter(Boolean).join(',')) p.ex = explorerDrivers.join(',');
     setSearchParams(p, { replace: true });
-  }, [year, selectedGP, sessionType, driver1, driver2, selectedLap1, selectedLap2, activeView, comparedDrivers]);
+  }, [year, selectedGP, sessionType, driver1, driver2, selectedLap1, selectedLap2, activeView, comparedDrivers, comparedLaps, explorerDrivers]);
+
+  // Bumped by every comparison the user starts and by every reset, so a
+  // slower URL restore finishing afterwards can't overwrite them.
+  const multiGenRef = useRef(0);
 
   // ── Reset helpers ─────────────────────────────────────────────────────────────
   const resetData = useCallback(() => {
+    multiGenRef.current++;
     setTelemetryData(null);
     setMultiTelemetryData(null);
     setComparedDrivers([]);
+    setComparedLaps([]);
   }, []);
 
   // ── Year → reset GP + session + drivers ──────────────────────────────────────
@@ -282,24 +306,32 @@ export default function TelemetryPage() {
     if (!comparedDrivers.length || selectedGP == null || !sessionType) return;
     restoredMultiRef.current = true;
     const gp = selectedGP, st = sessionType;
-    let cancelled = false;
-    (async () => {
-      if (!canMakeRequest) { setShowUpgradeModal(true); return; }
-      setMultiLoading(true);
-      try {
-        const laps: LapRef[] = comparedDrivers.map(d => ({ year, gp, session: st, driver: d }));
-        const data = await getTelemetryMulti(laps);
-        if (cancelled) return;
+    // The exact laps that were compared, else each driver's fastest lap
+    const laps: LapRef[] = comparedLaps.length
+      ? comparedLaps.map(l => ({ year, gp, session: st, driver: l.driver, lap: l.lapNumber }))
+      : comparedDrivers.map(d => ({ year, gp, session: st, driver: d }));
+    // Already loaded during this visit (e.g. back from Statistics): shown
+    // straight away, and not counted as a new request.
+    const cachedMulti = getCachedTelemetryMulti(laps);
+    if (cachedMulti) { setMultiTelemetryData(cachedMulti); return; }
+    if (!canMakeRequest) { setShowUpgradeModal(true); return; }
+    // Deliberately not cancelled on cleanup: this effect's deps
+    // (canMakeRequest, incrementRequest…) change identity while the request
+    // is in flight — e.g. once the subscription status loads — and
+    // cancelling then threw the result away, leaving the page stuck on
+    // "Loading telemetry…". What supersedes it is a newer comparison or a
+    // session change (multiGenRef).
+    const gen = multiGenRef.current;
+    setMultiLoading(true);
+    getTelemetryMulti(laps)
+      .then(data => {
+        if (multiGenRef.current !== gen) return;
         setMultiTelemetryData(data);
         incrementRequest();
-      } catch (e) {
-        console.error('restoreMultiTelemetry:', e);
-      } finally {
-        if (!cancelled) setMultiLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [comparedDrivers, selectedGP, sessionType, year, canMakeRequest, incrementRequest]);
+      })
+      .catch(e => console.error('restoreMultiTelemetry:', e))
+      .finally(() => { if (multiGenRef.current === gen) setMultiLoading(false); });
+  }, [comparedDrivers, selectedGP, sessionType, year, canMakeRequest, incrementRequest]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Year guard ────────────────────────────────────────────────────────────────
   // Was `y !== 2026 && !canAccessYear(y)` — that exempted exactly the one
@@ -327,20 +359,27 @@ export default function TelemetryPage() {
     if (!laps.length || selectedGP == null || !sessionType) return;
     const gp = selectedGP, st = sessionType;
     const uniqueDrivers = [...new Set(laps.map(l => l.driver))];
+    // Supersedes the one-time URL restore, which would otherwise fire on
+    // this same comparedDrivers change and fetch (and count) it a second time
+    restoredMultiRef.current = true;
+    multiGenRef.current++;
     setComparedDrivers(uniqueDrivers);
+    setComparedLaps(laps);
     setD1Raw(uniqueDrivers[0]);
     setD2Raw(uniqueDrivers[1] || '');
     setSelectedLap1(null);
     setSelectedLap2(null);
     setActiveView('trace');
 
+    const lapRefs: LapRef[] = laps.map(l => ({
+      year, gp, session: st, driver: l.driver, lap: l.lapNumber,
+    }));
+    const cachedMulti = getCachedTelemetryMulti(lapRefs);
+    if (cachedMulti) { setMultiTelemetryData(cachedMulti); return; }
     if (!canMakeRequest) { setShowUpgradeModal(true); return; }
     setMultiLoading(true);
     setMultiTelemetryData(null);
     try {
-      const lapRefs: LapRef[] = laps.map(l => ({
-        year, gp, session: st, driver: l.driver, lap: l.lapNumber,
-      }));
       const data = await getTelemetryMulti(lapRefs);
       setMultiTelemetryData(data);
       incrementRequest();
@@ -355,20 +394,25 @@ export default function TelemetryPage() {
   const handleCompare = useCallback(async (driversToCompare: string[]) => {
     if (!driversToCompare.length || selectedGP == null || !sessionType) return;
     const gp = selectedGP, st = sessionType;
+    restoredMultiRef.current = true; // see handleCompareLaps
+    multiGenRef.current++;
     setComparedDrivers(driversToCompare);
+    setComparedLaps([]);
     setD1Raw(driversToCompare[0]);
     setD2Raw(driversToCompare[1] || '');
     setSelectedLap1(null);
     setSelectedLap2(null);
     setActiveView('trace');
 
+    const laps: LapRef[] = driversToCompare.map(d => ({
+      year, gp, session: st, driver: d,
+    }));
+    const cachedMulti = getCachedTelemetryMulti(laps);
+    if (cachedMulti) { setMultiTelemetryData(cachedMulti); return; }
     if (!canMakeRequest) { setShowUpgradeModal(true); return; }
     setMultiLoading(true);
     setMultiTelemetryData(null);
     try {
-      const laps: LapRef[] = driversToCompare.map(d => ({
-        year, gp, session: st, driver: d,
-      }));
       const data = await getTelemetryMulti(laps);
       setMultiTelemetryData(data);
       incrementRequest();
@@ -534,7 +578,7 @@ export default function TelemetryPage() {
             Telemetry
           </span>
           <button
-            onClick={() => navigate('/stats')}
+            onClick={() => navigate(rememberedUrl('/stats'))}
             style={{
               padding: '3px 9px',
               fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: '0.1em',
@@ -673,8 +717,8 @@ export default function TelemetryPage() {
             drivers={drivers}
             getDriverColor={getDriverColor}
             areTeammates={areTeammates}
-            initialDriver1={driver1}
-            initialDriver2={driver2}
+            initialDrivers={explorerDrivers.length ? explorerDrivers : [driver1, driver2].filter(Boolean)}
+            initialLapRefs={comparedLaps}
             onCompare={handleCompare}
             onCompareLaps={handleCompareLaps}
             onSelectedDriversChange={setExplorerDrivers}

@@ -107,8 +107,10 @@ interface SessionExplorerProps {
   drivers: any[];
   getDriverColor: (code: string) => string;
   areTeammates: (a: string, b: string) => boolean;
-  initialDriver1: string;
-  initialDriver2: string;
+  /** Drivers plotted when the explorer opens or the session changes. */
+  initialDrivers: string[];
+  /** Laps already picked (restored with the page), highlighted on open. */
+  initialLapRefs?: LapSelection[];
   onCompare: (drivers: string[]) => void;
   onCompareLaps: (laps: LapSelection[]) => void;
   /** Lets the parent know which drivers are plotted (drives its PNG export button). */
@@ -164,7 +166,7 @@ export default function SessionExplorer({
   selectedGP, onGPChange, grandsPrix,
   sessionType, onSessionChange,
   drivers, getDriverColor, areTeammates,
-  initialDriver1, initialDriver2,
+  initialDrivers, initialLapRefs,
   onCompare,
   onCompareLaps,
   onSelectedDriversChange,
@@ -172,12 +174,12 @@ export default function SessionExplorer({
   const isMobile = useIsMobile();
 
   const [selectedDrivers,  setSelectedDrivers]  = useState<string[]>(() =>
-    [initialDriver1, initialDriver2].filter(Boolean),
+    initialDrivers,
   );
   useEffect(() => { onSelectedDriversChange?.(selectedDrivers); }, [selectedDrivers]); // eslint-disable-line react-hooks/exhaustive-deps
   const [lapDataMap,   setLapDataMap]   = useState<Map<string, LapData>>(new Map());
   const [loadingSet,   setLoadingSet]   = useState<Set<string>>(new Set());
-  const [selectedLapRefs, setSelectedLapRefs] = useState<LapSelection[]>([]);
+  const [selectedLapRefs, setSelectedLapRefs] = useState<LapSelection[]>(() => initialLapRefs ?? []);
   // Drivers mid-retract-animation after being deselected — kept rendered in
   // the chart (not the legend/table) just long enough to play the reverse
   // draw animation, then dropped.
@@ -204,12 +206,20 @@ export default function SessionExplorer({
   const API = getApiBase();
 
   // ── Reset on session change ────────────────────────────────────────────────
+  // Only on a real change, not on mount — that would drop the laps restored
+  // with the page. Value comparison rather than a first-run flag, which
+  // StrictMode's dev-only double effect run would flip (same fix as
+  // TelemetryPage).
+  const sessionKey = `${year}|${selectedGP}|${sessionType}`;
+  const prevSessionKeyRef = useRef(sessionKey);
   useEffect(() => {
+    if (prevSessionKeyRef.current === sessionKey) return;
+    prevSessionKeyRef.current = sessionKey;
     setLapDataMap(new Map());
-    setSelectedDrivers([initialDriver1, initialDriver2].filter(Boolean));
+    setSelectedDrivers(initialDrivers);
     setSelectedLapRefs([]);
     setRetractingDrivers([]);
-  }, [year, selectedGP, sessionType]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sessionKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Toggle specific lap ref ────────────────────────────────────────────────
   const toggleLapRef = useCallback((driver: string, lapNumber: number) => {
@@ -245,7 +255,7 @@ export default function SessionExplorer({
 
   // Load initial drivers on mount / session change
   useEffect(() => {
-    [initialDriver1, initialDriver2].filter(Boolean).forEach(loadDriver);
+    initialDrivers.forEach(loadDriver);
   }, [year, selectedGP, sessionType]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Toggle driver ──────────────────────────────────────────────────────────

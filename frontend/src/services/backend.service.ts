@@ -7,6 +7,12 @@ import { getApiBase } from '../config';
 
 const API_BASE_URL = getApiBase();
 
+// Multi-lap comparisons already loaded during this visit, by their exact
+// lap list — shown again instantly (switching views, or coming back from
+// Statistics) instead of refetched.
+const MULTI_CACHE_SIZE = 20;
+const multiCache = new Map<string, TelemetryDataMulti>();
+
 class BackendService {
   async getSchedule(year: number) {
     const response = await fetch(`${API_BASE_URL}/grands-prix/${year}`);
@@ -150,7 +156,10 @@ class BackendService {
       body: JSON.stringify({ laps }),
     });
     if (!response.ok) throw new Error('Failed to fetch multi-lap telemetry');
-    return response.json();
+    const data: TelemetryDataMulti = await response.json();
+    multiCache.set(JSON.stringify(laps), data);
+    if (multiCache.size > MULTI_CACHE_SIZE) multiCache.delete(multiCache.keys().next().value!);
+    return data;
   }
 }
 
@@ -188,3 +197,5 @@ export const getRaceResults = (year: number, gpRound: number) => backendService.
 export const getStandingsAfterRace = (year: number, gpRound: number) => backendService.getStandingsAfterRace(year, gpRound);
 export const getCircuits = (year: number) => backendService.getCircuits(year);
 export const getTelemetryMulti = (laps: LapRef[]) => backendService.getTelemetryMulti(laps);
+export const getCachedTelemetryMulti = (laps: LapRef[]): TelemetryDataMulti | undefined =>
+  multiCache.get(JSON.stringify(laps));

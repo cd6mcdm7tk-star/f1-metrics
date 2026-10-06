@@ -9,6 +9,7 @@ import AuthModal from '../components/AuthModal';
 import LegalLinks from '../components/LegalLinks';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { getApiBase } from '../config';
+import { useRememberPageUrl, rememberedUrl } from '../hooks/usePageMemory';
 
 interface DriverStats {
   wins: number;
@@ -173,6 +174,7 @@ export default function StatisticsPage() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const [searchParams, setSearchParams] = useSearchParams();
+  useRememberPageUrl();
   const { canAccessYear, isPremium, isReady: subscriptionReady } = useSubscription();
   const { user, signOut } = useAuth();
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
@@ -1410,7 +1412,7 @@ export default function StatisticsPage() {
           border: '1px solid var(--border)', borderRadius: 'var(--r)', overflow: 'hidden',
         }}>
           <button
-            onClick={() => navigate('/app')}
+            onClick={() => navigate(rememberedUrl('/app'))}
             style={{
               padding: '3px 9px',
               fontFamily: "'JetBrains Mono', monospace", fontSize: 9, letterSpacing: '0.1em',
