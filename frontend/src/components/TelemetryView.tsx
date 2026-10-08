@@ -539,7 +539,7 @@ export default function TelemetryView({
       </div>
 
       {/* ── Telemetry charts ─────────────────────────────────────────────────── */}
-      <div ref={chartsContainerRef} style={{ ...panelStyle(), position: 'relative' }}>
+      <div ref={chartsContainerRef} data-export-watermark style={{ ...panelStyle(), position: 'relative' }}>
 
         {/* Synchronized crosshair */}
         <div ref={crosshairLineRef} style={{

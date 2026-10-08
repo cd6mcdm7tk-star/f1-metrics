@@ -575,6 +575,7 @@ export default function TelemetryViewMulti({ telemetryData, getDriverColor, areT
           {/* Charts column */}
           <div
             ref={containerRef}
+            data-export-watermark
             className="relative flex-1 overflow-hidden"
             style={{ cursor: loupeMode ? 'zoom-in' : 'crosshair' }}
           >

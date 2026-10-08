@@ -52,11 +52,6 @@ const TEAM_COLORS: Record<string, string> = {
   'cadillac': '#0E49B1', 'audi': '#BB0A30',
 };
 
-// Readable session names for the exported image's context line.
-const SESSION_NAMES: Record<string, string> = {
-  Q: 'Qualifying', R: 'Race', S: 'Sprint', SQ: 'Sprint Qualifying',
-};
-
 const TEAMS_2026: Record<string, string> = {
   VER: 'Red Bull Racing', HAD: 'Red Bull Racing',
   LEC: 'Ferrari',         HAM: 'Ferrari',
@@ -435,9 +430,8 @@ export default function TelemetryPage() {
   const effectiveD2 = telemetryData?.driver2 || driver2;
 
   // ── PNG export ───────────────────────────────────────────────────────────────
-  // Works from both views: the full telemetry trace stack, or the lap-time
-  // chart in the explorer. The exported image gets a branded footer with
-  // this session's context (see utils/exportBrandedPng).
+  // Works from both views: the lap-time chart in 16:9, or the full telemetry
+  // trace stack at a fixed desktop width (see utils/exportBrandedPng).
   const handleExportPng = useCallback(async () => {
     const isLaps = activeView === 'laps';
     const target = document.getElementById(isLaps ? 'laps-export-target' : 'telemetry-export-target');
@@ -454,16 +448,12 @@ export default function TelemetryPage() {
         driverLabels = [effectiveD1, effectiveD2].filter(Boolean);
       }
       const gpName = grandsPrix.find(g => g.round === selectedGP)?.name;
-      const sessionName = sessionType ? (SESSION_NAMES[sessionType] ?? sessionType) : null;
-      const context = [
-        String(year), gpName, sessionName, isLaps ? 'Lap times' : null, driverLabels.join(' vs '),
-      ].filter(Boolean).join(' · ');
       const slug = [year, gpName, sessionType, ...driverLabels].filter(Boolean).join('-').toLowerCase().replace(/[^a-z0-9-]+/g, '');
 
       const { exportBrandedPng } = await import('../utils/exportBrandedPng');
       await exportBrandedPng(target, {
         filename: `metrikdelta-${isLaps ? 'laptimes' : 'telemetry'}-${slug}.png`,
-        context,
+        layout: isLaps ? { width: 960, height: 540 } : { width: 1440 },
       });
       setExportDone(true);
       setTimeout(() => setExportDone(false), 2000);
