@@ -1,17 +1,9 @@
 """
-METRIK DELTA - Session ingestion job
-====================================
-Loads telemetry + lap data for a given session and stores it in PostgreSQL.
+Stores a session's laps and telemetry in PostgreSQL: OpenF1 for the current
+season (every lap's telemetry), FastF1 before that (fastest laps only).
+Run by jobs/schedule_ingest.py, or by hand:
 
-Sources:
-  - FastF1   : year <= 2025
-  - OpenF1   : year >= 2026  (https://api.openf1.org)
-
-Usage:
   python jobs/ingest_session.py --year 2026 --round 1 --session Q
-  python jobs/ingest_session.py --year 2025 --round 5 --session R
-
-Railway Cron: configure to run this script after each session.
 """
 
 import argparse
@@ -22,7 +14,6 @@ import sys
 import time
 from typing import Optional
 
-import numpy as np
 import pandas as pd
 import requests
 
@@ -66,10 +57,10 @@ def _get_openf1_token() -> str | None:
         data = r.json()
         _openf1_jwt["token"]      = data["access_token"]
         _openf1_jwt["expires_at"] = now + int(data.get("expires_in", 3600)) - 300
-        logger.info("✅ OpenF1 JWT token refreshed")
+        logger.info("OpenF1 token refreshed")
         return _openf1_jwt["token"]
     except Exception as e:
-        logger.warning(f"⚠️  OpenF1 token fetch failed: {e}")
+        logger.warning(f"OpenF1 token fetch failed: {e}")
         return None
 
 
@@ -208,7 +199,7 @@ def ingest_openf1(year: int, gp_round: int, session_type: str):
     try:
         session_key = _openf1_session_key(year, gp_round, session_type)
     except (RuntimeError, ValueError) as e:
-        logger.warning(f"  OpenF1 indisponible ({e}) — fallback FastF1")
+        logger.warning(f"  OpenF1 unavailable ({e}), falling back to FastF1")
         ingest_fastf1(year, gp_round, session_type)
         return
     logger.info(f"  session_key = {session_key}")
@@ -463,7 +454,7 @@ def ingest_fastf1(year: int, gp_round: int, session_type: str):
     fastf1.Cache.enable_cache(cache_dir)
 
     session = fastf1.get_session(year, gp_round, session_type)
-    # Charger uniquement laps + telemetry (pas météo, pas messages radio)
+    # Laps and telemetry only: no weather or race control messages
     session.load(laps=True, telemetry=True, weather=False, messages=False)
 
     for driver_num in session.drivers:
@@ -538,7 +529,7 @@ def ingest_fastf1(year: int, gp_round: int, session_type: str):
         except Exception as e:
             logger.error(f"  Driver {driver_code} failed: {e}")
 
-    # Libérer la mémoire FastF1 explicitement
+    # FastF1 sessions are large: free the memory before the next one
     del session
     gc.collect()
     logger.info(f"[FastF1] Done ingesting {year} R{gp_round} {session_type}")

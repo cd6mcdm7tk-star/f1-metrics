@@ -1,12 +1,9 @@
-"""
-METRIK DELTA - PostgreSQL Database Layer
-Connection pool + query helpers for pre-computed F1 data.
-"""
+"""PostgreSQL: connection pool and queries for the ingested F1 data (laps, telemetry, session keys)."""
 import json
 import logging
 import math
 import os
-from typing import Any, Optional
+from typing import Optional
 
 import psycopg2
 from psycopg2 import pool
@@ -18,7 +15,7 @@ def _clean_telemetry_data(telemetry_data):
     # psycopg2 returns JSONB as dict already
     if isinstance(telemetry_data, str):
         telemetry_data = json.loads(telemetry_data)
-    # Nettoyer les NaN/Inf dans les données récupérées (listes ou scalaires)
+    # NaN/Inf aren't valid JSON: replaced by 0, in lists and scalars
     if telemetry_data:
         for key, value in telemetry_data.items():
             if isinstance(value, list):
@@ -409,26 +406,17 @@ class PostgresDB:
         ]
         return dict(zip(keys, row))
 
-    def get_fastest_lap_number(
-        self,
-        year: int,
-        gp_round: int,
-        session_type: str,
-        driver_code: str,
-    ) -> Optional[int]:
-        """Returns the lap_number of the fastest timed lap for a driver."""
-        row = self._execute(
-            """
-            SELECT lap_number FROM laps
-            WHERE year = %s AND gp_round = %s AND session_type = %s
-              AND driver_code = %s AND lap_time IS NOT NULL
-            ORDER BY lap_time ASC
-            LIMIT 1
-            """,
-            (year, gp_round, session_type, driver_code),
-            fetch="one",
-        )
-        return row[0] if row else None
+    def count_ingested(self, year: int, gp_round: int, session_type: str) -> dict:
+        """Laps and telemetry rows stored for one session."""
+        counts = {}
+        for table in ("laps", "telemetry"):
+            row = self._execute(
+                f"SELECT COUNT(*) FROM {table} WHERE year=%s AND gp_round=%s AND session_type=%s",
+                (year, gp_round, session_type),
+                fetch="one",
+            )
+            counts[table] = row[0] if row else 0
+        return counts
 
 
 # Global instance

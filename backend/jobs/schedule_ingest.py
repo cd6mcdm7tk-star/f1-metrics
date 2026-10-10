@@ -1,24 +1,12 @@
 """
-METRIK DELTA - Session auto-ingestion scheduler
-================================================
-Vérifie le calendrier OpenF1, détecte les sessions récemment terminées
-et lance l'ingestion pour les sessions absentes de PostgreSQL.
+Hourly ingestion scheduler (Railway cron: `python jobs/schedule_ingest.py`, 0 * * * *).
 
-Conçu pour tourner toutes les heures sur Railway Cron.
+For each session of the current season that ended less than 7 days ago and
+isn't fully stored in PostgreSQL yet (lap counts compared with OpenF1), runs
+ingest() — or only ingest_openf1_compounds() when just the tyres are missing.
+Sessions: Q, R, S, SQ, SS (practice isn't ingested).
 
-Railway Cron command : python jobs/schedule_ingest.py
-Schedule             : 0 * * * *  (toutes les heures)
-
-Logique :
-  - Pour chaque session de l'année en cours :
-      * Si la session est terminée (date_start + durée estimée < maintenant)
-      * Et si la session a moins de 7 jours (évite de re-checker l'historique lointain)
-      * Et si PostgreSQL n'a pas encore TOUS ses tours (comparé à OpenF1)
-      → Lance ingest() — ou, si seuls les pneus manquent, ingest_openf1_compounds()
-
-  `--all` ignore la fenêtre de 7 jours : rattrapage de toute la saison en cours.
-
-Sessions ingérées : Q, R, S, SQ, SS  (pas FP par défaut, peu consultées)
+`--all` drops the 7-day window to catch up the whole season.
 """
 
 import argparse
@@ -46,7 +34,7 @@ logger = logging.getLogger(__name__)
 OPENF1_BASE = "https://api.openf1.org/v1"
 
 # ---------------------------------------------------------------------------
-# OpenF1 JWT authentication (même logique que main.py)
+# OpenF1 authentication (same as app/openf1.py, with requests)
 # ---------------------------------------------------------------------------
 
 _openf1_jwt: dict = {"token": None, "expires_at": 0}
@@ -71,13 +59,13 @@ def _get_openf1_token() -> str | None:
         data = r.json()
         _openf1_jwt["token"]      = data["access_token"]
         _openf1_jwt["expires_at"] = now + int(data.get("expires_in", 3600)) - 300
-        logger.info("✅ OpenF1 JWT token refreshed")
+        logger.info("OpenF1 token refreshed")
         return _openf1_jwt["token"]
     except Exception as e:
-        logger.warning(f"⚠️  OpenF1 token fetch failed: {e}")
+        logger.warning(f"OpenF1 token fetch failed: {e}")
         return None
 
-# OpenF1 session_name → notre abréviation
+# OpenF1 session_name -> our session code
 SESSION_NAME_MAP = {
     "Qualifying":        "Q",
     "Race":              "R",
@@ -89,7 +77,7 @@ SESSION_NAME_MAP = {
     "Sprint Shootout":   "SS",
 }
 
-# Durée estimée de chaque session (minutes) — après laquelle les données sont disponibles
+# Expected length of each session (minutes): its data is available after that
 SESSION_DURATIONS = {
     "Q":   75,
     "R":   130,
@@ -101,7 +89,7 @@ SESSION_DURATIONS = {
     "SS":  60,
 }
 
-# Sessions à ingérer (FP exclues par défaut — peu consultées, coût API élevé)
+# Practice isn't ingested: rarely viewed, and costly in API calls
 SESSIONS_TO_INGEST = {"Q", "R", "S", "SQ", "SS"}
 
 
@@ -168,7 +156,7 @@ def session_status(year: int, gp_round: int, session_type: str, session_key: int
 
 
 def get_sessions_fastf1(year: int) -> list:
-    """Fallback: construit la liste des sessions depuis FastF1."""
+    """Fallback: the season's sessions from FastF1's schedule."""
     schedule = fastf1.get_event_schedule(year, include_testing=False)
     sessions = []
     for _, row in schedule.iterrows():
@@ -194,9 +182,8 @@ _ff1_schedule_cache: dict = {}
 
 
 def get_round_from_fastf1(year: int, session_date_str: str) -> Optional[int]:
-    """Retourne le round number FastF1 en matchant la date de session.
-    FastF1 est la source de vérité — il exclut les GP annulés contrairement à OpenF1.
-    """
+    """FastF1's round number for a session date. FastF1's schedule is the
+    reference: unlike OpenF1, it leaves cancelled Grands Prix out."""
     if year not in _ff1_schedule_cache:
         try:
             _ff1_schedule_cache[year] = fastf1.get_event_schedule(year, include_testing=False)
@@ -222,7 +209,7 @@ def get_round_from_fastf1(year: int, session_date_str: str) -> Optional[int]:
 
 def run(whole_season: bool = False):
     if not db.available:
-        logger.error("PostgreSQL non disponible — vérifier DATABASE_URL")
+        logger.error("PostgreSQL unavailable, check DATABASE_URL")
         sys.exit(1)
 
     db.create_tables()
@@ -230,15 +217,15 @@ def run(whole_season: bool = False):
     now = datetime.now(timezone.utc)
     current_year = now.year
 
-    logger.info(f"[Schedule] Vérification sessions {current_year} — {now.strftime('%Y-%m-%d %H:%M UTC')}")
+    logger.info(f"[Schedule] Checking {current_year} sessions at {now.strftime('%Y-%m-%d %H:%M UTC')}")
 
     try:
         sessions = openf1_get("sessions", {"year": current_year})
     except RuntimeError:
-        logger.warning("OpenF1 /sessions indisponible — fallback FastF1")
+        logger.warning("OpenF1 /sessions unavailable, falling back to FastF1")
         sessions = get_sessions_fastf1(current_year)
     if not sessions:
-        logger.info("Aucune session trouvée")
+        logger.info("No sessions found")
         return
 
     ingested = 0
@@ -269,42 +256,42 @@ def run(whole_season: bool = False):
         duration_min  = SESSION_DURATIONS.get(session_type, 90)
         estimated_end = date_start + timedelta(minutes=duration_min)
 
-        # Session pas encore terminée → ignorer
+        # Not finished yet
         if now < estimated_end:
             continue
 
-        # Session trop ancienne (> 7 jours) → déjà traitée ou hors scope
+        # Older than 7 days: already handled
         if not whole_season and now - estimated_end > timedelta(days=7):
             continue
 
-        # Round par DATE uniquement : un repli « Nième meeting de la liste
-        # OpenF1 » comptait les GP annulés et décalait tous les rounds suivants.
+        # Round by date only: counting meetings in OpenF1's list includes
+        # cancelled Grands Prix and shifts every later round.
         gp_round = get_round_from_fastf1(current_year, date_start_str)
         if gp_round is None:
-            logger.warning(f"Round introuvable pour {session_name} du {date_start_str[:10]}")
+            logger.warning(f"No round found for {session_name} on {date_start_str[:10]}")
             continue
 
         label = f"{current_year} R{gp_round} {session_type}"
         try:
             status = session_status(current_year, gp_round, session_type, session["session_key"])
             if status == "complete":
-                logger.info(f"  ✓ Complet : {label}")
+                logger.info(f"  complete: {label}")
                 skipped += 1
             elif status == "no_compounds":
-                logger.info(f"  → Pneus manquants : {label}")
+                logger.info(f"  tyres missing: {label}")
                 ingest_openf1_compounds(current_year, gp_round, session_type)
                 fixed += 1
             else:
-                logger.info(f"  → Ingestion : {label} (terminée ~{estimated_end.strftime('%H:%M UTC')})")
+                logger.info(f"  ingesting: {label} (ended ~{estimated_end.strftime('%H:%M UTC')})")
                 ingest(current_year, gp_round, session_type)
                 ingested += 1
-                logger.info(f"  ✅ Succès : {label}")
+                logger.info(f"  done: {label}")
         except Exception as e:
             errors += 1
-            logger.error(f"  ❌ Échec : {label} — {e}")
+            logger.error(f"  failed: {label}: {e}")
 
     logger.info(
-        f"[Schedule] Terminé — Ingérés: {ingested}, Pneus complétés: {fixed}, Déjà à jour: {skipped}, Erreurs: {errors}"
+        f"[Schedule] Done. Ingested: {ingested}, tyres completed: {fixed}, up to date: {skipped}, errors: {errors}"
     )
 
 
