@@ -4,7 +4,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useSubscription, CURRENT_SEASON_YEAR } from '../hooks/useSubscription';
 import { useTelemetryCache } from '../hooks/useTelemetryCache';
 import { useAuth } from '../contexts/AuthContext';
-import { getBackendUrl } from '../config';
+import { getApiBase } from '../config';
 import { supabase } from '../lib/supabase';
 import UpgradeModal, { type UpgradeReason } from '../components/UpgradeModal';
 import AuthModal from '../components/AuthModal';
@@ -95,7 +95,7 @@ export default function TelemetryPage() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const { user, signOut } = useAuth();
-  const { canAccessYear, isPremium, canMakeRequest, incrementRequest, isReady: subscriptionReady } = useSubscription();
+  const { canAccessYear, isPremium, isReady: subscriptionReady } = useSubscription();
   const { getCached, setCached, getTelemetryKey } = useTelemetryCache();
   useRememberPageUrl();
 
@@ -279,7 +279,6 @@ export default function TelemetryPage() {
     const key = getTelemetryKey(year, gp, st, driver1, selectedLap1 ?? undefined, driver2, selectedLap2 ?? undefined);
     const cached = getCached<TelemetryData>(key);
     if (cached) { setTelemetryData(cached); return; }
-    if (!canMakeRequest) { setShowUpgradeModal(true); return; }
     setLoading(true);
     getTelemetryComparison(
       year, gp, st,
@@ -289,7 +288,6 @@ export default function TelemetryPage() {
       if (cancelled) return;
       setTelemetryData(data);
       setCached(key, data);
-      incrementRequest();
     }).catch(e => console.error('loadTelemetry:', e))
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; setLoading(false); };
@@ -306,28 +304,22 @@ export default function TelemetryPage() {
     const laps: LapRef[] = comparedLaps.length
       ? comparedLaps.map(l => ({ year, gp, session: st, driver: l.driver, lap: l.lapNumber }))
       : comparedDrivers.map(d => ({ year, gp, session: st, driver: d }));
-    // Already loaded during this visit (e.g. back from Statistics): shown
-    // straight away, and not counted as a new request.
+    // Already loaded during this visit (e.g. back from Statistics): shown straight away
     const cachedMulti = getCachedTelemetryMulti(laps);
     if (cachedMulti) { setMultiTelemetryData(cachedMulti); return; }
-    if (!canMakeRequest) { setShowUpgradeModal(true); return; }
-    // Deliberately not cancelled on cleanup: this effect's deps
-    // (canMakeRequest, incrementRequest…) change identity while the request
-    // is in flight — e.g. once the subscription status loads — and
-    // cancelling then threw the result away, leaving the page stuck on
-    // "Loading telemetry…". What supersedes it is a newer comparison or a
-    // session change (multiGenRef).
+    // Not cancelled on cleanup (that threw the result away mid-flight and left
+    // the page stuck on "Loading telemetry…"): a newer comparison or a session
+    // change supersedes it instead, through multiGenRef.
     const gen = multiGenRef.current;
     setMultiLoading(true);
     getTelemetryMulti(laps)
       .then(data => {
         if (multiGenRef.current !== gen) return;
         setMultiTelemetryData(data);
-        incrementRequest();
       })
       .catch(e => console.error('restoreMultiTelemetry:', e))
       .finally(() => { if (multiGenRef.current === gen) setMultiLoading(false); });
-  }, [comparedDrivers, selectedGP, sessionType, year, canMakeRequest, incrementRequest]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [comparedDrivers, selectedGP, sessionType, year]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Year guard ────────────────────────────────────────────────────────────────
   // Was `y !== 2026 && !canAccessYear(y)` — that exempted exactly the one
@@ -356,7 +348,7 @@ export default function TelemetryPage() {
     const gp = selectedGP, st = sessionType;
     const uniqueDrivers = [...new Set(laps.map(l => l.driver))];
     // Supersedes the one-time URL restore, which would otherwise fire on
-    // this same comparedDrivers change and fetch (and count) it a second time
+    // this same comparedDrivers change and fetch it a second time
     restoredMultiRef.current = true;
     multiGenRef.current++;
     setComparedDrivers(uniqueDrivers);
@@ -372,19 +364,17 @@ export default function TelemetryPage() {
     }));
     const cachedMulti = getCachedTelemetryMulti(lapRefs);
     if (cachedMulti) { setMultiTelemetryData(cachedMulti); return; }
-    if (!canMakeRequest) { setShowUpgradeModal(true); return; }
     setMultiLoading(true);
     setMultiTelemetryData(null);
     try {
       const data = await getTelemetryMulti(lapRefs);
       setMultiTelemetryData(data);
-      incrementRequest();
     } catch (e) {
       console.error('compareLaps:', e);
     } finally {
       setMultiLoading(false);
     }
-  }, [year, selectedGP, sessionType, canMakeRequest, incrementRequest]);
+  }, [year, selectedGP, sessionType]);
 
   // ── Compare N drivers (from SessionExplorer) ─────────────────────────────────
   const handleCompare = useCallback(async (driversToCompare: string[]) => {
@@ -405,19 +395,17 @@ export default function TelemetryPage() {
     }));
     const cachedMulti = getCachedTelemetryMulti(laps);
     if (cachedMulti) { setMultiTelemetryData(cachedMulti); return; }
-    if (!canMakeRequest) { setShowUpgradeModal(true); return; }
     setMultiLoading(true);
     setMultiTelemetryData(null);
     try {
       const data = await getTelemetryMulti(laps);
       setMultiTelemetryData(data);
-      incrementRequest();
     } catch (e) {
       console.error('multiTelemetry:', e);
     } finally {
       setMultiLoading(false);
     }
-  }, [year, selectedGP, sessionType, canMakeRequest, incrementRequest]);
+  }, [year, selectedGP, sessionType]);
 
   // ── Share ─────────────────────────────────────────────────────────────────────
   const handleShare = useCallback(() => {
@@ -476,7 +464,7 @@ export default function TelemetryPage() {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
       if (!token) return;
-      const res = await fetch(`${getBackendUrl()}/api/customer-portal/${user.id}`, {
+      const res = await fetch(`${getApiBase()}/customer-portal/${user.id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();

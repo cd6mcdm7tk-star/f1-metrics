@@ -62,12 +62,6 @@ export default function GoogleAnalytics() {
   return null;
 }
 
-export const trackEvent = (eventName: string, eventParams?: any) => {
-  if (window.gtag) {
-    window.gtag('event', eventName, eventParams);
-  }
-};
-
 declare global {
   interface Window {
     gtag: (...args: any[]) => void;

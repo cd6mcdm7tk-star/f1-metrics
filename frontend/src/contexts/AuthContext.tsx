@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { User, Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
+import { getApiBase } from '../config'
 import AuthModal from '../components/AuthModal'
 
 interface AuthContextType {
@@ -65,8 +66,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const pending = sessionStorage.getItem('pendingUpgrade') as 'monthly' | 'annual' | null
       if (pending) {
         sessionStorage.removeItem('pendingUpgrade')
-        const apiUrl = (import.meta as any).env.VITE_API_URL_EU || (import.meta as any).env.VITE_API_URL
-        fetch(`${apiUrl}/api/create-checkout-session`, {
+        fetch(`${getApiBase()}/create-checkout-session`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ user_id: user.id, plan_type: pending })

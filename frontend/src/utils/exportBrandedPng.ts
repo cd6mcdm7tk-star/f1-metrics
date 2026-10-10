@@ -10,7 +10,7 @@ const WATERMARK = {
   widthRatio: 0.36, // wordmark width as a share of the host's width
 };
 
-export interface ExportLayout {
+interface ExportLayout {
   width: number;   // CSS px the target is laid out at for the capture
   height?: number; // CSS px; omitted = the content's natural height
 }

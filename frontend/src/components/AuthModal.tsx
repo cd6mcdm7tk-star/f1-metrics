@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { X, Mail, CheckCircle, Loader2 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
-import { useTranslation } from 'react-i18next'
 import { supabase } from '../lib/supabase'
 
 interface AuthModalProps {
@@ -149,7 +148,6 @@ function Card({ children, onClose }: { children: React.ReactNode; onClose: () =>
 }
 
 export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
-  const { t } = useTranslation()
   const [isLogin, setIsLogin] = useState(true)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -312,7 +310,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
   // ── Main login/signup modal ────────────────────────────────────────────────
   return (
     <Card onClose={onClose}>
-      <h2 style={headingStyle}>{isLogin ? t('auth.login') : t('auth.signup')}</h2>
+      <h2 style={headingStyle}>{isLogin ? 'Login' : 'Sign Up'}</h2>
       <p style={subStyle}>
         {isLogin ? 'Log in to access your account' : 'Sign up to start analyzing F1 data'}
       </p>
@@ -332,7 +330,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
       <form onSubmit={handleSubmit}>
         <div style={{ marginBottom: 14 }}>
-          <span style={labelStyle}>{t('auth.email')}</span>
+          <span style={labelStyle}>Email</span>
           <input
             id="email" type="email" required value={email}
             onChange={e => setEmail(e.target.value)}
@@ -341,7 +339,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
           />
         </div>
         <div style={{ marginBottom: 20 }}>
-          <span style={labelStyle}>{t('auth.password')}</span>
+          <span style={labelStyle}>Password</span>
           <input
             id="password" type="password" required value={password}
             onChange={e => setPassword(e.target.value)}
@@ -354,7 +352,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
           disabled={loading || oauthLoading !== null}
           style={{ ...primaryButtonStyle, opacity: (loading || oauthLoading !== null) ? 0.6 : 1 }}
         >
-          {loading ? t('common.loading') : (isLogin ? t('auth.login') : t('auth.signup'))}
+          {loading ? 'Loading' : (isLogin ? 'Login' : 'Sign Up')}
         </button>
       </form>
 
@@ -365,7 +363,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
           onMouseEnter={e => { e.currentTarget.style.color = P.accent }}
           onMouseLeave={e => { e.currentTarget.style.color = P.text2 }}
         >
-          {isLogin ? t('auth.noAccount') : t('auth.hasAccount')}
+          {isLogin ? "Don't have an account?" : 'Already have an account?'}
         </button>
         {isLogin && (
           <button

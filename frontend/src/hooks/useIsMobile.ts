@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-export const MOBILE_BREAKPOINT = 768;
+const MOBILE_BREAKPOINT = 768;
 
 // The whole app is laid out with inline `style={{}}` objects, not CSS
 // classes — so plain @media queries can't override any of it (inline

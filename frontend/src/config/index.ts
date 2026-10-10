@@ -1,58 +1,12 @@
-/**
- * METRIK DELTA - Frontend Config
- * Auto-détecte local/production pour l'URL backend
- */
+// Chosen from the Vite build mode only: `vite preview` (and the prerender
+// step) serve a production build on localhost, so the hostname can't tell.
+const BACKEND_URL = import.meta.env.DEV
+  ? import.meta.env.VITE_API_URL || 'http://localhost:8000'
+  : import.meta.env.VITE_API_URL_EU || 'https://metrikdelta-backend-eu-production.up.railway.app';
 
-// Détection environnement — uniquement basée sur le mode de build Vite.
-// Un fallback sur window.location.hostname === 'localhost' cassait la
-// prerendering : `vite preview` sert aussi un build de prod sur localhost,
-// ce qui ferait pointer un vrai build de prod vers un backend local absent
-// (donc absent aussi côté serveur de build Vercel).
-const isDevelopment = import.meta.env.DEV;
-
-// URLs Backend — lues depuis les variables d'environnement
-const BACKEND_URLS = {
-  development: {
-    eu: import.meta.env.VITE_API_URL || 'http://localhost:8000',
-    usa: import.meta.env.VITE_API_URL || 'http://localhost:8000',
-  },
-  production: {
-    eu: import.meta.env.VITE_API_URL_EU || 'https://metrikdelta-backend-eu-production.up.railway.app',
-    usa: import.meta.env.VITE_API_URL_USA || import.meta.env.VITE_API_URL_EU || 'https://metrikdelta-backend-eu-production.up.railway.app',
-  },
-};
-
-// Sélectionne l'URL selon l'environnement
-const currentBackend = isDevelopment
-  ? BACKEND_URLS.development
-  : BACKEND_URLS.production;
-
-// Export config
-export const config = {
-  backend: {
-    baseUrl: currentBackend.eu,
-    euUrl: currentBackend.eu,
-    usaUrl: currentBackend.usa,
-  },
-  isDevelopment,
-  isProduction: !isDevelopment,
-};
-
-// Helper: Get backend URL (avec région optionnelle)
-export function getBackendUrl(region: 'eu' | 'usa' = 'eu'): string {
-  return region === 'usa' ? config.backend.usaUrl : config.backend.euUrl;
-}
-
-// Helper: backend URL with exactly one trailing /api — normalizes regardless
-// of whether the host was given with or without it. Needed because Vercel's
-// configured VITE_API_URL_EU has no /api suffix while the local .env.production
-// file does; several call sites assumed the latter and 404'd in prod as a
-// result (grands-prix/calendar/session-laps all silently missing /api).
-export function getApiBase(region: 'eu' | 'usa' = 'eu'): string {
-  const trimmed = getBackendUrl(region).replace(/\/+$/, '');
+// Backend base with exactly one trailing /api — VITE_API_URL_EU is set
+// without it on Vercel but with it in the local .env.production.
+export function getApiBase(): string {
+  const trimmed = BACKEND_URL.replace(/\/+$/, '');
   return trimmed.endsWith('/api') ? trimmed : `${trimmed}/api`;
-}
-
-if (isDevelopment) {
-  console.log('🔧 Dev — backend:', config.backend.baseUrl);
 }

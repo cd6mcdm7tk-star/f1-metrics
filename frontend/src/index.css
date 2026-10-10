@@ -95,11 +95,6 @@
     background-image: radial-gradient(rgba(242,230,216,0.025) 1px, transparent 1px);
     background-size: 22px 22px;
   }
-
-  /* All data / numeric values → monospace */
-  .data, time, .lap-time, .sector-time {
-    font-family: 'JetBrains Mono', 'Fira Mono', monospace;
-  }
 }
 
 /* ── Scrollbar ─────────────────────────────────────────────────────────────── */
@@ -147,44 +142,3 @@
   letter-spacing: 0.20em;
   color: var(--text-3);
 }
-
-/* Engineering panel */
-.panel {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--r2);
-}
-
-/* Accent text */
-.accent { color: var(--accent); }
-
-/* ── Animations ────────────────────────────────────────────────────────────── */
-@keyframes slide-up {
-  from { opacity: 0; transform: translate(-50%, 12px); }
-  to   { opacity: 1; transform: translate(-50%, 0); }
-}
-.animate-slide-up { animation: slide-up 0.22s ease-out; }
-
-@keyframes fade-in {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-.animate-fade-in { animation: fade-in 0.3s ease-out; }
-
-@keyframes slide-in-right {
-  from { transform: translateX(100%); opacity: 0; }
-  to   { transform: translateX(0);    opacity: 1; }
-}
-.animate-slide-in-right { animation: slide-in-right 0.25s ease-out; }
-
-/* ── Legacy classes (kept for components not yet migrated) ──────────────────── */
-.glass-cockpit {
-  background: rgba(11,11,23,0.92);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-}
-
-.custom-scrollbar::-webkit-scrollbar       { width: 4px; }
-.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(var(--accent-rgb), 0.25); border-radius: 2px; }
-.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(var(--accent-rgb), 0.45); }
