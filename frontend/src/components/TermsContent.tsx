@@ -53,8 +53,8 @@ const TermsContent: React.FC = () => {
         <h3 style={h3}>4. Subscriptions and Payments</h3>
         <p style={p}>METRIK DELTA offers two tiers:</p>
         <ul style={ul}>
-          <li><span style={strong}>Free</span> — limited daily requests, historical seasons only</li>
-          <li><span style={strong}>PRO</span> — €1.99/month or €14.99/year (both include a 7-day free trial), unlimited requests, current-season access</li>
+          <li><span style={strong}>Free</span> — every past season, in Telemetry and Statistics</li>
+          <li><span style={strong}>PRO</span> — €1.99/month or €14.99/year: the current season in Telemetry and Statistics, and HD chart export</li>
         </ul>
         <p style={{ ...p, marginTop: 10 }}>
           Payments are processed by Stripe; we never store your card details. Subscriptions renew
@@ -64,12 +64,11 @@ const TermsContent: React.FC = () => {
       </section>
 
       <section style={section}>
-        <h3 style={h3}>5. Trial, Cancellation and Refunds</h3>
+        <h3 style={h3}>5. Cancellation and Refunds</h3>
         <p style={p}>
-          Cancel any time from your account settings — during the 7-day trial, cancelling means you're
-          never charged. Cancelling after the trial stops future renewals; you keep PRO access until the
-          end of the period already paid for. Amounts already charged are not refunded, except where
-          required by law.
+          Cancel any time from your account settings. Cancelling stops future renewals; you keep PRO
+          access until the end of the period already paid for. Amounts already charged are not refunded,
+          except where required by law.
         </p>
       </section>
 

@@ -1,41 +1,77 @@
-import { X, Zap, Check, Loader2, TrendingUp, Trophy, Radio } from 'lucide-react'
-import { useState } from 'react'
+import { X, Loader2, Activity, BarChart3, Download } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import type { LucideIcon } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { CURRENT_SEASON_YEAR } from '../hooks/useSubscription'
+import { getApiBase } from '../config'
+
+export type UpgradeReason = 'current_season' | 'export'
 
 interface UpgradeModalProps {
   isOpen: boolean
   onClose: () => void
-  reason?: 'current_season' | 'live_timing' | 'rate_limit'
+  reason?: UpgradeReason
 }
 
 type PlanType = 'monthly' | 'annual'
 
-// Same self-contained dark "chrome" palette as AuthModal — see that file for
-// why it's hardcoded rather than read via CSS vars.
-const P = {
-  bg: '#3d0c10', surface: '#4d1016', panel: '#57121c',
-  accent: '#f2e6d8', text: '#f2e6d8',
-  text2: 'rgba(242,230,216,0.55)', text3: 'rgba(242,230,216,0.32)',
-  border: 'rgba(242,230,216,0.10)', borderHi: 'rgba(242,230,216,0.20)',
-  green: '#4ADE80', // 7.99:1 against `panel`
+const PLANS: Record<PlanType, { label: string; price: string; period: string; note: string }> = {
+  annual:  { label: 'Annual',  price: '14,99€', period: '/ year',  note: '1,25€/mo · save 37%' },
+  monthly: { label: 'Monthly', price: '1,99€',  period: '/ month', note: 'Cancel anytime' },
 }
 
-const labelStyle: React.CSSProperties = {
-  fontFamily: "'JetBrains Mono', monospace", fontSize: 9, letterSpacing: '0.14em',
-  textTransform: 'uppercase', color: P.text3,
+const FEATURES: { key: 'telemetry' | 'statistics' | 'export'; icon: LucideIcon; title: string; desc: string }[] = [
+  {
+    key: 'telemetry', icon: Activity, title: `${CURRENT_SEASON_YEAR} telemetry`,
+    desc: 'Lap times plus speed, throttle, brake and gear traces for every session of the season.',
+  },
+  {
+    key: 'statistics', icon: BarChart3, title: `${CURRENT_SEASON_YEAR} statistics`,
+    desc: 'Head-to-heads, standings and season stats for the current grid.',
+  },
+  {
+    key: 'export', icon: Download, title: 'HD chart export',
+    desc: 'Download any chart as a 3600 px image, ready to post.',
+  },
+]
+
+const HEADINGS: Record<UpgradeReason, { title: string; subtitle: string }> = {
+  current_season: {
+    title: `Unlock the ${CURRENT_SEASON_YEAR} season`,
+    subtitle: `Telemetry and statistics for every ${CURRENT_SEASON_YEAR} session, plus HD chart export.`,
+  },
+  export: {
+    title: 'Export HD charts',
+    subtitle: `Chart export comes with METRIK PRO, along with the full ${CURRENT_SEASON_YEAR} season.`,
+  },
 }
 
+const mono = "'JetBrains Mono', monospace"
+const display = "'Rajdhani', sans-serif"
+
+// Cream `.data-zone` palette, like the Telemetry and Statistics pages it opens from.
 export default function UpgradeModal({ isOpen, onClose, reason = 'current_season' }: UpgradeModalProps) {
   const [loading, setLoading] = useState(false)
   const [selectedPlan, setSelectedPlan] = useState<PlanType>('annual')
   const { user, setAuthModalOpen } = useAuth()
 
+  useEffect(() => {
+    if (!isOpen) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !loading) onClose() }
+    document.addEventListener('keydown', onKey)
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.body.style.overflow = prevOverflow
+    }
+  }, [isOpen, loading, onClose])
+
   if (!isOpen) return null
 
   const handleUpgrade = async () => {
     if (!user) {
-      // Mémoriser l'intent de paiement → sera auto-déclenché après login
+      // Remembered intent: checkout starts automatically after sign-in
       sessionStorage.setItem('pendingUpgrade', selectedPlan)
       setAuthModalOpen(true)
       onClose()
@@ -43,26 +79,15 @@ export default function UpgradeModal({ isOpen, onClose, reason = 'current_season
     }
 
     setLoading(true)
-
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL_EU || import.meta.env.VITE_API_URL}/api/create-checkout-session`, {
+      const response = await fetch(`${getApiBase()}/create-checkout-session`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          user_id: user.id,
-          plan_type: selectedPlan  // 'monthly' ou 'annual'
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: user.id, plan_type: selectedPlan }),
       })
-
       const data = await response.json()
-
-      if (data.checkout_url) {
-        window.location.href = data.checkout_url
-      } else {
-        throw new Error('No checkout URL received')
-      }
+      if (!data.checkout_url) throw new Error('No checkout URL received')
+      window.location.href = data.checkout_url
     } catch (error) {
       console.error('Error creating checkout session:', error)
       alert('Error creating payment session')
@@ -70,162 +95,131 @@ export default function UpgradeModal({ isOpen, onClose, reason = 'current_season
     }
   }
 
-  const getReasonContent = () => {
-    switch (reason) {
-      case 'current_season':
-        return { icon: <Trophy size={32} color={P.accent} />, title: `Unlock ${CURRENT_SEASON_YEAR} Season`, description: 'Access live data from the current F1 season' }
-      case 'live_timing':
-        return { icon: <Radio size={32} color={P.accent} />, title: 'Live Timing Locked', description: 'Follow races in real-time with PRO' }
-      default:
-        return { icon: <Zap size={32} color={P.accent} />, title: 'Upgrade to PRO', description: 'Unlock all premium features' }
-    }
-  }
-
-  const reasonContent = getReasonContent()
-
-  const planCardStyle = (selected: boolean): React.CSSProperties => ({
-    position: 'relative', padding: '18px 16px', borderRadius: 'var(--r2)',
-    border: `2px solid ${selected ? P.accent : P.border}`,
-    background: selected ? 'rgba(242,230,216,0.08)' : P.bg,
-    cursor: loading ? 'not-allowed' : 'pointer',
-    textAlign: 'center', transition: 'all 0.2s',
-  })
+  const heading = HEADINGS[reason]
+  // The feature that brought the user here comes first
+  const features = reason === 'export'
+    ? [...FEATURES.filter(f => f.key === 'export'), ...FEATURES.filter(f => f.key !== 'export')]
+    : FEATURES
+  const plan = PLANS[selectedPlan]
 
   return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: 50,
-      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
-      background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)',
-    }}>
-      <div style={{
-        position: 'relative', width: '100%', maxWidth: 620, maxHeight: '92vh', overflowY: 'auto',
-        background: P.panel, border: `1px solid ${P.borderHi}`, borderRadius: 'var(--r2)',
-        boxShadow: '0 24px 60px rgba(0,0,0,0.5)',
-        padding: '32px 28px 28px',
-      }}>
+    <div
+      className="data-zone"
+      style={{
+        position: 'fixed', inset: 0, zIndex: 50,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+      }}
+    >
+      <div
+        onClick={() => { if (!loading) onClose() }}
+        style={{ position: 'absolute', inset: 0, background: 'rgba(28,4,7,0.55)', backdropFilter: 'blur(4px)' }}
+      />
+
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="upgrade-title"
+        style={{
+          position: 'relative', width: '100%', maxWidth: 520, maxHeight: '92vh', overflowY: 'auto',
+          background: 'var(--bg)', color: 'var(--text)',
+          border: '1px solid var(--border-hi)', borderTop: '3px solid var(--accent)', borderRadius: 'var(--r2)',
+          boxShadow: '0 24px 60px rgba(28,4,7,0.35)',
+          padding: '26px 26px 22px',
+        }}
+      >
         <button
           onClick={onClose}
           disabled={loading}
+          aria-label="Close"
           style={{
-            position: 'absolute', top: 16, right: 16,
-            color: P.text3, background: 'transparent', border: 'none',
+            position: 'absolute', top: 14, right: 14,
+            color: 'var(--text-2)', background: 'transparent', border: 'none',
             cursor: loading ? 'not-allowed' : 'pointer', padding: 4, lineHeight: 0, transition: 'color 0.15s',
           }}
-          onMouseEnter={e => { e.currentTarget.style.color = P.text }}
-          onMouseLeave={e => { e.currentTarget.style.color = P.text3 }}
+          onMouseEnter={e => { e.currentTarget.style.color = 'var(--text)' }}
+          onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-2)' }}
         >
           <X size={18} />
         </button>
 
         {/* Header */}
-        <div style={{ textAlign: 'center', marginBottom: 24 }}>
-          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 14 }}>
-            <div style={{
-              width: 56, height: 56, borderRadius: '50%',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: P.surface, border: `1px solid ${P.borderHi}`,
-            }}>
-              {reasonContent.icon}
-            </div>
-          </div>
-          <h2 style={{
-            fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 24,
-            letterSpacing: '0.04em', textTransform: 'uppercase', color: P.text, margin: '0 0 6px',
-          }}>
-            {reasonContent.title}
-          </h2>
-          <p style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, color: P.text2, margin: 0 }}>
-            {reasonContent.description}
-          </p>
-        </div>
-
-        {/* Plan selector */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
-          <button onClick={() => setSelectedPlan('monthly')} disabled={loading} style={planCardStyle(selectedPlan === 'monthly')}>
-            {selectedPlan === 'monthly' && (
-              <div style={{
-                position: 'absolute', top: 10, right: 10, width: 20, height: 20, borderRadius: '50%',
-                background: P.accent, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                <Check size={12} color={P.bg} />
-              </div>
-            )}
-            <h3 style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 14, textTransform: 'uppercase', color: P.text, margin: '0 0 8px' }}>Monthly</h3>
-            <span style={{ display: 'block', fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 700, color: P.green, marginBottom: 6 }}>7 days free</span>
-            <div style={{ marginBottom: 10 }}>
-              <span style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 800, fontSize: 30, color: P.accent }}>1,99€</span>
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: P.text2 }}>/mo</span>
-            </div>
-            <p style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: P.text3, margin: 0, lineHeight: 1.5 }}>
-              Then billed monthly · Cancel anytime
-            </p>
-          </button>
-
-          <button onClick={() => setSelectedPlan('annual')} disabled={loading} style={planCardStyle(selectedPlan === 'annual')}>
-            <div style={{
-              position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50%)',
-              padding: '2px 10px', borderRadius: 'var(--r)',
-              background: P.accent,
-            }}>
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: P.bg }}>Best</span>
-            </div>
-            {selectedPlan === 'annual' && (
-              <div style={{
-                position: 'absolute', top: 10, right: 10, width: 20, height: 20, borderRadius: '50%',
-                background: P.accent, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                <Check size={12} color={P.bg} />
-              </div>
-            )}
-            <h3 style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 14, textTransform: 'uppercase', color: P.text, margin: '0 0 8px' }}>Annual</h3>
-            <span style={{ display: 'block', fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 700, color: P.green, marginBottom: 6 }}>7 days free</span>
-            <div style={{ marginBottom: 6 }}>
-              <span style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 800, fontSize: 30, color: P.accent }}>14,99€</span>
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: P.text2 }}>/yr</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 10 }}>
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: P.text3, textDecoration: 'line-through' }}>23,88€</span>
-              <span style={{
-                padding: '1px 6px', borderRadius: 'var(--r)',
-                background: 'rgba(74,222,128,0.15)', border: '1px solid rgba(74,222,128,0.4)',
-                fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 700, color: P.green,
-              }}>
-                -38%
-              </span>
-            </div>
-            <p style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: P.text3, margin: 0, lineHeight: 1.5 }}>
-              Then billed yearly · 8,89€ saved
-            </p>
-          </button>
-        </div>
+        <p style={{ fontFamily: mono, fontSize: 9, fontWeight: 700, letterSpacing: '0.2em', color: 'var(--accent)', margin: '0 0 8px' }}>
+          METRIK PRO
+        </p>
+        <h2 id="upgrade-title" style={{
+          fontFamily: display, fontWeight: 700, fontSize: 26, lineHeight: 1.1,
+          letterSpacing: '0.02em', textTransform: 'uppercase', margin: '0 0 8px', paddingRight: 24,
+        }}>
+          {heading.title}
+        </h2>
+        <p style={{ fontFamily: mono, fontSize: 11, lineHeight: 1.6, color: 'var(--text-2)', margin: '0 0 20px' }}>
+          {heading.subtitle}
+        </p>
 
         {/* Features */}
-        <div style={{ background: P.bg, border: `1px solid ${P.border}`, borderRadius: 'var(--r2)', padding: 16, marginBottom: 20 }}>
-          <h4 style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase',
-            color: P.accent, margin: '0 0 12px', fontWeight: 700,
-          }}>
-            <TrendingUp size={13} />
-            What's included in PRO
-          </h4>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            {[
-              { title: `${CURRENT_SEASON_YEAR} Season Access`, desc: 'Real-time data from current season' },
-              { title: 'Live Timing', desc: 'Live data, GPS tracking, sector times & radio' },
-              { title: 'Full Telemetry', desc: `Detailed lap-by-lap analysis ${CURRENT_SEASON_YEAR} season` },
-              { title: 'Historical Data', desc: `Full access to 1950-${CURRENT_SEASON_YEAR - 1}` },
-            ].map(({ title, desc }) => (
-              <div key={title} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                <Check size={14} color={P.accent} style={{ flexShrink: 0, marginTop: 2 }} />
-                <div>
-                  <p style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 13, color: P.text, margin: '0 0 2px' }}>{title}</p>
-                  <p style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: P.text2, margin: 0, lineHeight: 1.4 }}>{desc}</p>
-                </div>
+        <ul style={{ listStyle: 'none', margin: '0 0 22px', padding: 0, borderTop: '1px solid var(--border)' }}>
+          {features.map(({ key, icon: Icon, title, desc }) => (
+            <li key={key} style={{ display: 'flex', gap: 12, padding: '12px 0', borderBottom: '1px solid var(--border)' }}>
+              <Icon size={16} color="var(--accent)" style={{ flexShrink: 0, marginTop: 1 }} aria-hidden="true" />
+              <div>
+                <p style={{ fontFamily: display, fontWeight: 700, fontSize: 15, margin: '0 0 2px' }}>{title}</p>
+                <p style={{ fontFamily: mono, fontSize: 10, lineHeight: 1.5, color: 'var(--text-2)', margin: 0 }}>{desc}</p>
               </div>
-            ))}
-          </div>
+            </li>
+          ))}
+        </ul>
+
+        {/* Plans */}
+        <div role="radiogroup" aria-label="Billing period" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
+          {(['annual', 'monthly'] as PlanType[]).map(type => {
+            const p = PLANS[type]
+            const selected = selectedPlan === type
+            return (
+              <button
+                key={type}
+                role="radio"
+                aria-checked={selected}
+                onClick={() => setSelectedPlan(type)}
+                disabled={loading}
+                style={{
+                  position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start',
+                  textAlign: 'left', padding: '14px 14px 12px',
+                  borderRadius: 'var(--r2)', outline: 'none',
+                  border: `1.5px solid ${selected ? 'var(--accent)' : 'var(--border)'}`,
+                  background: selected ? 'var(--accent-10)' : 'var(--surface)',
+                  color: 'var(--text)', cursor: loading ? 'not-allowed' : 'pointer',
+                  transition: 'border-color 0.15s, background 0.15s',
+                }}
+              >
+                {type === 'annual' && (
+                  <span style={{
+                    position: 'absolute', top: -8, right: 10, whiteSpace: 'nowrap', lineHeight: 1,
+                    fontFamily: mono, fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
+                    padding: '3px 6px', borderRadius: 'var(--r)', background: 'var(--accent)', color: '#f2e6d8',
+                  }}>
+                    Best value
+                  </span>
+                )}
+                <span style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8, fontFamily: mono, fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase' }}>
+                  <span aria-hidden="true" style={{
+                    width: 12, height: 12, borderRadius: '50%', flexShrink: 0,
+                    border: `1.5px solid ${selected ? 'var(--accent)' : 'var(--border-hi)'}`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    {selected && <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent)' }} />}
+                  </span>
+                  {p.label}
+                </span>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 4 }}>
+                  <span style={{ fontFamily: display, fontWeight: 700, fontSize: 28, lineHeight: 1 }}>{p.price}</span>
+                  <span style={{ fontFamily: mono, fontSize: 10, color: 'var(--text-2)' }}>{p.period}</span>
+                </div>
+                <span style={{ fontFamily: mono, fontSize: 9, color: type === 'annual' ? 'var(--accent)' : 'var(--text-2)' }}>
+                  {p.note}
+                </span>
+              </button>
+            )
+          })}
         </div>
 
         {/* CTA */}
@@ -233,30 +227,27 @@ export default function UpgradeModal({ isOpen, onClose, reason = 'current_season
           onClick={handleUpgrade}
           disabled={loading}
           style={{
-            width: '100%', padding: '13px 0',
-            background: P.accent, color: P.bg,
+            width: '100%', padding: '14px 0',
+            background: 'var(--accent)', color: '#f2e6d8',
             border: 'none', borderRadius: 'var(--r)',
-            fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 12,
-            letterSpacing: '0.1em', textTransform: 'uppercase',
-            cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1,
+            fontFamily: mono, fontWeight: 700, fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase',
+            cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1,
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
             transition: 'opacity 0.15s',
           }}
+          onMouseEnter={e => { if (!loading) e.currentTarget.style.opacity = '0.88' }}
+          onMouseLeave={e => { if (!loading) e.currentTarget.style.opacity = '1' }}
         >
-          {loading ? (
-            <>
-              <Loader2 size={15} className="animate-spin" />
-              Processing...
-            </>
-          ) : user ? (
-            <>Start 7-day free trial → {selectedPlan === 'monthly' ? '1,99€/mo after' : '14,99€/yr after'}</>
-          ) : (
-            <>Start 7-day free trial</>
-          )}
+          {loading
+            ? <><Loader2 size={15} className="animate-spin" />Redirecting to payment…</>
+            : <>Get PRO · {plan.price} {plan.period}</>}
         </button>
 
-        <p style={{ ...labelStyle, textAlign: 'center', marginTop: 14, lineHeight: 1.6, letterSpacing: '0.04em' }}>
-          7 days free • No charge until trial ends • Cancel anytime • Secure payment via Stripe
+        <p style={{ fontFamily: mono, fontSize: 9, lineHeight: 1.7, color: 'var(--text-2)', textAlign: 'center', margin: '12px 0 0' }}>
+          {!user && <>You'll sign in first.<br /></>}
+          Secure payment by Stripe · Cancel anytime
+          <br />
+          Every season up to {CURRENT_SEASON_YEAR - 1} stays free.
         </p>
       </div>
     </div>

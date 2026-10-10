@@ -11,8 +11,8 @@ export const CURRENT_SEASON_YEAR = new Date().getFullYear()
 /**
  * Hook pour gérer l'accès aux fonctionnalités PRO
  *
- * FREE : Accès à toutes les saisons passées, pas de Live Timing
- * PRO : Accès à la saison en cours, Live Timing
+ * FREE : Accès à toutes les saisons passées
+ * PRO : Accès à la saison en cours, export HD des graphiques
  */
 export function useSubscription() {
   const { user, isPremium, premiumLoading } = useAuth()

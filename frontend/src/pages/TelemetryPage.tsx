@@ -6,7 +6,7 @@ import { useTelemetryCache } from '../hooks/useTelemetryCache';
 import { useAuth } from '../contexts/AuthContext';
 import { getBackendUrl } from '../config';
 import { supabase } from '../lib/supabase';
-import UpgradeModal from '../components/UpgradeModal';
+import UpgradeModal, { type UpgradeReason } from '../components/UpgradeModal';
 import AuthModal from '../components/AuthModal';
 import SEO from '../components/SEO';
 import SessionExplorer from '../components/SessionExplorer';
@@ -105,6 +105,7 @@ export default function TelemetryPage() {
   );
   const [authModalOpen, setAuthModalOpen]     = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [upgradeReason, setUpgradeReason]     = useState<UpgradeReason>('current_season');
   const [urlCopied, setUrlCopied]             = useState(false);
   const [exportingPng, setExportingPng]       = useState(false);
   const [exportDone, setExportDone]           = useState(false);
@@ -431,8 +432,12 @@ export default function TelemetryPage() {
 
   // ── PNG export ───────────────────────────────────────────────────────────────
   // Works from both views: the lap-time chart in 16:9, or the full telemetry
-  // trace stack at a fixed desktop width (see utils/exportBrandedPng).
+  // trace stack at a fixed desktop width (see utils/exportBrandedPng). PRO only.
   const handleExportPng = useCallback(async () => {
+    if (!isPremium) {
+      if (subscriptionReady) { setUpgradeReason('export'); setShowUpgradeModal(true); }
+      return;
+    }
     const isLaps = activeView === 'laps';
     const target = document.getElementById(isLaps ? 'laps-export-target' : 'telemetry-export-target');
     if (!target || exportingPng) return;
@@ -462,7 +467,7 @@ export default function TelemetryPage() {
     } finally {
       setExportingPng(false);
     }
-  }, [activeView, exportingPng, explorerDrivers, multiTelemetryData, effectiveD1, effectiveD2, grandsPrix, selectedGP, sessionType, year]);
+  }, [isPremium, subscriptionReady, activeView, exportingPng, explorerDrivers, multiTelemetryData, effectiveD1, effectiveD2, grandsPrix, selectedGP, sessionType, year]);
 
   // ── Customer portal ───────────────────────────────────────────────────────────
   const handleManageSubscription = useCallback(async () => {
@@ -613,7 +618,7 @@ export default function TelemetryPage() {
             onClick={handleExportPng}
             disabled={exportingPng}
             style={{ padding: 6, border: 'none', background: 'transparent', cursor: exportingPng ? 'not-allowed' : 'pointer', color: exportDone ? 'var(--accent)' : 'var(--text-2)', outline: 'none', opacity: exportingPng ? 0.5 : 1 }}
-            title="Download charts as PNG"
+            title={isPremium ? 'Download charts as PNG' : 'Download charts as PNG (PRO)'}
             onMouseEnter={e => { if (!exportDone) e.currentTarget.style.color = 'var(--text)'; }}
             onMouseLeave={e => { if (!exportDone) e.currentTarget.style.color = 'var(--text-2)'; }}
           >
@@ -734,7 +739,11 @@ export default function TelemetryPage() {
 
       {/* ── Modals ─────────────────────────────────────────────────────────── */}
       <AuthModal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} />
-      <UpgradeModal isOpen={showUpgradeModal} onClose={() => setShowUpgradeModal(false)} reason="current_season" />
+      <UpgradeModal
+        isOpen={showUpgradeModal}
+        onClose={() => { setShowUpgradeModal(false); setUpgradeReason('current_season'); }}
+        reason={upgradeReason}
+      />
     </div>
     </>
   );
