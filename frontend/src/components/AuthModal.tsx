@@ -9,17 +9,15 @@ interface AuthModalProps {
   onClose: () => void
 }
 
-// Self-contained dark "chrome" palette — the exact root theme tokens
-// (index.css :root), hardcoded rather than read via CSS vars so the modal
-// looks identical whether it's opened from a cream `.data-zone` page or the
-// dark landing page, matching how LandingPage.tsx defines its own palette
-// for the same reason. #ff6b6b for errors measures 5.0:1 against `panel`.
+// Cream `.data-zone` palette (index.css), matching UpgradeModal — hardcoded
+// rather than read via CSS vars so the modal looks the same wherever it opens.
+// `bg` is the text colour on accent buttons. #b42318 errors: 5.3:1 on `panel`.
 const P = {
-  bg: '#3d0c10', surface: '#4d1016', panel: '#57121c',
-  accent: '#f2e6d8', text: '#f2e6d8',
-  text2: 'rgba(242,230,216,0.55)', text3: 'rgba(242,230,216,0.32)',
-  border: 'rgba(242,230,216,0.10)', borderHi: 'rgba(242,230,216,0.20)',
-  error: '#ff6b6b', errorBg: 'rgba(255,107,107,0.10)', errorBorder: 'rgba(255,107,107,0.35)',
+  bg: '#f2e6d8', surface: '#e5dcc9', panel: '#ede5d5', input: '#f6f1e8',
+  accent: '#5e1018', text: '#1c0407',
+  text2: 'rgba(28,4,7,0.62)', text3: 'rgba(28,4,7,0.58)',
+  border: 'rgba(94,16,24,0.22)', borderHi: 'rgba(94,16,24,0.48)',
+  error: '#b42318', errorBg: 'rgba(180,35,24,0.07)', errorBorder: 'rgba(180,35,24,0.35)',
 }
 
 function GoogleIcon() {
@@ -45,8 +43,8 @@ const labelStyle: React.CSSProperties = {
 
 const inputStyle: React.CSSProperties = {
   width: '100%', padding: '10px 12px', boxSizing: 'border-box',
-  background: P.bg,
-  border: `1px solid ${P.border}`,
+  background: P.input,
+  border: `1px solid ${P.borderHi}`,
   borderRadius: 'var(--r)',
   color: P.text,
   fontFamily: "'JetBrains Mono', monospace", fontSize: 12,
@@ -122,16 +120,18 @@ function Card({ children, onClose }: { children: React.ReactNode; onClose: () =>
     <div style={{
       position: 'fixed', inset: 0, zIndex: 50,
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
-      background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)',
+      background: 'rgba(28,4,7,0.55)', backdropFilter: 'blur(4px)',
     }}>
-      <div style={{
+      <div role="dialog" aria-modal="true" style={{
         position: 'relative', width: '100%', maxWidth: 420,
-        background: P.panel, border: `1px solid ${P.borderHi}`, borderRadius: 'var(--r2)',
-        boxShadow: '0 24px 60px rgba(0,0,0,0.5)',
+        background: P.panel, color: P.text,
+        border: `1px solid ${P.borderHi}`, borderTop: `3px solid ${P.accent}`, borderRadius: 'var(--r2)',
+        boxShadow: '0 24px 60px rgba(28,4,7,0.35)',
         padding: '32px 28px 28px',
       }}>
         <button
           onClick={onClose}
+          aria-label="Close"
           style={{
             position: 'absolute', top: 16, right: 16,
             color: P.text3, background: 'transparent', border: 'none',
