@@ -4,6 +4,7 @@ import { Zap } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { rememberedUrl } from '../hooks/usePageMemory';
+import AccountMenu from './AccountMenu';
 
 const MONO = 'JetBrains Mono, monospace';
 
@@ -89,9 +90,7 @@ export default function PageHeader({ page, leading, actions }: {
 
         {user ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontFamily: MONO, fontSize: 9, color: 'var(--text-2)' }}>
-              {user.email?.split('@')[0]}
-            </span>
+            <AccountMenu />
             <button
               onClick={() => signOut()}
               style={{
