@@ -8,10 +8,8 @@ import { CURRENT_SEASON_YEAR } from '../hooks/useSubscription';
 
 // ── Palette (Marlboro) ────────────────────────────────────────────────────────
 
-// textSub at 0.62 clears WCAG AA (4.5:1) for small text against `bg` — 0.55
-// measured 4.19:1, just under. textGhost stays low (2.03:1) but is reserved
-// for purely decorative use (borders, gradient, the countdown ":") — no real
-// copy should ever be set in it, use textSub for anything meant to be read.
+// textSub passes WCAG AA for small text on `bg`; textGhost (2:1) is for
+// decoration only (borders, gradient, the countdown ":"), never for copy.
 const P = {
   bg:        '#5e1018',
   text:      '#f2e6d8',

@@ -1,17 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
+import { CONSENT_EVENT, hasAnalyticsConsent } from '../utils/consent';
 
 const GA_MEASUREMENT_ID = 'G-BE39LEWZ5Q';
-export const CONSENT_KEY = 'cookie-consent';
-export const CONSENT_EVENT = 'cookie-consent-changed';
-
-function hasAnalyticsConsent() {
-  try {
-    return localStorage.getItem(CONSENT_KEY) === 'accepted';
-  } catch {
-    return false;
-  }
-}
 
 function loadGtag() {
   if (window.gtag) return;
@@ -33,10 +24,8 @@ function loadGtag() {
   document.head.appendChild(script2);
 }
 
-// Google Analytics is only ever loaded after the visitor accepts the cookie
-// banner (CookieConsent.tsx) — never on mount unconditionally. This listens
-// for the banner's "accepted" event so analytics can start immediately,
-// without needing a page reload.
+// Loaded only once the visitor accepts the cookie banner, straight away
+// (no reload needed) thanks to the banner's change event.
 export default function GoogleAnalytics() {
   const location = useLocation();
   const [consented, setConsented] = useState(hasAnalyticsConsent());
@@ -64,7 +53,7 @@ export default function GoogleAnalytics() {
 
 declare global {
   interface Window {
-    gtag: (...args: any[]) => void;
-    dataLayer: any[];
+    gtag?: (...args: unknown[]) => void;
+    dataLayer?: unknown[];
   }
 }

@@ -5,6 +5,7 @@ import {
 import { Loader2, ZoomIn } from 'lucide-react';
 import type { TelemetryDataMulti, DriverMeta } from '../types/telemetry';
 import { useIsMobile } from '../hooks/useIsMobile';
+import { teammateColors } from '../utils/teamColors';
 import Watermark from './Watermark';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -59,53 +60,23 @@ function blendToWhite(hex: string, blend: number): string {
   return `#${nr.toString(16).padStart(2, '0')}${ng.toString(16).padStart(2, '0')}${nb.toString(16).padStart(2, '0')}`;
 }
 
-// A later teammate doesn't reuse the team colour (indistinguishable from
-// their teammate's line), but every later teammate used to fall back to
-// the SAME black — so with 2+ teammate pairs selected at once, drivers
-// from DIFFERENT teams all rendered as identical black lines. Each team
-// needing a differentiator now gets its own colour from this palette
-// instead, assigned in the order that team's teammate pairing first shows
-// up in the selection (first team to need one → black, second → purple,
-// etc.), picked to not collide with any TEAM_COLORS entry.
-const TEAMMATE_PALETTE = ['#000000', '#6B2D8E', '#7B4B27', '#B8860B', '#4A5568', '#8B3A62'];
-
-// Same driver appearing twice (different laps) still blends toward white.
+// The same driver on another lap gets a lighter shade of their colour.
 function buildColors(
   drivers: DriverMeta[],
   getColor: (c: string) => string,
   areTeammates: (a: string, b: string) => boolean,
 ): string[] {
+  const secondColors = teammateColors(drivers.map(d => d.driver), areTeammates);
   const seen: Record<string, number> = {};
-  const colors: string[] = [];
-  const teammateColorByAnchor = new Map<string, string>();
-
-  drivers.forEach((d, i) => {
+  return drivers.map(d => {
     const dupeCount = seen[d.driver] ?? 0;
     seen[d.driver] = dupeCount + 1;
-
-    // The earliest-appearing driver this one shares a team with — the
-    // "anchor" that every teammate of the same team keys their
-    // differentiator color off of, so they all agree on one color.
-    const anchor = drivers.slice(0, i).find(prev => prev.driver !== d.driver && areTeammates(prev.driver, d.driver));
-
-    let base: string;
-    if (anchor) {
-      let color = teammateColorByAnchor.get(anchor.driver);
-      if (!color) {
-        color = TEAMMATE_PALETTE[teammateColorByAnchor.size % TEAMMATE_PALETTE.length];
-        teammateColorByAnchor.set(anchor.driver, color);
-      }
-      base = color;
-    } else {
-      base = getColor(d.driver);
-    }
-    colors.push(dupeCount === 0 ? base : blendToWhite(base, Math.min(dupeCount * 0.2, 0.5)));
+    const base = secondColors[d.driver] ?? getColor(d.driver);
+    return dupeCount === 0 ? base : blendToWhite(base, Math.min(dupeCount * 0.2, 0.5));
   });
-
-  return colors;
 }
 
-function buildLabel(d: DriverMeta, idx: number, drivers: DriverMeta[]): string {
+function buildLabel(d: DriverMeta, drivers: DriverMeta[]): string {
   const dupes = drivers.filter(x => x.driver === d.driver).length;
   if (dupes > 1) return `${d.driver} L${d.lap}`;
   return d.driver;
@@ -113,14 +84,9 @@ function buildLabel(d: DriverMeta, idx: number, drivers: DriverMeta[]): string {
 
 const SECTOR_KEYS = ['s1', 's2', 's3'] as const;
 
-// ── Chart margin constants (must match JSX below) ────────────────────────────
+// Chart margins: also used by the crosshair / loupe pixel math (desktop only)
 const MARGIN = { top: 8, right: 20, left: 52, bottom: 12 };
-// Mobile-only: the desktop margin/axis-width leaves ~100px of dead space
-// before the plot starts, which reads as fine on a wide desktop card but eats
-// nearly a third of a narrow phone screen. Used only in the <LineChart>
-// margin prop and the YAxis width below — never in the crosshair/loupe-zoom
-// pixel math above, which is a hover-driven desktop interaction that mobile
-// doesn't use.
+// Narrower on phones, where the desktop margins ate a third of the width
 const MOBILE_MARGIN = { top: 8, right: 8, left: 4, bottom: 12 };
 const MOBILE_Y_AXIS_WIDTH = 34;
 
@@ -128,22 +94,17 @@ const MOBILE_Y_AXIS_WIDTH = 34;
 
 export default function TelemetryViewMulti({ telemetryData, getDriverColor, areTeammates, loading }: Props) {
   const isMobile = useIsMobile();
-  // Used only for the charts' own margin/axis-width JSX props below — the
-  // crosshair/loupe-zoom math further down intentionally keeps using the
-  // desktop MARGIN constant directly (see comment on MOBILE_MARGIN above).
   const chartMargin = isMobile ? MOBILE_MARGIN : MARGIN;
   const yAxisWidth = isMobile ? MOBILE_Y_AXIS_WIDTH : 48;
   const n = telemetryData.drivers.length;
-  // Beyond 2 drivers the LIVE panel's fixed-width sidebar runs out of room —
-  // shrink labels/values and switch delta to a shorter format so nothing
-  // overflows the card instead of clipping mid-value.
+  // Beyond 2 drivers the live panel's fixed-width column needs smaller, shorter values
   const liveCompact = n >= 3;
   const colors = useMemo(
     () => buildColors(telemetryData.drivers, getDriverColor, areTeammates),
     [telemetryData, getDriverColor, areTeammates],
   );
   const labels = useMemo(
-    () => telemetryData.drivers.map((d, i) => buildLabel(d, i, telemetryData.drivers)),
+    () => telemetryData.drivers.map(d => buildLabel(d, telemetryData.drivers)),
     [telemetryData]
   );
 
@@ -181,9 +142,7 @@ export default function TelemetryViewMulti({ telemetryData, getDriverColor, areT
   );
   const maxDist = distances[distances.length - 1] ?? 5000;
 
-  // Speed axis floor — round down to the nearest 10 km/h below the actual
-  // slowest point on track. A car never sits at 0 km/h mid-lap, so starting
-  // the axis there just wastes vertical space and flattens the trace.
+  // Speed axis from the slowest point (to the 10 km/h below), not 0, which flattened the trace
   const speedYDomain = useMemo((): [number, string] => {
     let min = Infinity;
     telemetryData.telemetry.forEach(pt => {
@@ -198,15 +157,11 @@ export default function TelemetryViewMulti({ telemetryData, getDriverColor, areT
     const pts = telemetryData.telemetry;
     if (pts.length < 2) return null;
 
-    // Apply FastF1's own circuit rotation so the mini-map matches the
-    // orientation used by official track maps, instead of whatever arbitrary
-    // angle the raw GPS/local coordinate frame happens to be in.
+    // FastF1's circuit rotation, so the map matches official track maps
     const rot = ((telemetryData.rotation ?? 0) * Math.PI) / 180;
     const cosA = Math.cos(rot), sinA = Math.sin(rot);
     const rx = (x: number, y: number) => x * cosA - y * sinA;
-    // Negated: FastF1's rotation is designed for matplotlib's Y-up convention;
-    // SVG's Y axis increases downward, so without this flip the track renders
-    // as a vertical mirror image of the official orientation.
+    // Negated: FastF1's rotation assumes Y up, SVG's Y goes down
     const ry = (x: number, y: number) => -(x * sinA + y * cosA);
 
     const rxs = pts.map(p => rx(p.x, p.y)), rys = pts.map(p => ry(p.x, p.y));
@@ -214,9 +169,7 @@ export default function TelemetryViewMulti({ telemetryData, getDriverColor, areT
     const minY = Math.min(...rys), maxY = Math.max(...rys);
     const rangeX = maxX - minX || 1, rangeY = maxY - minY || 1;
     const W = 220, H = 195, pad = 12;
-    // Uniform scale on both axes — preserves the real track shape instead of
-    // stretching it to fill the box (elongated circuits like Baku or Spa would
-    // otherwise render as an unrecognisable warped silhouette).
+    // Same scale on both axes, so long circuits (Baku, Spa) keep their shape
     const scale = Math.min((W - 2 * pad) / rangeX, (H - 2 * pad) / rangeY);
     const offX = pad + ((W - 2 * pad) - rangeX * scale) / 2;
     const offY = pad + ((H - 2 * pad) - rangeY * scale) / 2;
@@ -318,15 +271,9 @@ export default function TelemetryViewMulti({ telemetryData, getDriverColor, areT
   const [trackHover, setTrackHover] = useState(false);
 
   // ── Loupe zoom — hover-follow magnifier, toggled by the button below ──────
-  // A plain CSS scaleX (previous version) is GPU-smooth but blurry: the
-  // browser composites the chart as a bitmap layer at its normal pixel size
-  // and then stretches that bitmap, so magnifying it upscales past its own
-  // resolution. Fix: only the hovered row switches, just for the duration of
-  // the hover, to an internal render RENDER_SCALE× wider (same data, more
-  // pixels to work with) — then the CSS transform only ever uses ~70% of
-  // that budget (ZOOM_TARGET/RENDER_SCALE), so it's always downsampling,
-  // never upsampling → crisp. The other 5 rows, and this row once the hover
-  // leaves, stay on the original 100%-width render, byte-for-byte unchanged.
+  // Scaling the chart up with CSS alone stretches a bitmap and blurs it. So
+  // while hovered, a row is rendered RENDER_SCALE times wider and then scaled
+  // down to ZOOM_TARGET: always downsampling, so always sharp.
   const [loupeMode, setLoupeMode] = useState(false);
   const [zoomChartIdx, setZoomChartIdx] = useState<number | null>(null);
   const chartRowRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -352,10 +299,7 @@ export default function TelemetryViewMulti({ telemetryData, getDriverColor, areT
         const pt = telemetryData.telemetry[idx];
         if (!pt) return;
 
-        // Loupe zoom — CSS transform on the hovered row only, updated every
-        // frame; no React state involved in the per-frame path (setZoomChartIdx
-        // only fires on a row change, which is what mounts/unmounts the wide
-        // render for that one row).
+        // Per frame: only a CSS transform. React state changes only when the hovered row does.
         if (loupeMode) {
           let hoveredRow: number | null = null;
           let hoveredRowRect: DOMRect | null = null;
@@ -376,15 +320,11 @@ export default function TelemetryViewMulti({ telemetryData, getDriverColor, areT
           if (hoveredRow != null && hoveredRowRect) {
             const el = zoomWrapRefs.current[hoveredRow];
             if (el) {
-              // rowWidth is the row's own (unwidened) box — unaffected by its
-              // overflowing child, so it stays the stable reference even while
-              // that child is rendered RENDER_SCALE× wider.
               const rowWidth = hoveredRowRect.width;
               const plotWNormal = rowWidth - MARGIN.left - MARGIN.right;
               const plotWWide = RENDER_SCALE * rowWidth - MARGIN.left - MARGIN.right;
               const sZoom = (plotWNormal * ZOOM_TARGET) / plotWWide;
-              // Anchor: the point under the cursor (at raw pixel relX) must
-              // land back on relX after the wide render is scaled by sZoom.
+              // Keeps the point under the cursor in place
               const tZoom = relX - sZoom * (MARGIN.left + frac * plotWWide);
               el.style.transformOrigin = '0 0';
               el.style.transform = `translateX(${tZoom}px) scaleX(${sZoom})`;
@@ -431,8 +371,6 @@ export default function TelemetryViewMulti({ telemetryData, getDriverColor, areT
       if (crosshairRef.current) crosshairRef.current.style.opacity = '0';
       if (panelRef.current) panelRef.current.style.opacity = '0';
       if (trackMarkerRef.current) trackMarkerRef.current.style.opacity = '0';
-      // Leaving the chart while the loupe is active drops back to the full lap
-      // — the zoom only exists while you're actively pointing at something.
       if (hoveredRowRef.current != null) {
         const el = zoomWrapRefs.current[hoveredRowRef.current];
         if (el) el.style.transform = 'none';
@@ -468,10 +406,7 @@ export default function TelemetryViewMulti({ telemetryData, getDriverColor, areT
   const fmtPct = (v: number) => `${Math.round(v)}%`;
   const fmtGear = (v: number) => `${Math.round(v)}`;
 
-  // Recharts always renders the full lap now — the loupe is a CSS transform,
-  // not a domain change. The zoomed row's own tick text gets hidden (it would
-  // otherwise visually stretch along with the transform); it comes back the
-  // instant that row stops being the hovered one.
+  // The zoomed row hides its ticks, which would stretch with the transform
   const xAxisPropsFor = (rowIdx: number) => ({
     dataKey: 'distance' as const,
     stroke: 'transparent',
@@ -832,7 +767,7 @@ export default function TelemetryViewMulti({ telemetryData, getDriverColor, areT
                     ))}
                   </div>
 
-                  {/* Hover overlay — corner analysis (mirrors the dedicated Track page) */}
+                  {/* Hover overlay: speed at each corner */}
                   <div
                     style={{
                       position: 'absolute', inset: 0, padding: 12,

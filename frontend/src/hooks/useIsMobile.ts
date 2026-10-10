@@ -2,12 +2,8 @@ import { useEffect, useState } from 'react';
 
 const MOBILE_BREAKPOINT = 768;
 
-// The whole app is laid out with inline `style={{}}` objects, not CSS
-// classes — so plain @media queries can't override any of it (inline
-// styles always win the cascade). This hook lets each component branch on
-// a JS boolean instead and pick different literal values for the same
-// style keys; the `false` branch must always equal what's already there
-// today, so desktop is byte-for-byte unchanged.
+// Layout is written in inline styles, which @media queries can't override:
+// components branch on this instead.
 export function useIsMobile(breakpoint: number = MOBILE_BREAKPOINT): boolean {
   const query = `(max-width: ${breakpoint}px)`;
   const [isMobile, setIsMobile] = useState(() =>

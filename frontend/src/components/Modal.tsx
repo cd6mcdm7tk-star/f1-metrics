@@ -7,8 +7,7 @@ interface ModalProps {
   children: React.ReactNode;
 }
 
-// Same self-contained dark "chrome" palette as AuthModal/UpgradeModal — see
-// AuthModal.tsx for why it's hardcoded rather than read via CSS vars.
+// Dark site palette, hardcoded so the legal documents look the same from every page.
 const P = {
   panel: '#57121c', accent: '#f2e6d8', text: '#f2e6d8',
   text2: 'rgba(242,230,216,0.55)', text3: 'rgba(242,230,216,0.32)',

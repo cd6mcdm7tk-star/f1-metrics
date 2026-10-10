@@ -1,4 +1,5 @@
-import type { TelemetryData, TelemetryDataMulti, LapRef } from '../types/telemetry';
+import type { TelemetryDataMulti, LapRef } from '../types/telemetry';
+import type { GrandPrix, SessionDriver } from '../types/session';
 import { getApiBase } from '../config';
 
 const API_BASE_URL = getApiBase();
@@ -16,27 +17,10 @@ async function getJson<T>(url: string, what: string, init?: RequestInit): Promis
 }
 
 export const getGrandsPrix = (year: number) =>
-  getJson<any>(`${API_BASE_URL}/grands-prix/${year}`, 'grands prix');
+  getJson<{ grands_prix: GrandPrix[] }>(`${API_BASE_URL}/grands-prix/${year}`, 'grands prix');
 
 export const getDrivers = (year: number, gpRound: number, sessionType: string) =>
-  getJson<any>(`${API_BASE_URL}/drivers/${year}/${gpRound}/${sessionType}`, 'drivers');
-
-// Fastest laps unless a lap number is given for that driver
-export function getTelemetryComparison(
-  year: number,
-  gpRound: number,
-  sessionType: string,
-  driver1: string,
-  driver2: string,
-  lapNumber1?: number,
-  lapNumber2?: number,
-): Promise<TelemetryData> {
-  const params = new URLSearchParams();
-  if (lapNumber1 !== undefined) params.append('lap_number1', lapNumber1.toString());
-  if (lapNumber2 !== undefined) params.append('lap_number2', lapNumber2.toString());
-  const query = params.toString() ? `?${params}` : '';
-  return getJson(`${API_BASE_URL}/telemetry/${year}/${gpRound}/${sessionType}/${driver1}/${driver2}${query}`, 'telemetry');
-}
+  getJson<SessionDriver[]>(`${API_BASE_URL}/drivers/${year}/${gpRound}/${sessionType}`, 'drivers');
 
 export async function getTelemetryMulti(laps: LapRef[]): Promise<TelemetryDataMulti> {
   const data = await getJson<TelemetryDataMulti>(`${API_BASE_URL}/telemetry/multi`, 'multi-lap telemetry', {

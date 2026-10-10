@@ -185,39 +185,9 @@ class PostgresDB:
     # ------------------------------------------------------------------
     # Telemetry
     # ------------------------------------------------------------------
-    def get_telemetry(
-        self,
-        year: int,
-        gp_round: int,
-        session_type: str,
-        driver_code: str,
-        lap_type: str,
-    ) -> Optional[dict]:
-        """
-        Returns {'telemetry_data': {...}, 'lap_number': N} or None.
-        telemetry_data is a column-based dict:
-          {distance, speed, throttle, brake, gear, drs, rpm, x, y}
-        """
-        row = self._execute(
-            """
-            SELECT telemetry_data, lap_number
-            FROM telemetry
-            WHERE year = %s AND gp_round = %s AND session_type = %s
-              AND driver_code = %s AND lap_type = %s
-            """,
-            (year, gp_round, session_type, driver_code, lap_type),
-            fetch="one",
-        )
-        if row is None:
-            return None
-        telemetry_data, lap_number = row
-        return {"telemetry_data": _clean_telemetry_data(telemetry_data), "lap_number": lap_number}
-
     def get_telemetry_with_metadata(self, refs: list[tuple]) -> dict[tuple, dict]:
         """
-        Batch read for several laps in one round trip: each lap's telemetry
-        plus its lap-time/sector metadata (what get_telemetry followed by
-        get_lap_metadata return, per lap — previously two queries per lap).
+        Several laps' telemetry and lap-time/sector metadata, in one round trip.
 
         refs: (year, gp_round, session_type, driver_code, lap_type) tuples.
         Returns {ref: {'telemetry_data', 'lap_number', 'lap_time',
@@ -377,34 +347,6 @@ class PostgresDB:
             fetch="all",
         )
         return len(updated or [])
-
-    def get_lap_metadata(
-        self,
-        year: int,
-        gp_round: int,
-        session_type: str,
-        driver_code: str,
-        lap_number: int,
-    ) -> Optional[dict]:
-        """Returns a single lap's metadata dict or None."""
-        row = self._execute(
-            """
-            SELECT lap_number, lap_time, sector1_time, sector2_time, sector3_time,
-                   compound, is_personal_best, telemetry_available
-            FROM laps
-            WHERE year = %s AND gp_round = %s AND session_type = %s
-              AND driver_code = %s AND lap_number = %s
-            """,
-            (year, gp_round, session_type, driver_code, lap_number),
-            fetch="one",
-        )
-        if row is None:
-            return None
-        keys = [
-            "lap_number", "lap_time", "sector1_time", "sector2_time", "sector3_time",
-            "compound", "is_personal_best", "telemetry_available",
-        ]
-        return dict(zip(keys, row))
 
     def count_ingested(self, year: int, gp_round: int, session_type: str) -> dict:
         """Laps and telemetry rows stored for one session."""

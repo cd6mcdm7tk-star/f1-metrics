@@ -10,9 +10,7 @@ interface LegalLinksProps {
   fontSize?: number;
 }
 
-// Minimal text-link row (Privacy · Terms · Mentions légales) meant to be
-// dropped into any page's header/footer without affecting layout height —
-// unlike the old Footer.tsx, this has no cards, no PWA prompt, no socials.
+// Privacy · Terms · Legal notice, as a row of text links opening each document
 export default function LegalLinks({
   color = 'rgba(242,230,216,0.32)',
   hoverColor = 'rgba(242,230,216,0.7)',

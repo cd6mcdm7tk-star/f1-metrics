@@ -109,12 +109,5 @@ class RedisCache:
     def laps_key(year: int, gp: int, session: str, driver: str) -> str:
         return f"laps:{year}:{gp}:{session}:{driver}"
 
-    @staticmethod
-    def telemetry_key(year: int, gp: int, session: str, driver1: str, lap1: Optional[int],
-                      driver2: str, lap2: Optional[int]) -> str:
-        lap1_str = f"lap{lap1}" if lap1 is not None else "fastest"
-        lap2_str = f"lap{lap2}" if lap2 is not None else "fastest"
-        return f"telemetry:{year}:{gp}:{session}:{driver1}:{lap1_str}:{driver2}:{lap2_str}"
-
 
 redis_cache = RedisCache()

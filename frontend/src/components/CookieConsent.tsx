@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { CONSENT_KEY, CONSENT_EVENT } from './GoogleAnalytics';
+import { CONSENT_KEY, CONSENT_EVENT } from '../utils/consent';
 
-// Same self-contained dark "chrome" palette as AuthModal/Modal/UpgradeModal.
+// Dark site palette, hardcoded: the banner shows on the dark landing page and on the cream app pages alike.
 const P = {
   panel: '#57121c', accent: '#f2e6d8', text: '#f2e6d8',
   text2: 'rgba(242,230,216,0.62)',

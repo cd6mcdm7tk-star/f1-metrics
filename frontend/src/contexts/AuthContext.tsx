@@ -1,145 +1,97 @@
 import { createContext, useContext, useEffect, useState } from 'react'
-import { User, Session } from '@supabase/supabase-js'
+import type { User } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import { getApiBase } from '../config'
 import AuthModal from '../components/AuthModal'
 
+const signUp = (email: string, password: string) => supabase.auth.signUp({ email, password })
+const signIn = (email: string, password: string) => supabase.auth.signInWithPassword({ email, password })
+
 interface AuthContextType {
   user: User | null
-  signUp: (email: string, password: string) => Promise<any>
-  signIn: (email: string, password: string) => Promise<any>
-  signOut: () => Promise<void>
   loading: boolean
+  signUp: typeof signUp
+  signIn: typeof signIn
+  signOut: () => Promise<void>
   setAuthModalOpen: (open: boolean) => void
-  isPremium: boolean  // ← NOUVEAU
-  premiumLoading: boolean  // ← NOUVEAU
+  isPremium: boolean
+  premiumLoading: boolean
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
-  const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
   const [authModalOpen, setAuthModalOpen] = useState(false)
-  const [isPremium, setIsPremium] = useState(false)  // ← NOUVEAU
-  const [premiumLoading, setPremiumLoading] = useState(true)  // ← NOUVEAU
-
-  // Vérifier le statut premium quand l'utilisateur change
-  useEffect(() => {
-    const checkPremiumStatus = async () => {
-      if (!user) {
-        setIsPremium(false)
-        setPremiumLoading(false)
-        return
-      }
-
-      try {
-        const { data, error } = await supabase
-          .from('subscriptions')
-          .select('status, plan')
-          .eq('user_id', user.id)
-          .in('status', ['active', 'trialing'])
-          .single()
-
-        if (data && !error) {
-          setIsPremium(true)
-          console.log('✅ Premium user detected:', data.plan)
-        } else {
-          setIsPremium(false)
-          console.log('ℹ️ Free user')
-        }
-      } catch (error) {
-        console.log('No active subscription found')
-        setIsPremium(false)
-      } finally {
-        setPremiumLoading(false)
-      }
-    }
-
-    checkPremiumStatus()
-  }, [user])
-
-  // Après login : vérifier s'il y a un intent de paiement en attente
-  useEffect(() => {
-    if (user && !premiumLoading && !isPremium) {
-      const pending = sessionStorage.getItem('pendingUpgrade') as 'monthly' | 'annual' | null
-      if (pending) {
-        sessionStorage.removeItem('pendingUpgrade')
-        fetch(`${getApiBase()}/create-checkout-session`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ user_id: user.id, plan_type: pending })
-        })
-          .then(r => r.json())
-          .then(data => { if (data.checkout_url) window.location.href = data.checkout_url })
-          .catch(err => console.error('Pending checkout failed:', err))
-      }
-    }
-  }, [user, premiumLoading, isPremium])
+  const [isPremium, setIsPremium] = useState(false)
+  const [premiumLoading, setPremiumLoading] = useState(true)
 
   useEffect(() => {
-    // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
       setUser(session?.user ?? null)
       setLoading(false)
     })
-
-    // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null)
       setLoading(false)
     })
-
     return () => subscription.unsubscribe()
   }, [])
 
-  const signUp = async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-    })
-    return { data, error }
-  }
+  // PRO = an active subscription row in Supabase
+  useEffect(() => {
+    if (!user) {
+      setIsPremium(false)
+      setPremiumLoading(false)
+      return
+    }
+    let cancelled = false
+    setPremiumLoading(true)
+    supabase
+      .from('subscriptions')
+      .select('status')
+      .eq('user_id', user.id)
+      .in('status', ['active', 'trialing'])
+      .single()
+      .then(({ data, error }) => { if (!cancelled) setIsPremium(Boolean(data) && !error) },
+            () => { if (!cancelled) setIsPremium(false) })
+      .then(() => { if (!cancelled) setPremiumLoading(false) })
+    return () => { cancelled = true }
+  }, [user])
 
-  const signIn = async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
+  // Checkout picked before signing in (see UpgradeModal): resumed once signed in
+  useEffect(() => {
+    if (!user || premiumLoading || isPremium) return
+    const pending = sessionStorage.getItem('pendingUpgrade') as 'monthly' | 'annual' | null
+    if (!pending) return
+    sessionStorage.removeItem('pendingUpgrade')
+    fetch(`${getApiBase()}/create-checkout-session`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: user.id, plan_type: pending }),
     })
-    return { data, error }
-  }
+      .then(r => r.json())
+      .then(data => { if (data.checkout_url) window.location.href = data.checkout_url })
+      .catch(err => console.error('Pending checkout failed:', err))
+  }, [user, premiumLoading, isPremium])
 
   const signOut = async () => {
     await supabase.auth.signOut()
-    setIsPremium(false)  // Reset premium status
+    setIsPremium(false)
   }
 
   return (
-    <AuthContext.Provider value={{ 
-      user, 
-      loading, 
-      signUp, 
-      signIn, 
-      signOut, 
-      setAuthModalOpen,
-      isPremium,  // ← NOUVEAU
-      premiumLoading  // ← NOUVEAU
-    }}>
+    <AuthContext.Provider value={{ user, loading, signUp, signIn, signOut, setAuthModalOpen, isPremium, premiumLoading }}>
       {children}
       <AuthModal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} />
     </AuthContext.Provider>
   )
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const context = useContext(AuthContext)
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider')
-  }
+  if (context === undefined) throw new Error('useAuth must be used within an AuthProvider')
   return context
 }

@@ -1,10 +1,6 @@
-// Discreet on-screen attribution, so a plain screenshot of a chart shared
-// on social media still points back to the site. Marked data-export-hide:
-// the PNG export gets its own larger centred watermark instead (see
-// utils/exportBrandedPng), so this would just be a duplicate there.
-// The text itself comes from CSS (.chart-watermark::after) — it's
-// decorative, and keeping it out of the DOM text keeps it out of the
-// accessibility tree and of contrast audits.
+// "metrikdelta.com" in a chart's corner, so a plain screenshot still credits
+// the site. Hidden from PNG exports, which get their own watermark. The text
+// comes from CSS (.chart-watermark::after), out of the accessibility tree.
 export default function Watermark({ bottom = 6, right = 10 }: { bottom?: number; right?: number }) {
   return (
     <span

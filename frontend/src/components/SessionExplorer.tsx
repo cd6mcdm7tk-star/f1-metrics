@@ -4,30 +4,24 @@ import {
   CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
 import { Loader2, Eye, EyeOff } from 'lucide-react';
-import { useTelemetryCache } from '../hooks/useTelemetryCache';
+import { getCached, getSessionLapsKey, setCached } from '../utils/lapsCache';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { getApiBase } from '../config';
-import type { LapData } from '../types/session';
+import { CURRENT_SEASON_YEAR } from '../hooks/useSubscription';
+import type { GrandPrix, LapData, SessionDriver } from '../types/session';
 import { compoundColor } from '../utils/compoundColors';
+import { teammateColors } from '../utils/teamColors';
 import Watermark from './Watermark';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const YEARS    = [2026, 2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018];
+// Telemetry exists from 2018 (FastF1)
+const YEARS = Array.from({ length: CURRENT_SEASON_YEAR - 2018 + 1 }, (_, i) => CURRENT_SEASON_YEAR - i);
 const SESSIONS = ['Q', 'R', 'FP1', 'FP2', 'FP3'];
 const SPRINT_SESSIONS = ['SQ', 'S'];
 const SESSION_LABELS: Record<string, string> = {
   Q: 'Qualifying', R: 'Race', S: 'Sprint', SQ: 'Sprint Qualifying',
 };
-
-// A later teammate doesn't reuse the team colour (indistinguishable from
-// their teammate's line), but every later teammate used to fall back to
-// the SAME black — so with 2+ teammate pairs selected at once, drivers
-// from DIFFERENT teams all rendered as identical black lines. Each team
-// needing a differentiator now gets its own colour from this palette
-// instead (first team to need one → black, second → purple, etc.), picked
-// to not collide with any real team's own color.
-const TEAMMATE_PALETTE = ['#000000', '#6B2D8E', '#7B4B27', '#B8860B', '#4A5568', '#8B3A62'];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -71,11 +65,11 @@ function SelectField({ label, value, onChange, options, placeholder, disabled }:
           fontFamily: 'JetBrains Mono, monospace', fontSize: 10,
           outline: 'none', cursor: disabled ? 'not-allowed' : 'pointer',
           opacity: disabled ? 0.5 : 1,
-          appearance: 'none' as any,
+          appearance: 'none',
           backgroundImage: 'none',
           backgroundRepeat: 'no-repeat',
           backgroundPosition: 'right 10px center',
-          WebkitAppearance: 'none' as any,
+          WebkitAppearance: 'none',
           transition: 'opacity 0.15s',
         }}
       >
@@ -101,10 +95,10 @@ interface SessionExplorerProps {
   onYearChange: (y: number) => void;
   selectedGP: number | null;
   onGPChange: (gp: number) => void;
-  grandsPrix: any[];
+  grandsPrix: GrandPrix[];
   sessionType: string | null;
   onSessionChange: (s: string) => void;
-  drivers: any[];
+  drivers: SessionDriver[];
   getDriverColor: (code: string) => string;
   areTeammates: (a: string, b: string) => boolean;
   /** Drivers plotted when the explorer opens or the session changes. */
@@ -117,36 +111,33 @@ interface SessionExplorerProps {
   onSelectedDriversChange?: (drivers: string[]) => void;
 }
 
-// ── Custom chart dot (clickable, colored by tire compound, highlights selection) ─
+type ChartRow = Record<string, number | string | null>;
 
-function ChartDot(props: any) {
-  const { cx, cy, stroke, payload, dataKey, selectedLapRefs, onToggle } = props;
-  const lapNumber: number = payload?.lapNumber;
+// ── Chart dot: clickable, filled with the tyre colour, larger when selected ──
+
+function ChartDot({ cx, cy, stroke, payload, dataKey, selectedLapRefs, onToggle }: {
+  cx?: number; cy?: number; stroke?: string; payload?: ChartRow;
+  dataKey: string; selectedLapRefs: LapSelection[]; onToggle: (driver: string, lapNumber: number) => void;
+}) {
+  const lapNumber = Number(payload?.lapNumber);
   const value = payload?.[dataKey];
   if (value == null || cx == null || cy == null) return null;
-  const isSelected = selectedLapRefs?.some(
-    (l: LapSelection) => l.driver === dataKey && l.lapNumber === lapNumber,
-  );
-  const compound = payload?.[`${dataKey}__compound`];
+  const isSelected = selectedLapRefs.some(l => l.driver === dataKey && l.lapNumber === lapNumber);
+  const compound = payload?.[`${dataKey}__compound`] as string | null | undefined;
   const fillColor = isSelected ? stroke : (compoundColor(compound) || 'var(--bg)');
 
   const handleClick = (e: React.MouseEvent) => {
-    e.stopPropagation(); // don't also trigger the chart-level onClick below
-    onToggle?.(dataKey, lapNumber);
+    e.stopPropagation();
+    onToggle(dataKey, lapNumber);
   };
 
   return (
     <g>
-      {/* Bigger invisible hit-area — this is the sole click mechanism now, so
-          make it generous (14px radius vs a 3-4px visible dot) */}
+      {/* Generous invisible hit area around the 4px dot */}
       <circle cx={cx} cy={cy} r={14} fill="transparent" style={{ cursor: 'pointer', pointerEvents: 'all' }} onClick={handleClick} />
-      {/* No `style` prop here on purpose: the draw-in/retract animation sets
-          this circle's opacity/transition by writing directly to its style
-          attribute, and if React also controlled `style` on this element it
-          would reset those inline writes back to whatever's declared here on
-          every unrelated re-render (hover, tooltip...), wiping the fade
-          mid-flight. `pointer-events: none` is a plain CSS rule instead —
-          see [data-visible-dot] in index.css. */}
+      {/* No `style` prop: the draw-in animation writes this circle's style
+          directly, and React would reset it on every re-render ([data-visible-dot]
+          in index.css sets pointer-events instead). */}
       <circle
         data-visible-dot="true"
         cx={cx} cy={cy}
@@ -180,19 +171,13 @@ export default function SessionExplorer({
   const [lapDataMap,   setLapDataMap]   = useState<Map<string, LapData>>(new Map());
   const [loadingSet,   setLoadingSet]   = useState<Set<string>>(new Set());
   const [selectedLapRefs, setSelectedLapRefs] = useState<LapSelection[]>(() => initialLapRefs ?? []);
-  // Drivers mid-retract-animation after being deselected — kept rendered in
-  // the chart (not the legend/table) just long enough to play the reverse
-  // draw animation, then dropped.
+  // Deselected drivers still on the chart (only) while their line retracts
   const [retractingDrivers, setRetractingDrivers] = useState<string[]>([]);
-  // Laps more than 5s off the comparison's best are hidden from the chart by
-  // default (pit laps, safety car, red flag...) so they don't blow out the
-  // y-scale — this reveals them without touching the table below, which
-  // already shows every lap regardless.
+  // Laps over 5s off the best (pit, safety car, red flag) are hidden from the
+  // chart by default so they don't flatten it; the table always lists them.
   const [showOutliers, setShowOutliers] = useState(false);
-  // Briefly flips the lines' own isAnimationActive on so Recharts morphs the
-  // curve between its old and new shape (values changing, not points being
-  // added/removed) — separate from the custom draw-in/retract stroke system,
-  // which needs isAnimationActive off to keep control of the path style.
+  // Recharts' own animation, on just long enough to morph the lines when
+  // outliers toggle (the draw-in animation needs it off the rest of the time)
   const [outlierAnimActive, setOutlierAnimActive] = useState(false);
   const outlierMountedRef = useRef(false);
   useEffect(() => {
@@ -202,14 +187,10 @@ export default function SessionExplorer({
     return () => clearTimeout(t);
   }, [showOutliers]);
 
-  const { getCached, setCached, getSessionLapsKey } = useTelemetryCache();
   const API = getApiBase();
 
-  // ── Reset on session change ────────────────────────────────────────────────
-  // Only on a real change, not on mount — that would drop the laps restored
-  // with the page. Value comparison rather than a first-run flag, which
-  // StrictMode's dev-only double effect run would flip (same fix as
-  // TelemetryPage).
+  // ── Reset on a real session change (not on mount: that would drop the laps
+  //    restored with the page; compared by value for StrictMode) ─────────────
   const sessionKey = `${year}|${selectedGP}|${sessionType}`;
   const prevSessionKeyRef = useRef(sessionKey);
   useEffect(() => {
@@ -251,7 +232,7 @@ export default function SessionExplorer({
     } catch { /* ignore */ } finally {
       setLoadingSet(prev => { const s = new Set(prev); s.delete(code); return s; });
     }
-  }, [year, selectedGP, sessionType, API, getCached, setCached, getSessionLapsKey]);
+  }, [year, selectedGP, sessionType, API]);
 
   // Load initial drivers on mount / session change
   useEffect(() => {
@@ -267,33 +248,16 @@ export default function SessionExplorer({
     });
   }, [loadDriver]);
 
-  // ── Resolve a plotted driver's color — a later teammate gets a distinct
-  //    neutral marker instead of the identical team color, with each team
-  //    needing one getting its own color from TEAMMATE_PALETTE instead of
-  //    every team's extra driver colliding on the same black ─────────────────
-  const teammateColorByCode = useMemo(() => {
-    const map: Record<string, string> = {};
-    const colorByAnchor = new Map<string, string>();
-    selectedDrivers.forEach((code, idx) => {
-      const anchor = selectedDrivers.slice(0, idx).find(prev => prev !== code && areTeammates(prev, code));
-      if (!anchor) return;
-      let color = colorByAnchor.get(anchor);
-      if (!color) {
-        color = TEAMMATE_PALETTE[colorByAnchor.size % TEAMMATE_PALETTE.length];
-        colorByAnchor.set(anchor, color);
-      }
-      map[code] = color;
-    });
-    return map;
-  }, [selectedDrivers, areTeammates]);
+  const teammateColorByCode = useMemo(
+    () => teammateColors(selectedDrivers, areTeammates),
+    [selectedDrivers, areTeammates],
+  );
 
   const resolveColor = useCallback((code: string) => {
     return teammateColorByCode[code] ?? getDriverColor(code);
   }, [teammateColorByCode, getDriverColor]);
 
-  // Chart-only superset: keeps a just-deselected driver's line + data around
-  // for the length of its retract animation, without it lingering in the
-  // legend/driver-picker/table (those go straight off `selectedDrivers`).
+  // The chart also keeps retracting drivers; legend, grid and table don't
   const renderedDrivers = useMemo(
     () => [...selectedDrivers, ...retractingDrivers.filter(d => !selectedDrivers.includes(d))],
     [selectedDrivers, retractingDrivers],
@@ -311,7 +275,7 @@ export default function SessionExplorer({
     const best = allTimes.length ? Math.min(...allTimes) : Infinity;
 
     return Array.from(allNums).sort((a, b) => a - b).map(lapNumber => {
-      const row: Record<string, any> = { lapNumber };
+      const row: ChartRow = { lapNumber };
       renderedDrivers.forEach(code => {
         const lap = lapDataMap.get(code)?.laps.find(l => l.LapNumber === lapNumber);
         const t = lap?.LapTime ?? null;
@@ -331,19 +295,10 @@ export default function SessionExplorer({
   }, [chartData, renderedDrivers]);
 
   // ── Draw-in / retract animation, with dots synced to the line ─────────────
-  // A line traces itself in when genuinely new (session change, or a driver
-  // added to an existing comparison) and reverse-traces out when deselected.
-  // Dots fade in/out in step with the line reaching their x-position instead
-  // of popping in ahead of it. Never replays on hover, lap-click, tooltip,
-  // zoom, or lap-time selection.
-  //
-  // A per-driver "generation" counter guards a fast re-toggle of the same
-  // driver: starting any animation for a code bumps its generation, and a
-  // completion callback checks its own captured generation against the
-  // current one before touching shared state — a stale callback from an
-  // animation that got superseded mid-flight just no-ops instead of leaving
-  // `retractingDrivers`/`startedRetractRef` permanently stuck (which is what
-  // was silently breaking the animation after a fast select/deselect).
+  // A new line (new session, or driver added) traces itself in; a deselected
+  // one traces itself out; each dot fades as the line reaches it. A per-driver
+  // generation counter makes the callbacks of an animation superseded by a
+  // quick re-toggle do nothing.
   const chartWrapRef = useRef<HTMLDivElement>(null);
   const chartKey = `${year}-${selectedGP}-${sessionType}`;
   const driversSignature = selectedDrivers.join(',');
@@ -361,10 +316,7 @@ export default function SessionExplorer({
     container: HTMLDivElement, code: string,
     direction: 'in' | 'out', delayMs: number,
   ) => {
-    // Found by the driver's own class scope, not array position — an index
-    // captured when the animation was scheduled can point at the wrong line
-    // by the time it actually runs a couple of frames later, if another
-    // toggle reordered `renderedDrivers` in between.
+    // Found by class, not index: the order can change before this runs
     const scope = container.querySelector<SVGGElement>(`.chart-line-${code}`);
     const path = scope?.querySelector<SVGPathElement>('.recharts-line-curve') ?? null;
     const len = path?.getTotalLength();
@@ -426,9 +378,7 @@ export default function SessionExplorer({
     prevChartKeyRef.current = chartKey;
     prevDriversRef.current = selectedDrivers;
 
-    // Re-added before its retract finished — it's not retracting anymore,
-    // and clear its "started" flag so a future retract of the same driver
-    // isn't blocked by this cancelled one.
+    // Re-added mid-retract: no longer retracting
     const reclaimed = toAnimate.filter(d => retractingDrivers.includes(d));
     if (reclaimed.length) {
       reclaimed.forEach(d => startedRetractRef.current.delete(d));
@@ -483,9 +433,7 @@ export default function SessionExplorer({
   const canCompare = selectedDrivers.length >= 1;
   const sessionReady = selectedGP != null && !!sessionType;
 
-  // Sprint (S) and Sprint Qualifying (SQ) only exist on sprint-format
-  // weekends — offering them for every GP was misleading since they simply
-  // don't exist for a conventional weekend.
+  // Sprint sessions only on sprint weekends
   const isSprintWeekend = grandsPrix.find(g => g.round === selectedGP)?.is_sprint ?? false;
   const availableSessions = isSprintWeekend ? [...SESSIONS, ...SPRINT_SESSIONS] : SESSIONS;
 
@@ -743,8 +691,7 @@ export default function SessionExplorer({
             </div>
           ) : (
             <>
-              {/* Outlier toggle — reveal laps normally hidden for being >5s
-                  off the comparison's best (pit/SC/red-flag laps) */}
+              {/* Outlier toggle (see showOutliers) */}
               <button
                 data-export-hide
                 onClick={() => setShowOutliers(v => !v)}
@@ -791,7 +738,7 @@ export default function SessionExplorer({
                     padding={{ left: 12, right: 12 }}
                     label={{ value: 'LAP', position: 'insideBottom', offset: -6, fill: 'var(--text-3)', style: { fontSize: 8, fontFamily: 'JetBrains Mono', letterSpacing: '0.15em' } }}
                   />
-                  <YAxis stroke="transparent" width={46}
+                  <YAxis stroke="transparent" width={46} allowDecimals={false}
                     tick={{ fill: 'var(--text-2)', fontSize: 9, fontFamily: 'JetBrains Mono' }}
                     tickFormatter={v => {
                       const m = Math.floor(v / 60);
@@ -804,7 +751,7 @@ export default function SessionExplorer({
                     contentStyle={{ background: 'var(--panel)', border: '1px solid var(--border-hi)', borderRadius: 'var(--r2)', padding: '6px 10px' }}
                     labelStyle={{ color: 'var(--accent)', fontFamily: 'JetBrains Mono', fontSize: 9, marginBottom: 4 }}
                     itemStyle={{ fontFamily: 'JetBrains Mono', fontSize: 10 }}
-                    formatter={(v: any, name: string) => [fmtTime(v), name]}
+                    formatter={(v, name) => [fmtTime(Number(v)), name]}
                     labelFormatter={l => `Lap ${l}`}
                   />
                   {renderedDrivers.map((code) => (
@@ -815,7 +762,7 @@ export default function SessionExplorer({
                       dataKey={code}
                       stroke={resolveColor(code)}
                       strokeWidth={1.5}
-                      dot={(p: any) => (
+                      dot={(p: { cx?: number; cy?: number; stroke?: string; payload?: ChartRow }) => (
                         <ChartDot
                           {...p}
                           dataKey={code}

@@ -1,8 +1,6 @@
-"""Lap telemetry: cleaning, reading it from PostgreSQL / OpenF1 / FastF1, and
-interpolating laps onto a shared distance grid."""
+"""Lap telemetry: cleaning it, and reading it from PostgreSQL, OpenF1 or FastF1."""
 import asyncio
 import logging
-import math
 from typing import Optional
 
 import fastf1
@@ -10,10 +8,8 @@ import numpy as np
 import pandas as pd
 from fastapi import HTTPException
 from pydantic import BaseModel
-from scipy.interpolate import interp1d
 
 from app import openf1
-from database import db
 
 logger = logging.getLogger(__name__)
 
@@ -48,118 +44,6 @@ def prepare_tel(tel: pd.DataFrame) -> pd.DataFrame:
         else:
             tel[col] = pd.to_numeric(tel[col], errors="coerce").fillna(default)
     return tel
-
-
-def comparison_from_db(
-    year: int, gp_round: int, session_type: str,
-    driver1: str, lap_number1,
-    driver2: str, lap_number2,
-) -> dict | None:
-    """A two-driver comparison from PostgreSQL, same shape as the live path,
-    or None if either lap isn't stored. Runs in a thread (psycopg2 is sync)."""
-    try:
-        lap_type1 = "fastest" if lap_number1 is None else f"lap_{lap_number1}"
-        lap_type2 = "fastest" if lap_number2 is None else f"lap_{lap_number2}"
-
-        t1 = db.get_telemetry(year, gp_round, session_type, driver1, lap_type1)
-        t2 = db.get_telemetry(year, gp_round, session_type, driver2, lap_type2)
-        if t1 is None or t2 is None:
-            return None
-
-        actual_lap1 = t1["lap_number"]
-        actual_lap2 = t2["lap_number"]
-        lap1_meta = db.get_lap_metadata(year, gp_round, session_type, driver1, actual_lap1) or {}
-        lap2_meta = db.get_lap_metadata(year, gp_round, session_type, driver2, actual_lap2) or {}
-
-        def _dedup(data: dict, dist_key: str = "distance") -> dict:
-            dist = np.array(data[dist_key], dtype=float)
-            _, idx = np.unique(dist, return_index=True)
-            return {k: [v[i] for i in idx] for k, v in data.items()}
-
-        d1 = _dedup(t1["telemetry_data"])
-        d2 = _dedup(t2["telemetry_data"])
-
-        dist1 = np.array(d1["distance"], dtype=float)
-        dist2 = np.array(d2["distance"], dtype=float)
-
-        min_distance = max(dist1.min(), dist2.min())
-        max_distance = min(dist1.max(), dist2.max())
-        common_distance = np.linspace(min_distance, max_distance, 1000)
-
-        interp_speed1    = interp1d(dist1, d1["speed"],                   kind="linear",  bounds_error=False, fill_value=0)
-        interp_throttle1 = interp1d(dist1, d1["throttle"],                kind="linear",  bounds_error=False, fill_value=0)
-        interp_brake1    = interp1d(dist1, np.array(d1["brake"]).astype(int), kind="nearest", bounds_error=False, fill_value=0)
-        interp_gear1     = interp1d(dist1, d1["gear"],                    kind="nearest", bounds_error=False, fill_value=0)
-        interp_drs1      = interp1d(dist1, d1["drs"],                     kind="nearest", bounds_error=False, fill_value=0)
-        interp_rpm1      = interp1d(dist1, d1["rpm"],                     kind="linear",  bounds_error=False, fill_value=10000)
-        interp_x1        = interp1d(dist1, d1["x"],                       kind="linear",  bounds_error=False, fill_value="extrapolate")
-        interp_y1        = interp1d(dist1, d1["y"],                       kind="linear",  bounds_error=False, fill_value="extrapolate")
-
-        interp_speed2    = interp1d(dist2, d2["speed"],                   kind="linear",  bounds_error=False, fill_value=0)
-        interp_throttle2 = interp1d(dist2, d2["throttle"],                kind="linear",  bounds_error=False, fill_value=0)
-        interp_brake2    = interp1d(dist2, np.array(d2["brake"]).astype(int), kind="nearest", bounds_error=False, fill_value=0)
-        interp_gear2     = interp1d(dist2, d2["gear"],                    kind="nearest", bounds_error=False, fill_value=0)
-        interp_drs2      = interp1d(dist2, d2["drs"],                     kind="nearest", bounds_error=False, fill_value=0)
-        interp_rpm2      = interp1d(dist2, d2["rpm"],                     kind="linear",  bounds_error=False, fill_value=10000)
-
-        # Cumulative time from speed over distance...
-        cum_times1 = [0.0] * len(common_distance)
-        cum_times2 = [0.0] * len(common_distance)
-        speeds1 = [float(interp_speed1(d)) for d in common_distance]
-        speeds2 = [float(interp_speed2(d)) for d in common_distance]
-        for i in range(1, len(common_distance)):
-            seg = common_distance[i] - common_distance[i - 1]
-            avg1 = (speeds1[i] + speeds1[i - 1]) / 2 / 3.6
-            avg2 = (speeds2[i] + speeds2[i - 1]) / 2 / 3.6
-            cum_times1[i] = cum_times1[i - 1] + (seg / avg1 if avg1 > 0 else 0)
-            cum_times2[i] = cum_times2[i - 1] + (seg / avg2 if avg2 > 0 else 0)
-
-        # ...scaled to the official lap times, so the delta ends on the real gap
-        actual_lap_time1 = lap1_meta.get("lap_time")
-        actual_lap_time2 = lap2_meta.get("lap_time")
-        if actual_lap_time1 and cum_times1[-1] > 0:
-            scale1 = actual_lap_time1 / cum_times1[-1]
-            cum_times1 = [t * scale1 for t in cum_times1]
-        if actual_lap_time2 and cum_times2[-1] > 0:
-            scale2 = actual_lap_time2 / cum_times2[-1]
-            cum_times2 = [t * scale2 for t in cum_times2]
-
-        telemetry_data = []
-        for i, dist in enumerate(common_distance):
-            telemetry_data.append({
-                "distance":  float(dist),
-                "speed1":    speeds1[i],
-                "speed2":    speeds2[i],
-                "throttle1": float(interp_throttle1(dist)),
-                "throttle2": float(interp_throttle2(dist)),
-                "brake1":    bool(interp_brake1(dist)),
-                "brake2":    bool(interp_brake2(dist)),
-                "gear1":     int(interp_gear1(dist)),
-                "gear2":     int(interp_gear2(dist)),
-                "drs1":      int(v) if not math.isnan(v := float(interp_drs1(dist))) else 0,
-                "drs2":      int(v) if not math.isnan(v := float(interp_drs2(dist))) else 0,
-                "x":         float(interp_x1(dist)),
-                "y":         float(interp_y1(dist)),
-                "delta":     float(cum_times2[i] - cum_times1[i]),
-                "rpm1":      float(interp_rpm1(dist)),
-                "rpm2":      float(interp_rpm2(dist)),
-            })
-
-        return {
-            "telemetry":  telemetry_data,
-            "lapTime1":   lap1_meta.get("lap_time"),
-            "lapTime2":   lap2_meta.get("lap_time"),
-            "sectors1":   {"sector1": lap1_meta.get("sector1_time"), "sector2": lap1_meta.get("sector2_time"), "sector3": lap1_meta.get("sector3_time")},
-            "sectors2":   {"sector1": lap2_meta.get("sector1_time"), "sector2": lap2_meta.get("sector2_time"), "sector3": lap2_meta.get("sector3_time")},
-            "driver1":    driver1,
-            "driver2":    driver2,
-            "lapNumber1": actual_lap1,
-            "lapNumber2": actual_lap2,
-            "source":     "postgresql",
-        }
-    except Exception as e:
-        logger.warning(f"PostgreSQL telemetry lookup failed: {e}", exc_info=True)
-        return None
 
 
 def db_lap_ref(lap_ref: LapRef) -> tuple:
