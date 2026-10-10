@@ -3,6 +3,7 @@
 Data sources: PostgreSQL for ingested sessions (jobs/), OpenF1 for the
 current season, FastF1 for past seasons, Jolpica for results and standings."""
 import asyncio
+import os
 
 from dotenv import load_dotenv
 
@@ -21,6 +22,7 @@ from app.routes import admin, laps, payments, season, sessions, telemetry  # noq
 from app.season import prewarm_seasons  # noqa: E402
 from database import db  # noqa: E402
 
+os.makedirs("cache", exist_ok=True)  # FastF1 refuses a missing cache directory
 fastf1.Cache.enable_cache("cache")
 
 app = FastAPI()
