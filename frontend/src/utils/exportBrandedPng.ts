@@ -7,7 +7,7 @@ const OUTPUT_WIDTH = 3600; // px — stays sharp after social feeds downscale it
 const WATERMARK = {
   color: '#5e1018',
   opacity: 0.11,
-  widthRatio: 0.3, // wordmark width as a share of the host's width
+  widthRatio: 0.36, // wordmark width as a share of the host's width
 };
 
 export interface ExportLayout {
@@ -146,7 +146,7 @@ function applyWatermark(clone: HTMLElement, hostWidth: number) {
   const url = doc.createElement('div');
   url.textContent = 'metrikdelta.com';
   Object.assign(url.style, {
-    fontFamily: '"JetBrains Mono", monospace', fontWeight: '700', fontSize: `${size * 0.24}px`,
+    fontFamily: '"JetBrains Mono", monospace', fontWeight: '700', fontSize: `${size * 0.27}px`,
     lineHeight: '1', letterSpacing: '0.3em', paddingLeft: '0.3em', marginTop: `${size * 0.12}px`,
     whiteSpace: 'nowrap',
   });
