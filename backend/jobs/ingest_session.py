@@ -14,6 +14,7 @@ import sys
 import time
 from typing import Optional
 
+import numpy as np
 import pandas as pd
 import requests
 
@@ -95,14 +96,15 @@ def _sanitize_tel_data(data: dict) -> dict:
     return cleaned
 
 
-def _distance_from_xy(x: list, y: list) -> list:
-    """Cumulative Euclidean distance in metres from GPS arrays."""
-    dist = [0.0]
-    for i in range(1, len(x)):
-        dx = x[i] - x[i - 1]
-        dy = y[i] - y[i - 1]
-        dist.append(dist[-1] + math.sqrt(dx * dx + dy * dy))
-    return dist
+def _distance_from_speed(dates: list, speeds: list) -> list:
+    """Cumulative distance in metres: speed integrated over time, like
+    FastF1's add_distance() and app.openf1.fetch_lap_telemetry(). Summing the
+    GPS steps instead read OpenF1's positions, in tenths of a metre and
+    jittery, as metres: laps came out about ten times too long."""
+    times = pd.to_datetime(pd.Series(dates), utc=True, format="ISO8601")
+    dt = times.diff().dt.total_seconds().fillna(0).to_numpy()
+    speed_ms = pd.to_numeric(pd.Series(speeds), errors="coerce").fillna(0).to_numpy() / 3.6
+    return np.cumsum(speed_ms * dt).tolist()
 
 
 # ---------------------------------------------------------------------------
@@ -396,7 +398,7 @@ def _build_telemetry_from_raw(car_data: list, pos_data: list) -> Optional[dict]:
             x_vals[i] = pos_x[j]
             y_vals[i] = pos_y[j]
 
-    dist = _distance_from_xy(x_vals, y_vals)
+    dist = _distance_from_speed(dates_car, speed)
 
     return _sanitize_tel_data({
         "distance": dist,

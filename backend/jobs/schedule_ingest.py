@@ -6,7 +6,8 @@ isn't fully stored in PostgreSQL yet (lap counts compared with OpenF1), runs
 ingest() — or only ingest_openf1_compounds() when just the tyres are missing.
 Sessions: Q, R, S, SQ, SS (practice isn't ingested).
 
-`--all` drops the 7-day window to catch up the whole season.
+`--all` drops the 7-day window to catch up the whole season. `--force` re-ingests
+sessions already complete too, after a fix to how they're stored.
 """
 
 import argparse
@@ -207,7 +208,7 @@ def get_round_from_fastf1(year: int, session_date_str: str) -> Optional[int]:
 # Main
 # ---------------------------------------------------------------------------
 
-def run(whole_season: bool = False):
+def run(whole_season: bool = False, force: bool = False):
     if not db.available:
         logger.error("PostgreSQL unavailable, check DATABASE_URL")
         sys.exit(1)
@@ -273,7 +274,7 @@ def run(whole_season: bool = False):
 
         label = f"{current_year} R{gp_round} {session_type}"
         try:
-            status = session_status(current_year, gp_round, session_type, session["session_key"])
+            status = "missing" if force else session_status(current_year, gp_round, session_type, session["session_key"])
             if status == "complete":
                 logger.info(f"  complete: {label}")
                 skipped += 1
@@ -298,4 +299,6 @@ def run(whole_season: bool = False):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Ingest recently finished sessions")
     parser.add_argument("--all", action="store_true", help="Check every session of the current season, not just the last 7 days")
-    run(whole_season=parser.parse_args().all)
+    parser.add_argument("--force", action="store_true", help="Re-ingest sessions even when they are complete")
+    args = parser.parse_args()
+    run(whole_season=args.all, force=args.force)
