@@ -1,16 +1,14 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import {
-  LineChart, Line, XAxis, YAxis,
-  CartesianGrid, Tooltip, ResponsiveContainer,
-} from 'recharts';
 import { Loader2, Eye, EyeOff } from 'lucide-react';
 import { getCached, getSessionLapsKey, setCached } from '../utils/lapsCache';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { getApiBase } from '../config';
 import { CURRENT_SEASON_YEAR } from '../hooks/useSubscription';
-import type { GrandPrix, LapData, SessionDriver } from '../types/session';
+import type { GrandPrix, LapData, LapSelection, SessionDriver } from '../types/session';
 import { compoundColor } from '../utils/compoundColors';
 import { teammateColors } from '../utils/teamColors';
+import { formatLapTime, lapChartDomain, lapChartRows } from './lapChart';
+import LapTimesChart from './LapTimesChart';
 import Watermark from './Watermark';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -22,14 +20,6 @@ const SPRINT_SESSIONS = ['SQ', 'S'];
 const SESSION_LABELS: Record<string, string> = {
   Q: 'Qualifying', R: 'Race', S: 'Sprint', SQ: 'Sprint Qualifying',
 };
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function fmtTime(s: number | null | undefined): string {
-  if (!s) return '—';
-  const m = Math.floor(s / 60);
-  return `${m}:${(s % 60).toFixed(3).padStart(6, '0')}`;
-}
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -88,8 +78,6 @@ function SelectField({ label, value, onChange, options, placeholder, disabled }:
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
-export interface LapSelection { driver: string; lapNumber: number; }
-
 interface SessionExplorerProps {
   year: number;
   onYearChange: (y: number) => void;
@@ -109,45 +97,6 @@ interface SessionExplorerProps {
   onCompareLaps: (laps: LapSelection[]) => void;
   /** Lets the parent know which drivers are plotted (drives its PNG export button). */
   onSelectedDriversChange?: (drivers: string[]) => void;
-}
-
-type ChartRow = Record<string, number | string | null>;
-
-// ── Chart dot: clickable, filled with the tyre colour, larger when selected ──
-
-function ChartDot({ cx, cy, stroke, payload, dataKey, selectedLapRefs, onToggle }: {
-  cx?: number; cy?: number; stroke?: string; payload?: ChartRow;
-  dataKey: string; selectedLapRefs: LapSelection[]; onToggle: (driver: string, lapNumber: number) => void;
-}) {
-  const lapNumber = Number(payload?.lapNumber);
-  const value = payload?.[dataKey];
-  if (value == null || cx == null || cy == null) return null;
-  const isSelected = selectedLapRefs.some(l => l.driver === dataKey && l.lapNumber === lapNumber);
-  const compound = payload?.[`${dataKey}__compound`] as string | null | undefined;
-  const fillColor = isSelected ? stroke : (compoundColor(compound) || 'var(--bg)');
-
-  const handleClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onToggle(dataKey, lapNumber);
-  };
-
-  return (
-    <g>
-      {/* Generous invisible hit area around the 4px dot */}
-      <circle cx={cx} cy={cy} r={14} fill="transparent" style={{ cursor: 'pointer', pointerEvents: 'all' }} onClick={handleClick} />
-      {/* No `style` prop: the draw-in animation writes this circle's style
-          directly, and React would reset it on every re-render ([data-visible-dot]
-          in index.css sets pointer-events instead). */}
-      <circle
-        data-visible-dot="true"
-        cx={cx} cy={cy}
-        r={isSelected ? 6.5 : 4}
-        fill={fillColor}
-        stroke={stroke}
-        strokeWidth={isSelected ? 2 : 1.5}
-      />
-    </g>
-  );
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -264,35 +213,12 @@ export default function SessionExplorer({
   );
 
   // ── Chart data ─────────────────────────────────────────────────────────────
-  const chartData = useMemo(() => {
-    const allNums = new Set<number>();
-    renderedDrivers.forEach(code => {
-      lapDataMap.get(code)?.laps.forEach(l => { if (l.LapTime) allNums.add(l.LapNumber); });
-    });
-    const allTimes = renderedDrivers.flatMap(code =>
-      lapDataMap.get(code)?.laps.map(l => l.LapTime).filter(Boolean) ?? [],
-    ) as number[];
-    const best = allTimes.length ? Math.min(...allTimes) : Infinity;
+  const chartData = useMemo(
+    () => lapChartRows(code => lapDataMap.get(code)?.laps, renderedDrivers, showOutliers),
+    [renderedDrivers, lapDataMap, showOutliers],
+  );
 
-    return Array.from(allNums).sort((a, b) => a - b).map(lapNumber => {
-      const row: ChartRow = { lapNumber };
-      renderedDrivers.forEach(code => {
-        const lap = lapDataMap.get(code)?.laps.find(l => l.LapNumber === lapNumber);
-        const t = lap?.LapTime ?? null;
-        row[code] = t && (showOutliers || t <= best + 5) ? t : null;
-        row[`${code}__compound`] = lap?.Compound ?? null;
-      });
-      return row;
-    });
-  }, [renderedDrivers, lapDataMap, showOutliers]);
-
-  const yDomain = useMemo((): [number, number] => {
-    const times = chartData.flatMap(d =>
-      renderedDrivers.map(c => d[c]).filter(Boolean),
-    ) as number[];
-    if (!times.length) return [60, 120];
-    return [Math.floor(Math.min(...times) - 0.5), Math.ceil(Math.max(...times) + 0.5)];
-  }, [chartData, renderedDrivers]);
+  const yDomain = useMemo(() => lapChartDomain(chartData, renderedDrivers), [chartData, renderedDrivers]);
 
   // ── Draw-in / retract animation, with dots synced to the line ─────────────
   // A new line (new session, or driver added) traces itself in; a deselected
@@ -711,75 +637,11 @@ export default function SessionExplorer({
                 {showOutliers ? <Eye size={12} /> : <EyeOff size={12} />}
               </button>
 
-              {/* Legend */}
-              <div style={{
-                position: 'absolute', top: 10, left: 56, zIndex: 10,
-                display: 'flex', gap: 14, flexWrap: 'wrap',
-              }}>
-                {selectedDrivers.map(code => (
-                  <span key={code} style={{
-                    fontFamily: 'Rajdhani, sans-serif', fontSize: 11, fontWeight: 700,
-                    color: resolveColor(code),
-                  }}>
-                    ● {code}
-                  </span>
-                ))}
-              </div>
-
-              <div ref={chartWrapRef} key={chartKey} style={{ width: '100%', height: '100%' }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart
-                  data={chartData}
-                  margin={{ top: 34, right: 20, left: 4, bottom: 18 }}
-                >
-                  <CartesianGrid strokeDasharray="4 4" stroke="var(--chart-grid)" />
-                  <XAxis dataKey="lapNumber" stroke="transparent"
-                    tick={{ fill: 'var(--text-2)', fontSize: 9, fontFamily: 'JetBrains Mono' }}
-                    padding={{ left: 12, right: 12 }}
-                    label={{ value: 'LAP', position: 'insideBottom', offset: -6, fill: 'var(--text-3)', style: { fontSize: 8, fontFamily: 'JetBrains Mono', letterSpacing: '0.15em' } }}
-                  />
-                  <YAxis stroke="transparent" width={46} allowDecimals={false}
-                    tick={{ fill: 'var(--text-2)', fontSize: 9, fontFamily: 'JetBrains Mono' }}
-                    tickFormatter={v => {
-                      const m = Math.floor(v / 60);
-                      return `${m}:${Math.floor(v % 60).toString().padStart(2, '0')}`;
-                    }}
-                    domain={yDomain}
-                  />
-                  <Tooltip
-                    cursor={false}
-                    contentStyle={{ background: 'var(--panel)', border: '1px solid var(--border-hi)', borderRadius: 'var(--r2)', padding: '6px 10px' }}
-                    labelStyle={{ color: 'var(--accent)', fontFamily: 'JetBrains Mono', fontSize: 9, marginBottom: 4 }}
-                    itemStyle={{ fontFamily: 'JetBrains Mono', fontSize: 10 }}
-                    formatter={(v, name) => [fmtTime(Number(v)), name]}
-                    labelFormatter={l => `Lap ${l}`}
-                  />
-                  {renderedDrivers.map((code) => (
-                    <Line
-                      key={code}
-                      className={`chart-line-${code}`}
-                      type="monotone"
-                      dataKey={code}
-                      stroke={resolveColor(code)}
-                      strokeWidth={1.5}
-                      dot={(p: { cx?: number; cy?: number; stroke?: string; payload?: ChartRow }) => (
-                        <ChartDot
-                          {...p}
-                          dataKey={code}
-                          selectedLapRefs={selectedLapRefs}
-                          onToggle={toggleLapRef}
-                        />
-                      )}
-                      activeDot={false}
-                      connectNulls
-                      isAnimationActive={outlierAnimActive}
-                      animationDuration={500}
-                      animationEasing="ease-in-out"
-                    />
-                  ))}
-                </LineChart>
-              </ResponsiveContainer>
-              </div>
+              <LapTimesChart
+                rows={chartData} drivers={selectedDrivers} lines={renderedDrivers} colorOf={resolveColor} yDomain={yDomain}
+                selectedLapRefs={selectedLapRefs} onToggle={toggleLapRef} animate={outlierAnimActive}
+                chartRef={chartWrapRef} chartKey={chartKey}
+              />
               <Watermark />
             </>
           )}
@@ -885,7 +747,7 @@ export default function SessionExplorer({
                                   color: isPersonalBest ? color : 'var(--text)',
                                   fontWeight: isPersonalBest ? 700 : 400,
                                 }}>
-                                  {fmtTime(t)}
+                                  {formatLapTime(t)}
                                 </span>
                                 {dot && (
                                   <div style={{ width: 4, height: 4, borderRadius: '50%', background: dot, border: '1px solid var(--border-hi)' }} />

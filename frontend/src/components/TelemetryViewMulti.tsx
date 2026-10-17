@@ -1,12 +1,12 @@
-import { useMemo, useRef, useEffect, useState } from 'react';
-import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ReferenceLine,
-} from 'recharts';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Loader2, ZoomIn } from 'lucide-react';
-import type { TelemetryDataMulti, DriverMeta } from '../types/telemetry';
+import type { TelemetryDataMulti } from '../types/telemetry';
 import { useIsMobile } from '../hooks/useIsMobile';
-import { teammateColors } from '../utils/teamColors';
-import Watermark from './Watermark';
+import TelemetryChartStack from './TelemetryChartStack';
+import {
+  buildChartData, buildColors, buildLabel, fastestLapIndex, fmtRpm,
+  MARGIN, MOBILE_MARGIN, MOBILE_Y_AXIS_WIDTH, RENDER_SCALE, Y_AXIS_WIDTH,
+} from './telemetryChart';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -15,6 +15,9 @@ interface Props {
   getDriverColor: (code: string) => string;
   areTeammates: (d1: string, d2: string) => boolean;
   loading?: boolean;
+  /** Replays the lap up to this distance (m): traces stop there, and the live
+   * readouts and track marker follow it instead of the pointer */
+  replayDistance?: number;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -36,10 +39,6 @@ function fmtDelta(d: number, compact = false): string {
   return (d > 0 ? '+' : '') + d.toFixed(compact ? 2 : 3) + (compact ? '' : 's');
 }
 
-function fmtRpm(v: number): string {
-  return `${(v / 1000).toFixed(1)}k`;
-}
-
 function nearestIdx(arr: number[], val: number): number {
   let lo = 0, hi = arr.length - 1;
   while (lo < hi - 1) {
@@ -49,53 +48,21 @@ function nearestIdx(arr: number[], val: number): number {
   return Math.abs(arr[lo] - val) <= Math.abs(arr[hi] - val) ? lo : hi;
 }
 
-function blendToWhite(hex: string, blend: number): string {
-  const h = hex.replace('#', '');
-  const r = parseInt(h.slice(0, 2), 16);
-  const g = parseInt(h.slice(2, 4), 16);
-  const b = parseInt(h.slice(4, 6), 16);
-  const nr = Math.round(r + (255 - r) * blend);
-  const ng = Math.round(g + (255 - g) * blend);
-  const nb = Math.round(b + (255 - b) * blend);
-  return `#${nr.toString(16).padStart(2, '0')}${ng.toString(16).padStart(2, '0')}${nb.toString(16).padStart(2, '0')}`;
-}
-
-// The same driver on another lap gets a lighter shade of their colour.
-function buildColors(
-  drivers: DriverMeta[],
-  getColor: (c: string) => string,
-  areTeammates: (a: string, b: string) => boolean,
-): string[] {
-  const secondColors = teammateColors(drivers.map(d => d.driver), areTeammates);
-  const seen: Record<string, number> = {};
-  return drivers.map(d => {
-    const dupeCount = seen[d.driver] ?? 0;
-    seen[d.driver] = dupeCount + 1;
-    const base = secondColors[d.driver] ?? getColor(d.driver);
-    return dupeCount === 0 ? base : blendToWhite(base, Math.min(dupeCount * 0.2, 0.5));
-  });
-}
-
-function buildLabel(d: DriverMeta, drivers: DriverMeta[]): string {
-  const dupes = drivers.filter(x => x.driver === d.driver).length;
-  if (dupes > 1) return `${d.driver} L${d.lap}`;
-  return d.driver;
-}
-
 const SECTOR_KEYS = ['s1', 's2', 's3'] as const;
 
-// Chart margins: also used by the crosshair / loupe pixel math (desktop only)
-const MARGIN = { top: 8, right: 20, left: 52, bottom: 12 };
-// Narrower on phones, where the desktop margins ate a third of the width
-const MOBILE_MARGIN = { top: 8, right: 8, left: 4, bottom: 12 };
-const MOBILE_Y_AXIS_WIDTH = 34;
+// A replay reveals the traces up to the crosshair through this clip
+// (index.css), which keeps the axes and the work of a full lap
+const REPLAY_CLIP_ID = 'telemetry-replay-clip';
+
+// Where the plot starts: Recharts puts the Y axis inside the left margin
+const PLOT_LEFT = MARGIN.left + Y_AXIS_WIDTH;
 
 // ── Component ────────────────────────────────────────────────────────────────
 
-export default function TelemetryViewMulti({ telemetryData, getDriverColor, areTeammates, loading }: Props) {
+export default function TelemetryViewMulti({ telemetryData, getDriverColor, areTeammates, loading, replayDistance }: Props) {
   const isMobile = useIsMobile();
   const chartMargin = isMobile ? MOBILE_MARGIN : MARGIN;
-  const yAxisWidth = isMobile ? MOBILE_Y_AXIS_WIDTH : 48;
+  const yAxisWidth = isMobile ? MOBILE_Y_AXIS_WIDTH : Y_AXIS_WIDTH;
   const n = telemetryData.drivers.length;
   // Beyond 2 drivers the live panel's fixed-width column needs smaller, shorter values
   const liveCompact = n >= 3;
@@ -107,33 +74,14 @@ export default function TelemetryViewMulti({ telemetryData, getDriverColor, areT
     () => telemetryData.drivers.map(d => buildLabel(d, telemetryData.drivers)),
     [telemetryData]
   );
+  const dashed = useMemo(
+    () => telemetryData.drivers.map((d, i) => i > 0 && d.driver === telemetryData.drivers[0].driver),
+    [telemetryData]
+  );
 
-  // Fastest driver in the comparison — used as the delta reference instead of
-  // whichever driver happened to be selected/clicked first.
-  const fastestIdx = useMemo(() => {
-    let best = 0;
-    telemetryData.drivers.forEach((d, i) => {
-      const bestTime = telemetryData.drivers[best].lapTime;
-      if (d.lapTime != null && (bestTime == null || d.lapTime < bestTime)) best = i;
-    });
-    return best;
-  }, [telemetryData]);
-
-  // ── Transform to Recharts flat format ──────────────────────────────────────
-  const chartData = useMemo(() => {
-    return telemetryData.telemetry.map(pt => {
-      const row: Record<string, number> = { distance: pt.distance };
-      pt.speeds.forEach((v, i) => { row[`spd${i}`] = v; });
-      pt.throttles.forEach((v, i) => { row[`thr${i}`] = v; });
-      pt.brakes.forEach((v, i) => { row[`brk${i}`] = v ? 1 : 0; });
-      pt.gears.forEach((v, i) => { row[`gear${i}`] = v; });
-      // Rebase deltas onto the fastest driver (backend gives them vs drivers[0]).
-      const refDelta = pt.deltas[fastestIdx] ?? 0;
-      pt.deltas.forEach((v, i) => { row[`dlt${i}`] = v - refDelta; });
-      pt.rpms.forEach((v, i) => { row[`rpm${i}`] = v; });
-      return row;
-    });
-  }, [telemetryData, fastestIdx]);
+  // The delta reference, rather than whichever lap was picked first
+  const fastestIdx = useMemo(() => fastestLapIndex(telemetryData.drivers), [telemetryData]);
+  const chartData = useMemo(() => buildChartData(telemetryData, fastestIdx), [telemetryData, fastestIdx]);
 
   // Distance array for binary search
   const distances = useMemo(
@@ -141,6 +89,7 @@ export default function TelemetryViewMulti({ telemetryData, getDriverColor, areT
     [telemetryData]
   );
   const maxDist = distances[distances.length - 1] ?? 5000;
+  const xDomain = useMemo((): [number, number] => [0, maxDist], [maxDist]);
 
   // Speed axis from the slowest point (to the 10 km/h below), not 0, which flattened the trace
   const speedYDomain = useMemo((): [number, string] => {
@@ -184,10 +133,13 @@ export default function TelemetryViewMulti({ telemetryData, getDriverColor, areT
       return best;
     });
 
+    // In a replay, only the part of the lap driven so far
+    const reached = replayDistance == null ? -1 : pts.findIndex(p => p.distance > replayDistance);
+    const shown = reached === -1 ? pts.length : reached;
     const segments: { path: string; color: string }[] = [];
     let curDriver = dominant[0];
     let curPath = `M${nx(pts[0].x, pts[0].y).toFixed(1)},${ny(pts[0].x, pts[0].y).toFixed(1)}`;
-    for (let i = 1; i < pts.length; i++) {
+    for (let i = 1; i < shown; i++) {
       const coord = `${nx(pts[i].x, pts[i].y).toFixed(1)},${ny(pts[i].x, pts[i].y).toFixed(1)}`;
       if (dominant[i] !== curDriver) {
         curPath += ` L${coord}`;
@@ -198,7 +150,7 @@ export default function TelemetryViewMulti({ telemetryData, getDriverColor, areT
         curPath += ` L${coord}`;
       }
     }
-    segments.push({ path: curPath, color: colors[curDriver] });
+    if (shown > 1) segments.push({ path: curPath, color: colors[curDriver] });
 
     const outline = `M${pts.map(p => `${nx(p.x, p.y).toFixed(1)},${ny(p.x, p.y).toFixed(1)}`).join(' L')}`;
 
@@ -221,7 +173,7 @@ export default function TelemetryViewMulti({ telemetryData, getDriverColor, areT
     const startFinish = { x: nx(pts[0].x, pts[0].y), y: ny(pts[0].x, pts[0].y) };
 
     return { W, H, nx, ny, pts, segments, outline, pct, cornerMarkers, startFinish };
-  }, [telemetryData, colors, n, distances]);
+  }, [telemetryData, colors, n, distances, replayDistance]);
 
   // ── Corner analysis — official FIA corner numbers from the backend, mapped
   //    onto this comparison's own distance grid (nearest telemetry sample) ────
@@ -247,6 +199,7 @@ export default function TelemetryViewMulti({ telemetryData, getDriverColor, areT
     const segSize = maxD / N_SEG;
     return Array.from({ length: N_SEG }, (_, i) => {
       const s = i * segSize, e = (i + 1) * segSize;
+      if (replayDistance != null && e > replayDistance) return -1;
       const pts = tel.filter(p => p.distance >= s && p.distance < e);
       if (!pts.length) return -1;
       const avgs = Array.from({ length: n }, (_, di) =>
@@ -256,13 +209,14 @@ export default function TelemetryViewMulti({ telemetryData, getDriverColor, areT
       for (let di = 1; di < n; di++) if (avgs[di] > avgs[best]) best = di;
       return best;
     });
-  }, [telemetryData, n]);
+  }, [telemetryData, n, replayDistance]);
 
   // ── Refs for DOM manipulation ──────────────────────────────────────────────
   const containerRef = useRef<HTMLDivElement>(null);
   const crosshairRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const trackMarkerRef = useRef<SVGCircleElement>(null);
+  const replayClipRef = useRef<SVGRectElement>(null);
 
   // Per-driver, per-channel DOM refs for live panel
   const liveRefs = useRef<Record<string, HTMLSpanElement | null>>({});
@@ -279,8 +233,48 @@ export default function TelemetryViewMulti({ telemetryData, getDriverColor, areT
   const chartRowRefs = useRef<(HTMLDivElement | null)[]>([]);
   const zoomWrapRefs = useRef<(HTMLDivElement | null)[]>([]);
   const hoveredRowRef = useRef<number | null>(null);
-  const RENDER_SCALE = 6; // internal pre-render width multiplier (resolution headroom)
   const ZOOM_TARGET = 4.2; // visual magnification actually shown while hovering
+
+  // Crosshair, live panel and track marker at one point of the lap
+  const showReadouts = useCallback((idx: number, frac: number) => {
+    const pt = telemetryData.telemetry[idx];
+    const container = containerRef.current;
+    if (!pt || !container) return;
+    const plotW = container.clientWidth - PLOT_LEFT - MARGIN.right;
+    // Crosshair, and the edge of a replay's traces
+    if (crosshairRef.current) {
+      crosshairRef.current.style.left = `${PLOT_LEFT + frac * plotW}px`;
+      crosshairRef.current.style.opacity = '1';
+    }
+    replayClipRef.current?.setAttribute('width', `${PLOT_LEFT + frac * plotW}`);
+
+    // Live panel values
+    for (let i = 0; i < n; i++) {
+      const spd = liveRefs.current[`spd${i}`];
+      const thr = liveRefs.current[`thr${i}`];
+      const brk = liveRefs.current[`brk${i}`];
+      const gear = liveRefs.current[`gear${i}`];
+      const rpm = liveRefs.current[`rpm${i}`];
+      const dlt = liveRefs.current[`dlt${i}`];
+      if (spd) spd.textContent = `${Math.round(pt.speeds[i])}`;
+      if (thr) thr.textContent = `${Math.round(pt.throttles[i])}%`;
+      if (brk) { brk.textContent = pt.brakes[i] ? 'ON' : 'OFF'; brk.style.color = pt.brakes[i] ? '#ef4444' : '#6b7280'; }
+      if (gear) gear.textContent = `${Math.round(pt.gears[i])}`;
+      if (rpm) rpm.textContent = fmtRpm(pt.rpms[i]);
+      if (dlt) { const d = pt.deltas[i] - pt.deltas[fastestIdx]; dlt.textContent = fmtDelta(d, liveCompact); dlt.style.color = d > 0 ? '#ef4444' : d < 0 ? '#22c55e' : '#6b7280'; }
+    }
+
+    if (panelRef.current) panelRef.current.style.opacity = '1';
+
+    // Track marker
+    if (trackMarkerRef.current && trackViz) {
+      const { nx, ny, pts } = trackViz;
+      const p = pts[idx] ?? pts[0];
+      trackMarkerRef.current.setAttribute('cx', String(nx(p.x, p.y).toFixed(1)));
+      trackMarkerRef.current.setAttribute('cy', String(ny(p.x, p.y).toFixed(1)));
+      trackMarkerRef.current.style.opacity = '1';
+    }
+  }, [telemetryData, n, fastestIdx, liveCompact, trackViz]);
 
   // ── Mousemove → crosshair + live panel + track marker + loupe zoom ───────
   useEffect(() => {
@@ -292,8 +286,8 @@ export default function TelemetryViewMulti({ telemetryData, getDriverColor, areT
       rafRef.current = requestAnimationFrame(() => {
         const rect = container.getBoundingClientRect();
         const relX = e.clientX - rect.left;
-        const plotW = rect.width - MARGIN.left - MARGIN.right;
-        const frac = Math.max(0, Math.min(1, (relX - MARGIN.left) / plotW));
+        const plotW = rect.width - PLOT_LEFT - MARGIN.right;
+        const frac = Math.max(0, Math.min(1, (relX - PLOT_LEFT) / plotW));
         const dist = frac * maxDist;
         const idx = nearestIdx(distances, dist);
         const pt = telemetryData.telemetry[idx];
@@ -321,49 +315,18 @@ export default function TelemetryViewMulti({ telemetryData, getDriverColor, areT
             const el = zoomWrapRefs.current[hoveredRow];
             if (el) {
               const rowWidth = hoveredRowRect.width;
-              const plotWNormal = rowWidth - MARGIN.left - MARGIN.right;
-              const plotWWide = RENDER_SCALE * rowWidth - MARGIN.left - MARGIN.right;
+              const plotWNormal = rowWidth - PLOT_LEFT - MARGIN.right;
+              const plotWWide = RENDER_SCALE * rowWidth - PLOT_LEFT - MARGIN.right;
               const sZoom = (plotWNormal * ZOOM_TARGET) / plotWWide;
               // Keeps the point under the cursor in place
-              const tZoom = relX - sZoom * (MARGIN.left + frac * plotWWide);
+              const tZoom = relX - sZoom * (PLOT_LEFT + frac * plotWWide);
               el.style.transformOrigin = '0 0';
               el.style.transform = `translateX(${tZoom}px) scaleX(${sZoom})`;
             }
           }
         }
 
-        // Crosshair
-        if (crosshairRef.current) {
-          crosshairRef.current.style.left = `${MARGIN.left + frac * plotW}px`;
-          crosshairRef.current.style.opacity = '1';
-        }
-
-        // Live panel values
-        for (let i = 0; i < n; i++) {
-          const spd = liveRefs.current[`spd${i}`];
-          const thr = liveRefs.current[`thr${i}`];
-          const brk = liveRefs.current[`brk${i}`];
-          const gear = liveRefs.current[`gear${i}`];
-          const rpm = liveRefs.current[`rpm${i}`];
-          const dlt = liveRefs.current[`dlt${i}`];
-          if (spd) spd.textContent = `${Math.round(pt.speeds[i])}`;
-          if (thr) thr.textContent = `${Math.round(pt.throttles[i])}%`;
-          if (brk) { brk.textContent = pt.brakes[i] ? 'ON' : 'OFF'; brk.style.color = pt.brakes[i] ? '#ef4444' : '#6b7280'; }
-          if (gear) gear.textContent = `${Math.round(pt.gears[i])}`;
-          if (rpm) rpm.textContent = fmtRpm(pt.rpms[i]);
-          if (dlt) { const d = pt.deltas[i] - pt.deltas[fastestIdx]; dlt.textContent = fmtDelta(d, liveCompact); dlt.style.color = d > 0 ? '#ef4444' : d < 0 ? '#22c55e' : '#6b7280'; }
-        }
-
-        if (panelRef.current) panelRef.current.style.opacity = '1';
-
-        // Track marker
-        if (trackMarkerRef.current && trackViz) {
-          const { nx, ny, pts } = trackViz;
-          const p = pts[idx] ?? pts[0];
-          trackMarkerRef.current.setAttribute('cx', String(nx(p.x, p.y).toFixed(1)));
-          trackMarkerRef.current.setAttribute('cy', String(ny(p.x, p.y).toFixed(1)));
-          trackMarkerRef.current.style.opacity = '1';
-        }
+        showReadouts(idx, frac);
       });
     };
 
@@ -386,7 +349,12 @@ export default function TelemetryViewMulti({ telemetryData, getDriverColor, areT
       container.removeEventListener('mouseleave', leave);
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [distances, maxDist, n, telemetryData, trackViz, fastestIdx, liveCompact, loupeMode]);
+  }, [distances, maxDist, telemetryData, showReadouts, loupeMode]);
+
+  useLayoutEffect(() => {
+    if (replayDistance == null) return;
+    showReadouts(nearestIdx(distances, replayDistance), Math.min(1, replayDistance / maxDist));
+  }, [replayDistance, distances, maxDist, showReadouts]);
 
   // Turning the loupe off should immediately restore the full-lap view.
   useEffect(() => {
@@ -399,27 +367,6 @@ export default function TelemetryViewMulti({ telemetryData, getDriverColor, areT
       }
     }
   }, [loupeMode]);
-
-  // ── Axis formatters ────────────────────────────────────────────────────────
-  const fmtDist = (v: number) => `${(v / 1000).toFixed(1)}km`;
-  const fmtSpeed = (v: number) => `${Math.round(v)}`;
-  const fmtPct = (v: number) => `${Math.round(v)}%`;
-  const fmtGear = (v: number) => `${Math.round(v)}`;
-
-  // The zoomed row hides its ticks, which would stretch with the transform
-  const xAxisPropsFor = (rowIdx: number) => ({
-    dataKey: 'distance' as const,
-    stroke: 'transparent',
-    tick: zoomChartIdx === rowIdx ? false : { fill: 'var(--text-2)', fontSize: 9, fontFamily: 'JetBrains Mono' },
-    tickLine: false,
-    tickFormatter: fmtDist,
-    type: 'number' as const,
-    domain: [0, maxDist] as [number, number],
-  });
-
-  const GRID  = { strokeDasharray: '3 4', stroke: 'var(--chart-grid)', vertical: false };
-  const CORNER_LINE = { stroke: 'var(--border-hi)', strokeDasharray: '2 3' };
-  const TICK  = { fill: 'var(--text-2)', fontSize: 9, fontFamily: 'JetBrains Mono' };
 
   const panel: React.CSSProperties = {
     background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--r2)',
@@ -511,9 +458,19 @@ export default function TelemetryViewMulti({ telemetryData, getDriverColor, areT
           <div
             ref={containerRef}
             data-export-watermark
+            data-replay={replayDistance != null || undefined}
             className="relative flex-1 overflow-hidden"
             style={{ cursor: loupeMode ? 'zoom-in' : 'crosshair' }}
           >
+            {replayDistance != null && (
+              // In each chart's own coordinates, up to the crosshair (showReadouts)
+              <svg width={0} height={0} style={{ position: 'absolute' }} aria-hidden="true">
+                <clipPath id={REPLAY_CLIP_ID} clipPathUnits="userSpaceOnUse">
+                  <rect ref={replayClipRef} x={0} y={0} width={0} height={10000} />
+                </clipPath>
+              </svg>
+            )}
+
             {/* Loupe toggle — hover-follow zoom on all 6 synced charts */}
             <button
               data-export-hide
@@ -543,128 +500,11 @@ export default function TelemetryViewMulti({ telemetryData, getDriverColor, areT
               }}
             />
 
-            {/* Speed */}
-            <div ref={(el) => { chartRowRefs.current[0] = el; }} className="relative h-[220px] sm:h-[300px] overflow-hidden flex flex-col">
-              <Watermark bottom={4} right={24} />
-              <div className="label-section ml-1 mb-0.5 flex-shrink-0" style={{ color: 'var(--text-2)' }}>SPEED km/h</div>
-              <div ref={(el) => { zoomWrapRefs.current[0] = el; }} className="flex-1 min-h-0" style={{ width: zoomChartIdx === 0 ? `${RENDER_SCALE * 100}%` : '100%' }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData} syncId="multi" margin={chartMargin}>
-                    <CartesianGrid {...GRID} />
-                    <XAxis {...xAxisPropsFor(0)} hide />
-                    <YAxis stroke="transparent" tick={zoomChartIdx === 0 ? false : TICK} tickLine={false} tickFormatter={fmtSpeed} domain={speedYDomain} width={yAxisWidth} />
-                    {corners.map((c, i) => (
-                      <ReferenceLine
-                        key={i} x={c.distance} {...CORNER_LINE}
-                        label={{ value: c.label, position: 'insideTop', fill: 'var(--text-3)', fontSize: 8, fontFamily: 'JetBrains Mono' }}
-                      />
-                    ))}
-                    {Array.from({ length: n }, (_, i) => (
-                      <Line key={i} type="monotone" dataKey={`spd${i}`} stroke={colors[i]} strokeWidth={i === 0 ? 1.5 : 1.2}
-                        dot={false} isAnimationActive={false} strokeDasharray={i > 0 && telemetryData.drivers[i].driver === telemetryData.drivers[0].driver ? '4 2' : undefined} />
-                    ))}
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            {/* Throttle */}
-            <div ref={(el) => { chartRowRefs.current[1] = el; }} className="h-[110px] sm:h-[150px] overflow-hidden flex flex-col">
-              <div className="label-section ml-1 mb-0.5 flex-shrink-0" style={{ color: 'var(--text-2)' }}>THROTTLE %</div>
-              <div ref={(el) => { zoomWrapRefs.current[1] = el; }} className="flex-1 min-h-0" style={{ width: zoomChartIdx === 1 ? `${RENDER_SCALE * 100}%` : '100%' }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData} syncId="multi" margin={chartMargin}>
-                    <CartesianGrid {...GRID} />
-                    <XAxis {...xAxisPropsFor(1)} hide />
-                    <YAxis stroke="transparent" tick={zoomChartIdx === 1 ? false : TICK} tickLine={false} tickFormatter={fmtPct} domain={[0, 100]} width={yAxisWidth} />
-                    {corners.map((c, i) => <ReferenceLine key={i} x={c.distance} {...CORNER_LINE} />)}
-                    {Array.from({ length: n }, (_, i) => (
-                      <Line key={i} type="monotone" dataKey={`thr${i}`} stroke={colors[i]} strokeWidth={i === 0 ? 1.5 : 1.2}
-                        dot={false} isAnimationActive={false} strokeDasharray={i > 0 && telemetryData.drivers[i].driver === telemetryData.drivers[0].driver ? '4 2' : undefined} />
-                    ))}
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            {/* Brake */}
-            <div ref={(el) => { chartRowRefs.current[2] = el; }} className="h-[60px] sm:h-[75px] overflow-hidden flex flex-col">
-              <div className="label-section ml-1 mb-0.5 flex-shrink-0" style={{ color: 'var(--text-2)' }}>BRAKE</div>
-              <div ref={(el) => { zoomWrapRefs.current[2] = el; }} className="flex-1 min-h-0" style={{ width: zoomChartIdx === 2 ? `${RENDER_SCALE * 100}%` : '100%' }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData} syncId="multi" margin={chartMargin}>
-                    <CartesianGrid {...GRID} />
-                    <XAxis {...xAxisPropsFor(2)} hide />
-                    <YAxis stroke="transparent" tick={false} domain={[0, 1]} width={yAxisWidth} />
-                    {corners.map((c, i) => <ReferenceLine key={i} x={c.distance} {...CORNER_LINE} />)}
-                    {Array.from({ length: n }, (_, i) => (
-                      <Line key={i} type="stepAfter" dataKey={`brk${i}`} stroke={colors[i]} strokeWidth={i === 0 ? 2 : 1.5}
-                        dot={false} isAnimationActive={false} opacity={0.85} />
-                    ))}
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            {/* Gear */}
-            <div ref={(el) => { chartRowRefs.current[3] = el; }} className="h-[100px] sm:h-[130px] overflow-hidden flex flex-col">
-              <div className="label-section ml-1 mb-0.5 flex-shrink-0" style={{ color: 'var(--text-2)' }}>GEAR</div>
-              <div ref={(el) => { zoomWrapRefs.current[3] = el; }} className="flex-1 min-h-0" style={{ width: zoomChartIdx === 3 ? `${RENDER_SCALE * 100}%` : '100%' }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData} syncId="multi" margin={chartMargin}>
-                    <CartesianGrid {...GRID} />
-                    <XAxis {...xAxisPropsFor(3)} hide />
-                    <YAxis stroke="transparent" tick={zoomChartIdx === 3 ? false : TICK} tickLine={false} tickFormatter={fmtGear} domain={[1, 8]} ticks={[1, 2, 3, 4, 5, 6, 7, 8]} width={yAxisWidth} />
-                    {corners.map((c, i) => <ReferenceLine key={i} x={c.distance} {...CORNER_LINE} />)}
-                    {Array.from({ length: n }, (_, i) => (
-                      <Line key={i} type="stepAfter" dataKey={`gear${i}`} stroke={colors[i]} strokeWidth={i === 0 ? 1.5 : 1.2}
-                        dot={false} isAnimationActive={false} />
-                    ))}
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            {/* Delta vs fastest driver */}
-            <div ref={(el) => { chartRowRefs.current[4] = el; }} className="h-[110px] sm:h-[150px] overflow-hidden flex flex-col">
-              <div className="label-section ml-1 mb-0.5 flex-shrink-0" style={{ color: 'var(--text-2)' }}>
-                DELTA vs <span style={{ color: colors[fastestIdx] }}>{labels[fastestIdx]}</span> — s
-              </div>
-              <div ref={(el) => { zoomWrapRefs.current[4] = el; }} className="flex-1 min-h-0" style={{ width: zoomChartIdx === 4 ? `${RENDER_SCALE * 100}%` : '100%' }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData} syncId="multi" margin={chartMargin}>
-                    <CartesianGrid {...GRID} />
-                    <XAxis {...xAxisPropsFor(4)} hide />
-                    <YAxis stroke="transparent" tick={zoomChartIdx === 4 ? false : TICK} tickLine={false} tickFormatter={(v: number) => v.toFixed(1)} width={yAxisWidth} />
-                    {corners.map((c, i) => <ReferenceLine key={i} x={c.distance} {...CORNER_LINE} />)}
-                    <ReferenceLine y={0} stroke={colors[fastestIdx]} strokeWidth={1.5} />
-                    {Array.from({ length: n }, (_, i) => i !== fastestIdx && (
-                      <Line key={i} type="monotone" dataKey={`dlt${i}`} stroke={colors[i]} strokeWidth={1.5}
-                        dot={false} isAnimationActive={false} />
-                    ))}
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            {/* RPM */}
-            <div ref={(el) => { chartRowRefs.current[5] = el; }} className="h-[110px] sm:h-[150px] overflow-hidden flex flex-col">
-              <div className="label-section ml-1 mb-0.5 flex-shrink-0" style={{ color: 'var(--text-2)' }}>RPM</div>
-              <div ref={(el) => { zoomWrapRefs.current[5] = el; }} className="flex-1 min-h-0" style={{ width: zoomChartIdx === 5 ? `${RENDER_SCALE * 100}%` : '100%' }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData} syncId="multi" margin={chartMargin}>
-                    <CartesianGrid {...GRID} />
-                    <XAxis {...xAxisPropsFor(5)} />
-                    <YAxis stroke="transparent" tick={zoomChartIdx === 5 ? false : TICK} tickLine={false} tickFormatter={fmtRpm} domain={['dataMin - 300', 'dataMax + 300']} width={yAxisWidth} />
-                    {corners.map((c, i) => <ReferenceLine key={i} x={c.distance} {...CORNER_LINE} />)}
-                    {Array.from({ length: n }, (_, i) => (
-                      <Line key={i} type="monotone" dataKey={`rpm${i}`} stroke={colors[i]} strokeWidth={i === 0 ? 1.5 : 1.2}
-                        dot={false} isAnimationActive={false} />
-                    ))}
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
+            <TelemetryChartStack
+              chartData={chartData} colors={colors} labels={labels} dashed={dashed} fastestIdx={fastestIdx}
+              corners={corners} xDomain={xDomain} speedYDomain={speedYDomain} margin={chartMargin} yAxisWidth={yAxisWidth}
+              zoomChartIdx={zoomChartIdx} rowRefs={chartRowRefs} zoomWrapRefs={zoomWrapRefs}
+            />
           </div>
 
           {/* Side column — Live readouts + Track dominance */}

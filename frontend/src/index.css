@@ -133,6 +133,11 @@
   opacity: 0.32;
 }
 
+/* A replayed lap (TelemetryViewMulti's replayDistance): traces up to the crosshair */
+[data-replay] .recharts-line {
+  clip-path: url(#telemetry-replay-clip);
+}
+
 /* Section label — tiny uppercase mono */
 .label-section {
   font-family: 'JetBrains Mono', 'Fira Mono', monospace;

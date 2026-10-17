@@ -29,6 +29,9 @@ export interface GPTempoLap {
   Compound: string | null;
 }
 
+/** A lap picked on the lap chart, to compare its telemetry */
+export interface LapSelection { driver: string; lapNumber: number; }
+
 export interface LapData {
   driver: string;
   team: string;

@@ -5,14 +5,14 @@ import { useSubscription, CURRENT_SEASON_YEAR } from '../hooks/useSubscription';
 import UpgradeModal, { type UpgradeReason } from '../components/UpgradeModal';
 import SEO from '../components/SEO';
 import PageHeader from '../components/PageHeader';
-import SessionExplorer, { type LapSelection } from '../components/SessionExplorer';
+import SessionExplorer from '../components/SessionExplorer';
 import TelemetryViewMulti from '../components/TelemetryViewMulti';
 import LegalLinks from '../components/LegalLinks';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { useRememberPageUrl } from '../hooks/usePageMemory';
 import { getDrivers, getGrandsPrix, getTelemetryMulti, getCachedTelemetryMulti } from '../services/backend.service';
 import type { TelemetryDataMulti, LapRef } from '../types/telemetry';
-import type { GrandPrix, SessionDriver } from '../types/session';
+import type { GrandPrix, LapSelection, SessionDriver } from '../types/session';
 import { teamColor } from '../utils/teamColors';
 
 type ViewType = 'trace' | 'laps';
