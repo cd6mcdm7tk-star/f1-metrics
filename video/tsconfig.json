@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "resolveJsonModule": true,
+    "types": ["node"],
+    "paths": {
+      "react-router-dom": ["../frontend/node_modules/react-router-dom"],
+      "lucide-react": ["../frontend/node_modules/lucide-react"],
+      "recharts": ["../frontend/node_modules/recharts"]
+    }
+  },
+  "include": ["src", "scripts", "narration", "webpack-override.ts", "remotion.config.ts"]
+}

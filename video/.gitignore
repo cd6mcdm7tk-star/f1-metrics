@@ -1,0 +1,5 @@
+node_modules/
+out/
+# Spoken by scripts/voice.ts, regenerated on demand
+public/voice/
+__pycache__/

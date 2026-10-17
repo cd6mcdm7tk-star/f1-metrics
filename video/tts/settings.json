@@ -1,0 +1,5 @@
+{
+  "model": "mlx-community/chatterbox-multilingual-v3",
+  "exaggeration": 0.9,
+  "cfgWeight": 0.4
+}

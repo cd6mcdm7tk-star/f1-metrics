@@ -1,0 +1,33 @@
+{
+  "hook": "[focused] Quatre-vingt-quatre millièmes. [surprised] Moins qu'un clignement d'œil. [ironic] Assez pour perdre une pole position… chez soi.",
+  "laps": "Melbourne, 2025. Oscar Piastri dispute le Grand Prix de sa ville natale. En face, pas un rival. Son propre coéquipier.",
+  "sectors": "Norris prend le premier secteur. Piastri, le deuxième. Norris, le dernier. Le début et la fin : en Formule 1, ce sont les seuls qu'on retient.",
+  "moments": {
+    "T1": [
+      "Virage 1. Regardez la corde. Norris passe en cinquième, Piastri en quatrième. Un rapport de moins, neuf kilomètres-heure de moins.",
+      "Et la sortie confirme la sentence.",
+      "Neuf centièmes, envolés dès le premier virage."
+    ],
+    "T6": [
+      "Virage 6. Piastri répond. Regardez les pointillés : Piastri freine vingt mètres plus tard. Vingt mètres d'audace pure.",
+      "À la corde, sept kilomètres-heure de plus.",
+      "Quatre centièmes de repris."
+    ],
+    "T10": [
+      "Au virage 10 : même audace, même récompense. Dix kilomètres-heure de plus à l'entrée…",
+      "… et cinq centièmes de plus dans la poche. L'enfant du pays remonte."
+    ],
+    "T13": [
+      "Puis vient le virage 13. Le dernier juge. Norris en sort plus vite…",
+      "… et reprend dix centièmes d'un seul coup. Tout ce que Piastri avait arraché au freinage, Norris le reprend à la sortie."
+    ]
+  },
+  "summary": "Résumons. Piastri gagne là où il faut du courage. Norris gagne là où il faut de la patience. Et ce jour-là, la patience l'emporte de quatre-vingt-quatre millièmes.",
+  "topSpeed": "En ligne droite, rien à dire : 329 contre 328. La différence n'est pas dans le moteur. Elle est dans les virages.",
+  "epilogue": {
+    "kicker": "Le lendemain",
+    "title": "Sous la pluie, Norris gagne · Piastri 9e",
+    "voice": "Et le lendemain, la pluie s'invite. Norris gagne. Piastri, deuxième, sort de la piste au virage 12, et termine neuvième. À domicile."
+  },
+  "end": "Toute la télémétrie, chaque session : métrik delta point com."
+}

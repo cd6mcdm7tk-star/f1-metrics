@@ -1,0 +1,24 @@
+{
+  "title": [
+    "SINGAPOUR"
+  ],
+  "hook": "[ironic] Cinquante-quatre millièmes pour la pole. [surprised] Et celui qui l'avait dans les mains… part troisième.",
+  "grid": "Verstappen en pole, Leclerc à cinquante-quatre millièmes, Hamilton troisième. [surprised] Quatre pilotes en moins de deux dixièmes.",
+  "lap": "[focused] Et la pole, sur le site, mètre par mètre.",
+  "moments": {
+    "T1": [
+      "Virage un : Leclerc freine quarante mètres plus tard, et garde vingt-huit kilomètres-heure de plus.",
+      "Et à la corde, encore cinq kilomètres-heure d'avance.",
+      "[surprised] Deux dixièmes gagnés, en un seul virage."
+    ],
+    "T3": [
+      "Virage trois : Leclerc entre encore plus vite, quinze kilomètres-heure de plus.",
+      "[ironic] Mais Verstappen sort vingt-et-un kilomètres-heure plus vite… et c'est la sortie qui compte.",
+      "Il reprend tout : deux dixièmes, d'un coup."
+    ]
+  },
+  "sectors": "Dans les secteurs, Verstappen signe le premier et le dernier. [surprised] Mais le deuxième, c'est Hamilton. Mis bout à bout, ses meilleurs secteurs battent la pole… de vingt-huit millièmes.",
+  "teammates": "Les duels internes : Leclerc devance Hamilton de sept centièmes. Antonelli bat Russell, Norris bat Piastri… et Lawson bat Lindblad.",
+  "verdict": "[pleased] Au final, Verstappen en pole. [ironic] Hamilton avait le tour idéal… il lui manquait juste le tour. [focused] Qui part devant demain ? Dis-le en commentaire.",
+  "end": "Toute la télémétrie, chaque session : métrik delta point com."
+}

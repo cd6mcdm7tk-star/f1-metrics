@@ -1,0 +1,33 @@
+{
+  "hook": "[focused] Eighty-four thousandths of a second. [surprised] Less than the blink of an eye. [ironic] Enough to lose pole position… at home.",
+  "laps": "Melbourne, twenty twenty-five. Home race for Oscar Piastri, born right here. Standing in the way: not a rival. A teammate.",
+  "sectors": "Norris takes sector one. Piastri, sector two. Norris, sector three. The start and the finish: in Formula One, those are the only ones anyone remembers.",
+  "moments": {
+    "T1": [
+      "Turn 1. Look at the apex. Norris in fifth, Piastri in fourth. One gear down, nine kilometres an hour down.",
+      "And the exit confirms the verdict.",
+      "Nine hundredths, gone at the very first corner."
+    ],
+    "T6": [
+      "Turn 6. Piastri strikes back. Look at the dotted lines: Piastri brakes twenty metres later. Twenty metres of pure nerve.",
+      "Seven kilometres an hour more at the apex.",
+      "Four hundredths of a second, clawed back."
+    ],
+    "T10": [
+      "Turn 10. Same nerve, same reward. Ten kilometres an hour more on the way in…",
+      "… and five more hundredths in the bank. The local hero is fighting back."
+    ],
+    "T13": [
+      "Then comes turn 13. The final judge. Norris gets out faster…",
+      "… and takes back ten hundredths in one go. Everything Piastri won on the brakes, Norris takes back on the exit."
+    ]
+  },
+  "summary": "So. Piastri wins where it takes courage. Norris wins where it takes patience. And that day, patience wins by eighty-four thousandths of a second.",
+  "topSpeed": "On the straights, nothing to choose: three twenty-nine against three twenty-eight. The difference isn't in the engine. It's in the corners.",
+  "epilogue": {
+    "kicker": "The next day",
+    "title": "In the rain, Norris wins · Piastri 9th",
+    "voice": "The next day, the rain arrives. Norris wins. Piastri, running second, goes off at turn 12 and finishes ninth. At home."
+  },
+  "end": "Every session's telemetry: metrikdelta dot com."
+}
