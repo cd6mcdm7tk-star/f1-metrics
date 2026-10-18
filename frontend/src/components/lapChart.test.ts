@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { GPTempoLap } from '../types/session';
-import { formatLapTime, lapChartDomain, lapChartRows } from './lapChart';
+import { dotDrawDelay, DRAW_MS, drawTimeAt, formatLapTime, lapChartDomain, lapChartRows } from './lapChart';
 
 const lap = (LapNumber: number, LapTime: number | null, Compound: string | null = 'SOFT'): GPTempoLap => ({
   LapNumber, LapTime, Compound, Sector1Time: null, Sector2Time: null, Sector3Time: null, IsPersonalBest: false, HasTelemetry: true, Team: '', Driver: '',
@@ -35,5 +35,27 @@ describe('formatLapTime', () => {
   it('writes minutes and thousandths, a dash without a time', () => {
     expect(formatLapTime(95.202)).toBe('1:35.202');
     expect(formatLapTime(null)).toBe('—');
+  });
+});
+
+describe('the draw-in timing', () => {
+  it('starts and ends with the line', () => {
+    expect(drawTimeAt(0)).toBeCloseTo(0, 6);
+    expect(drawTimeAt(1)).toBeCloseTo(1, 6);
+  });
+
+  it('follows the easing: halfway along the line comes before half the time', () => {
+    const half = drawTimeAt(0.5);
+    expect(half).toBeLessThan(0.5);
+    expect(drawTimeAt(0.25)).toBeLessThan(half);
+    // A straight curve keeps time and length together
+    expect(drawTimeAt(0.3, [0, 0, 1, 1])).toBeCloseTo(0.3, 3);
+  });
+
+  it('shows each dot as the line reaches it', () => {
+    const xs = [100, 200, 300];
+    expect(dotDrawDelay(xs, 100)).toBe(0);
+    expect(dotDrawDelay(xs, 300)).toBeCloseTo(DRAW_MS, 0);
+    expect(dotDrawDelay([150], 150)).toBe(0);
   });
 });

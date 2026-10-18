@@ -6,9 +6,9 @@ import { getApiBase } from '../config';
 import { CURRENT_SEASON_YEAR } from '../hooks/useSubscription';
 import type { GrandPrix, LapData, LapSelection, SessionDriver } from '../types/session';
 import { compoundColor } from '../utils/compoundColors';
-import { teammateColors } from '../utils/teamColors';
 import { formatLapTime, lapChartDomain, lapChartRows } from './lapChart';
 import LapTimesChart from './LapTimesChart';
+import { useLineColors, useLineTransitions } from './lineTransitions';
 import Watermark from './Watermark';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -120,22 +120,9 @@ export default function SessionExplorer({
   const [lapDataMap,   setLapDataMap]   = useState<Map<string, LapData>>(new Map());
   const [loadingSet,   setLoadingSet]   = useState<Set<string>>(new Set());
   const [selectedLapRefs, setSelectedLapRefs] = useState<LapSelection[]>(() => initialLapRefs ?? []);
-  // Deselected drivers still on the chart (only) while their line retracts
-  const [retractingDrivers, setRetractingDrivers] = useState<string[]>([]);
   // Laps over 5s off the best (pit, safety car, red flag) are hidden from the
   // chart by default so they don't flatten it; the table always lists them.
   const [showOutliers, setShowOutliers] = useState(false);
-  // Recharts' own animation, on just long enough to morph the lines when
-  // outliers toggle (the draw-in animation needs it off the rest of the time)
-  const [outlierAnimActive, setOutlierAnimActive] = useState(false);
-  const outlierMountedRef = useRef(false);
-  useEffect(() => {
-    if (!outlierMountedRef.current) { outlierMountedRef.current = true; return; }
-    setOutlierAnimActive(true);
-    const t = setTimeout(() => setOutlierAnimActive(false), 550);
-    return () => clearTimeout(t);
-  }, [showOutliers]);
-
   const API = getApiBase();
 
   // ── Reset on a real session change (not on mount: that would drop the laps
@@ -148,7 +135,6 @@ export default function SessionExplorer({
     setLapDataMap(new Map());
     setSelectedDrivers(initialDrivers);
     setSelectedLapRefs([]);
-    setRetractingDrivers([]);
   }, [sessionKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Toggle specific lap ref ────────────────────────────────────────────────
@@ -197,157 +183,30 @@ export default function SessionExplorer({
     });
   }, [loadDriver]);
 
-  const teammateColorByCode = useMemo(
-    () => teammateColors(selectedDrivers, areTeammates),
-    [selectedDrivers, areTeammates],
-  );
+  // The chart keeps a deselected line while it fades; legend, grid and table don't.
+  // The scale follows the selection, so the other lines move as one fades.
+  const chartKey = `${year}-${selectedGP}-${sessionType}`;
+  const loadedDrivers = useMemo(() => selectedDrivers.filter(d => lapDataMap.has(d)), [selectedDrivers, lapDataMap]);
+  const { lines, entering, leaving } = useLineTransitions(selectedDrivers, loadedDrivers, chartKey);
+
+  // Over the lines drawn, a fading one keeping its colour: two lines never share one
+  const teammateColorByCode = useLineColors(lines, leaving, areTeammates);
 
   const resolveColor = useCallback((code: string) => {
     return teammateColorByCode[code] ?? getDriverColor(code);
   }, [teammateColorByCode, getDriverColor]);
 
-  // The chart also keeps retracting drivers; legend, grid and table don't
-  const renderedDrivers = useMemo(
-    () => [...selectedDrivers, ...retractingDrivers.filter(d => !selectedDrivers.includes(d))],
-    [selectedDrivers, retractingDrivers],
-  );
-
   // ── Chart data ─────────────────────────────────────────────────────────────
   const chartData = useMemo(
-    () => lapChartRows(code => lapDataMap.get(code)?.laps, renderedDrivers, showOutliers),
-    [renderedDrivers, lapDataMap, showOutliers],
+    () => lapChartRows(code => lapDataMap.get(code)?.laps, lines, showOutliers),
+    [lines, lapDataMap, showOutliers],
   );
 
-  const yDomain = useMemo(() => lapChartDomain(chartData, renderedDrivers), [chartData, renderedDrivers]);
-
-  // ── Draw-in / retract animation, with dots synced to the line ─────────────
-  // A new line (new session, or driver added) traces itself in; a deselected
-  // one traces itself out; each dot fades as the line reaches it. A per-driver
-  // generation counter makes the callbacks of an animation superseded by a
-  // quick re-toggle do nothing.
-  const chartWrapRef = useRef<HTMLDivElement>(null);
-  const chartKey = `${year}-${selectedGP}-${sessionType}`;
-  const driversSignature = selectedDrivers.join(',');
-  const prevChartKeyRef = useRef(chartKey);
-  const prevDriversRef = useRef<string[]>([]);
-  const prevSelectedRef = useRef<string[]>(selectedDrivers);
-  const startedRetractRef = useRef<Set<string>>(new Set());
-  const animGenRef = useRef<Map<string, number>>(new Map());
-
-  const LINE_MS = 1050;
-  const DOT_MS = 150;
-  const STAGGER_MS = 150;
-
-  const animateLine = useCallback((
-    container: HTMLDivElement, code: string,
-    direction: 'in' | 'out', delayMs: number,
-  ) => {
-    // Found by class, not index: the order can change before this runs
-    const scope = container.querySelector<SVGGElement>(`.chart-line-${code}`);
-    const path = scope?.querySelector<SVGPathElement>('.recharts-line-curve') ?? null;
-    const len = path?.getTotalLength();
-    if (!path || !len) {
-      if (direction === 'out') setRetractingDrivers(prev => prev.filter(d => d !== code));
-      return;
-    }
-    const gen = (animGenRef.current.get(code) ?? 0) + 1;
-    animGenRef.current.set(code, gen);
-
-    const bbox = path.getBBox();
-    const dots = scope?.querySelectorAll<SVGCircleElement>('[data-visible-dot]') ?? [];
-
-    path.style.transition = 'none';
-    path.style.strokeDasharray = `${len}`;
-    path.style.strokeDashoffset = direction === 'in' ? `${len}` : '0';
-    dots.forEach(dot => { dot.style.transition = 'none'; dot.style.opacity = direction === 'in' ? '0' : '1'; });
-    path.getBoundingClientRect(); // force reflow before re-enabling the transitions
-
-    path.style.transition = `stroke-dashoffset ${LINE_MS}ms ease-${direction === 'in' ? 'out' : 'in'} ${delayMs}ms`;
-    path.style.strokeDashoffset = direction === 'in' ? '0' : `${len}`;
-
-    dots.forEach(dot => {
-      const cx = parseFloat(dot.getAttribute('cx') ?? '0');
-      const frac = bbox.width > 0 ? Math.min(1, Math.max(0, (cx - bbox.x) / bbox.width)) : 0;
-      const dotDelay = delayMs + (direction === 'in' ? frac : 1 - frac) * LINE_MS;
-      dot.style.transition = `opacity ${DOT_MS}ms ease ${dotDelay}ms`;
-      dot.style.opacity = direction === 'in' ? '1' : '0';
-      const clearDot = () => {
-        dot.removeEventListener('transitionend', clearDot);
-        if (animGenRef.current.get(code) !== gen) return; // superseded — leave it alone
-        dot.style.transition = '';
-      };
-      dot.addEventListener('transitionend', clearDot);
-    });
-
-    const finish = () => {
-      path.removeEventListener('transitionend', finish);
-      if (animGenRef.current.get(code) !== gen) return; // superseded — leave it alone
-      path.style.transition = '';
-      path.style.strokeDasharray = '';
-      path.style.strokeDashoffset = '';
-      if (direction === 'out') {
-        startedRetractRef.current.delete(code);
-        setRetractingDrivers(prev => prev.filter(d => d !== code));
-      }
-    };
-    path.addEventListener('transitionend', finish);
-  }, []);
-
-  // Draw-in
-  useEffect(() => {
-    const container = chartWrapRef.current;
-    if (!container) return;
-
-    const sessionChanged = prevChartKeyRef.current !== chartKey;
-    const prevDrivers = sessionChanged ? [] : prevDriversRef.current;
-    const toAnimate = sessionChanged ? selectedDrivers : selectedDrivers.filter(d => !prevDrivers.includes(d));
-    prevChartKeyRef.current = chartKey;
-    prevDriversRef.current = selectedDrivers;
-
-    // Re-added mid-retract: no longer retracting
-    const reclaimed = toAnimate.filter(d => retractingDrivers.includes(d));
-    if (reclaimed.length) {
-      reclaimed.forEach(d => startedRetractRef.current.delete(d));
-      setRetractingDrivers(prev => prev.filter(d => !reclaimed.includes(d)));
-    }
-
-    if (!toAnimate.length) return;
-    let raf2 = 0;
-    const raf1 = requestAnimationFrame(() => {
-      raf2 = requestAnimationFrame(() => {
-        toAnimate.forEach((code, i) => animateLine(container, code, 'in', i * STAGGER_MS));
-      });
-    });
-    return () => { cancelAnimationFrame(raf1); cancelAnimationFrame(raf2); };
-  }, [chartKey, driversSignature]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Retract — detect a deselection
-  useEffect(() => {
-    const removed = prevSelectedRef.current.filter(
-      d => !selectedDrivers.includes(d) && !retractingDrivers.includes(d),
-    );
-    prevSelectedRef.current = selectedDrivers;
-    if (removed.length) setRetractingDrivers(prev => [...prev, ...removed]);
-  }, [driversSignature]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Retract — play it
-  useEffect(() => {
-    const container = chartWrapRef.current;
-    if (!container) return;
-    const toStart = retractingDrivers.filter(d => !startedRetractRef.current.has(d));
-    if (!toStart.length) return;
-
-    let raf2 = 0;
-    const raf1 = requestAnimationFrame(() => {
-      raf2 = requestAnimationFrame(() => {
-        toStart.forEach((code, i) => {
-          startedRetractRef.current.add(code);
-          animateLine(container, code, 'out', i * STAGGER_MS);
-        });
-      });
-    });
-    return () => { cancelAnimationFrame(raf1); cancelAnimationFrame(raf2); };
-  }, [retractingDrivers]); // eslint-disable-line react-hooks/exhaustive-deps
+  const yDomain = useMemo(
+    () => lapChartDomain(chartData, selectedDrivers.length ? selectedDrivers : lines),
+    [chartData, selectedDrivers, lines],
+  );
+  const reducedMotion = useMemo(() => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false, []);
 
   // ── All lap numbers for table ──────────────────────────────────────────────
   const allLapNums = useMemo(() => {
@@ -606,7 +465,7 @@ export default function SessionExplorer({
           borderBottom: '1px solid var(--border)',
           background: 'var(--surface)', position: 'relative',
         }}>
-          {renderedDrivers.length === 0 ? (
+          {lines.length === 0 ? (
             <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <span style={{
                 fontFamily: 'JetBrains Mono, monospace', fontSize: 10,
@@ -638,9 +497,10 @@ export default function SessionExplorer({
               </button>
 
               <LapTimesChart
-                rows={chartData} drivers={selectedDrivers} lines={renderedDrivers} colorOf={resolveColor} yDomain={yDomain}
-                selectedLapRefs={selectedLapRefs} onToggle={toggleLapRef} animate={outlierAnimActive}
-                chartRef={chartWrapRef} chartKey={chartKey}
+                rows={chartData} drivers={selectedDrivers} lines={lines} entering={entering} leaving={leaving}
+                colorOf={resolveColor} yDomain={yDomain}
+                selectedLapRefs={selectedLapRefs} onToggle={toggleLapRef} animate={!reducedMotion}
+                chartKey={chartKey}
               />
               <Watermark />
             </>

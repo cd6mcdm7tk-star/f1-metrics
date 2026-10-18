@@ -39,3 +39,27 @@ export function lapChartDomain(rows: LapChartRow[], drivers: string[]): [number,
   if (!times.length) return [60, 120];
   return [Math.floor(Math.min(...times) - 0.5), Math.ceil(Math.max(...times) + 0.5)];
 }
+
+/** The chart's own animation: a line drawing in, or the lines moving to a new scale (ms) */
+export const DRAW_MS = 900;
+/** Recharts' 'ease-in-out' curve, as cubic-bezier control points */
+const DRAW_EASING = [0, 0, 0.58, 1] as const;
+
+/** The share of the draw after which a line drawing in has covered `progress` of its length */
+export function drawTimeAt(progress: number, [x1, y1, x2, y2]: readonly number[] = DRAW_EASING): number {
+  const bezier = (s: number, p1: number, p2: number) => 3 * (1 - s) ** 2 * s * p1 + 3 * (1 - s) * s ** 2 * p2 + s ** 3;
+  if (progress <= 0) return 0;
+  if (progress >= 1) return 1;
+  let lo = 0, hi = 1;
+  for (let i = 0; i < 30; i++) {
+    const mid = (lo + hi) / 2;
+    if (bezier(mid, y1, y2) < progress) lo = mid; else hi = mid;
+  }
+  return bezier((lo + hi) / 2, x1, x2);
+}
+
+/** When a dot at `x` shows as its line draws in, the line running across `xs` (ms) */
+export function dotDrawDelay(xs: number[], x: number): number {
+  const first = Math.min(...xs), last = Math.max(...xs);
+  return DRAW_MS * drawTimeAt(last > first ? (x - first) / (last - first) : 0);
+}

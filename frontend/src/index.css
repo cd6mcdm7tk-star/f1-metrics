@@ -112,11 +112,32 @@
   letter-spacing: -0.01em;
 }
 
-/* Chart dot visible circle (SessionExplorer) — deliberately has no `style`
-   prop in JSX so its draw-in/retract fade animation (set via direct DOM
-   writes) survives unrelated re-renders instead of being reset. */
+/* Lap chart (LapTimesChart): the visible dot lets clicks through to its hit area */
 [data-visible-dot] {
   pointer-events: none;
+}
+
+/* A line drawing in shows each dot as it reaches it (the delay is the dot's own);
+   a deselected line and its dots fade out before they're removed */
+.chart-dot-in {
+  animation: chart-fade-in 160ms ease-out both;
+}
+.chart-fade-out {
+  animation: chart-fade-out 300ms ease-in forwards;
+  pointer-events: none;
+}
+@keyframes chart-fade-in {
+  from { opacity: 0; }
+}
+@keyframes chart-fade-out {
+  to { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chart-dot-in,
+  .chart-fade-out {
+    animation-duration: 1ms;
+    animation-delay: 0ms !important;
+  }
 }
 
 /* On-chart attribution (components/Watermark.tsx) */
