@@ -1,7 +1,7 @@
 // What the voiceover says, in each language: sentences written to be heard,
 // with units and gaps in words. Every sentence starts with its subject, so a
 // "but" can go in front of any of them.
-import type { Lang } from './i18n';
+import { lapKm, type Lang } from './i18n';
 import type { Viseme } from './mascot/face';
 import { moodFrames, parseMoods, type MoodAt } from './mascot/script';
 import { showWords, timeWords, type HeardWord } from './words';
@@ -33,15 +33,22 @@ export function spokenLapTime(seconds: number, lang: Lang): string {
   return `${minutes}:${whole.padStart(2, '0')}.${thousandths}`;
 }
 
-/** "T1", "T13", "straight" → "aux virages 1 et 13" / "at turns 1 and 13" */
+/** "T1", "T13", "straight" → "aux virages 1 et 13" / "at turns 1 and 13";
+ * a corner by its place on the lap ("@1230") → "à 1,2 kilomètres" */
 export function spokenPlaces(labels: string[], lang: Lang): string {
-  const turns = labels.filter(l => l !== 'straight').map(l => l.replace('T', ''));
-  const straight = labels.length > turns.length;
+  const corners = labels.filter(l => l !== 'straight');
+  const turns = corners.filter(l => !l.startsWith('@')).map(l => l.replace('T', ''));
+  const marks = corners.filter(l => l.startsWith('@')).map(l => lapKm(l, lang));
+  const straight = labels.length > corners.length;
   if (lang === 'fr') {
-    const corners = turns.length ? [turns.length > 1 ? `aux virages ${join(turns, 'et')}` : `au virage ${turns[0]}`] : [];
-    return join([...corners, ...(straight ? ['en ligne droite'] : [])], 'et');
+    const numbered = turns.length ? [turns.length > 1 ? `aux virages ${join(turns, 'et')}` : `au virage ${turns[0]}`] : [];
+    return join([...numbered, ...marks.map(k => `à ${k} kilomètres`), ...(straight ? ['en ligne droite'] : [])], 'et');
   }
-  const parts = [...(turns.length ? [`at turn${turns.length > 1 ? 's' : ''} ${join(turns, 'and')}`] : []), ...(straight ? ['on the straight'] : [])];
+  const parts = [
+    ...(turns.length ? [`at turn${turns.length > 1 ? 's' : ''} ${join(turns, 'and')}`] : []),
+    ...marks.map(k => `${k} kilometres in`),
+    ...(straight ? ['on the straight'] : []),
+  ];
   return parts.join(' and ');
 }
 
@@ -69,7 +76,7 @@ export const VOICE = {
     laps: (session: string, location: string, year: number, a: string, time: string, b: string, gap: string) =>
       `${location} ${year}, ${session.toLowerCase()}. ${a} en ${time}, ${b} à ${gap}.`,
     sectors: sectorSentence,
-    corner: (label: string) => `Virage ${label.replace('T', '')}. `,
+    corner: (label: string) => (label.startsWith('@') ? `À ${lapKm(label, 'fr')} kilomètres. ` : `Virage ${label.replace('T', '')}. `),
     braking: (who: string, by: number, entry?: number) => `${who} freine ${by} mètres plus tard${entry ? ` et garde ${entry} ${kmh.fr} de plus` : ''}.`,
     lifting: (who: string, by: number) => `${who} lève le pied ${by} mètres plus tard.`,
     entrySpeed: (who: string, by: number) => `${who} entre avec ${by} ${kmh.fr} de plus.`,
@@ -97,7 +104,7 @@ export const VOICE = {
     laps: (session: string, location: string, year: number, a: string, time: string, b: string, gap: string) =>
       `${location} ${year}, ${session.toLowerCase()}. ${a} on a ${time}, ${b} ${gap} back.`,
     sectors: sectorSentence,
-    corner: (label: string) => `Turn ${label.replace('T', '')}. `,
+    corner: (label: string) => (label.startsWith('@') ? `${lapKm(label, 'en')} kilometres in. ` : `Turn ${label.replace('T', '')}. `),
     braking: (who: string, by: number, entry?: number) => `${who} brakes ${by} metres later${entry ? ` and carries ${entry} ${kmh.en} more` : ''}.`,
     lifting: (who: string, by: number) => `${who} lifts ${by} metres later.`,
     entrySpeed: (who: string, by: number) => `${who} carries ${by} ${kmh.en} more into the corner.`,

@@ -18,7 +18,7 @@ export const STRINGS = {
     laps: (a: string, timeA: string, b: string, gap: string) => `${a} ${timeA} · ${b} +${gap}`,
     sectors: 'Sectors',
     sectorWinners: (names: string[]) => names.map((n, i) => `S${i + 1} ${n}`).join(' · '),
-    corner: (label: string) => `Turn ${label.replace('T', '')}`,
+    corner: (label: string) => cornerName(label, 'en'),
     straight: 'Straight',
     braking: (who: string, by: number) => `${who} brakes ${by} m later`,
     lifting: (who: string, by: number) => `${who} lifts ${by} m later`,
@@ -60,7 +60,7 @@ export const STRINGS = {
     laps: (a: string, timeA: string, b: string, gap: string) => `${a} ${timeA} · ${b} +${gap}`,
     sectors: 'Secteurs',
     sectorWinners: (names: string[]) => names.map((n, i) => `S${i + 1} ${n}`).join(' · '),
-    corner: (label: string) => `Virage ${label.replace('T', '')}`,
+    corner: (label: string) => cornerName(label, 'fr'),
     straight: 'Ligne droite',
     braking: (who: string, by: number) => `${who} freine ${by} m plus tard`,
     lifting: (who: string, by: number) => `${who} lève le pied ${by} m plus tard`,
@@ -98,13 +98,24 @@ export const STRINGS = {
   },
 } satisfies Record<Lang, unknown>;
 
+/** A corner labelled by its place on the lap ("@1230", for a circuit whose
+ * corners aren't numbered), in km: "1,2" / "1.2" */
+export const lapKm = (label: string, lang: Lang): string => decimal((Number(label.slice(1)) / 1000).toFixed(1), lang);
+
+/** "T6" → "Virage 6" / "Turn 6"; "@1230" → "À 1,2 km" / "At 1.2 km" */
+export const cornerName = (label: string, lang: Lang): string =>
+  label.startsWith('@')
+    ? `${lang === 'fr' ? 'À' : 'At'} ${lapKm(label, lang)} km`
+    : `${lang === 'fr' ? 'Virage' : 'Turn'} ${label.replace('T', '')}`;
+
 /** Where things happen, with the language's prepositions: "at T1 and T13" / "au T1 et au T13" */
 export function placeList(labels: string[], lang: Lang): string {
   const corners = labels.filter(l => l !== 'straight');
   const straight = labels.length > corners.length;
   const join = (items: string[]) => (items.length > 1 ? `${items.slice(0, -1).join(', ')} ${STRINGS[lang].and} ${items[items.length - 1]}` : items[0]);
-  if (lang === 'fr') return join([...corners.map(c => `au ${c}`), ...(straight ? ['en ligne droite'] : [])]);
-  const parts = [...(corners.length ? [`at ${join(corners)}`] : []), ...(straight ? ['on the straight'] : [])];
+  if (lang === 'fr') return join([...corners.map(c => (c.startsWith('@') ? `à ${lapKm(c, lang)} km` : `au ${c}`)), ...(straight ? ['en ligne droite'] : [])]);
+  const named = corners.map(c => (c.startsWith('@') ? `${lapKm(c, lang)} km` : c));
+  const parts = [...(named.length ? [`at ${join(named)}`] : []), ...(straight ? ['on the straight'] : [])];
   return parts.join(' and ');
 }
 

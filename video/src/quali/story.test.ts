@@ -11,7 +11,7 @@ const story = buildQuali(quali, facts, analysis, 'fr');
 describe('defaultNarration', () => {
   it('tells the session from its facts', () => {
     const fr = defaultNarration(facts, 'fr');
-    expect(fr.grid).toBe('Aaa en pole, Ccc à 50 millièmes. 2 pilotes en moins de deux dixièmes.');
+    expect(fr.grid).toBe('Aaa en pole, Ccc à 50 millièmes. 3 pilotes en moins d’une demi-seconde.');
     expect(fr.sectors).toContain('Les meilleurs secteurs de Bbb font 100 millièmes de moins que la pole.');
     expect(defaultNarration(facts, 'en').teammates).toBe('Aaa beats Bbb by 300 thousandths. Ccc beats Ddd by 550 thousandths.');
   });

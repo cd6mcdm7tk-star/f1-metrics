@@ -106,3 +106,30 @@ describe('the telemetry scene', () => {
     expect(story.scenes.map(s => s.kind)).not.toContain('telemetry');
   });
 });
+
+describe('a race told without its strategy', () => {
+  it('leaves the strategy scene out when the script has no line for it', () => {
+    const narration: RecapNarration = { ...defaultNarration(recap, facts, 'fr'), strategy: '' };
+    expect(buildRecap(recap, facts, 'fr', narration).scenes.map(s => s.kind)).not.toContain('strategy');
+  });
+});
+
+describe('the race chart\'s cues', () => {
+  it('follows the voice\'s order, the faller named before a neutralised lap', () => {
+    // CCC slower over the first two laps takes second when BBB stops, holds it
+    // from lap 3 to 7, then loses it; everyone is neutralised on lap 10
+    const charlie = [93.5, 93.5, 90.5, ...Array<number>(9).fill(94)];
+    const slow = {
+      ...recap,
+      drivers: recap.drivers.map(d => (d.laps ? { ...d, laps: (d.code === 'CCC' ? charlie : d.laps).map((t, k) => (k === 9 ? t + 40 : t)) } : d)),
+    };
+    const slowFacts = raceFacts(slow);
+    expect(slowFacts.faller).toMatchObject({ lap: 3, best: 2 });
+    const narration: RecapNarration = {
+      ...defaultNarration(slow, slowFacts, 'fr'),
+      race: 'Au départ, tout est calme, chacun reste à sa place. Charlie tient la deuxième place longtemps. Puis, tour dix : la course est neutralisée.',
+    };
+    const told = buildRecap(slow, slowFacts, 'fr', narration);
+    expect(told.raceLaps.map(k => k.lap)).toEqual([1, 3, 10, slowFacts.totalLaps]);
+  });
+});

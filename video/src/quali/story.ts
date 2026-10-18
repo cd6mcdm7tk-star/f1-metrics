@@ -11,7 +11,7 @@ import { DRIVERS } from '../site/geometry';
 import { spokenGap, toVoiceLine, VOICE, type Voiceover, type VoiceLine } from '../voice';
 import { cueTime, normalise } from '../words';
 import type { Quali, QualiDriver } from './data';
-import type { QualiFacts } from './facts';
+import type { Close, QualiFacts } from './facts';
 
 /** A script written for one session (narration/<video>.<lang>.json) */
 export interface QualiNarration {
@@ -66,6 +66,10 @@ export const PAIRS = 4;
 const CORNERS = 2;
 
 const gapWords = (gap: number, lang: Lang) => spokenGap(gap, lang);
+const CLOSE_WORDS: Record<Lang, Record<Close, string>> = {
+  fr: { 0.2: 'de deux dixièmes', 0.5: 'd’une demi-seconde', 1: 'd’une seconde' },
+  en: { 0.2: 'two tenths', 0.5: 'half a second', 1: 'a second' },
+};
 
 /** The lines when no script was written for the session */
 export function defaultNarration(facts: QualiFacts, lang: Lang): QualiNarration {
@@ -76,7 +80,7 @@ export function defaultNarration(facts: QualiFacts, lang: Lang): QualiNarration 
   if (lang === 'fr') {
     return {
       hook: `${gapWords(p2?.gap ?? 0, lang)} entre la pole et la deuxième place.`,
-      grid: `${p1.driver.name} en pole, ${p2?.driver.name ?? ''} à ${gapWords(p2?.gap ?? 0, lang)}. ${facts.within.count} pilotes en moins de deux dixièmes.`,
+      grid: `${p1.driver.name} en pole, ${p2?.driver.name ?? ''} à ${gapWords(p2?.gap ?? 0, lang)}. ${facts.within.count} pilotes en moins ${CLOSE_WORDS.fr[facts.within.gap]}.`,
       lap: `La pole, sur le site, mètre par mètre.`,
       moments: {},
       sectors: [
@@ -90,7 +94,7 @@ export function defaultNarration(facts: QualiFacts, lang: Lang): QualiNarration 
   }
   return {
     hook: `${gapWords(p2?.gap ?? 0, lang)} between pole and second.`,
-    grid: `${p1.driver.name} on pole, ${p2?.driver.name ?? ''} ${gapWords(p2?.gap ?? 0, lang)} back. ${facts.within.count} drivers within two tenths.`,
+    grid: `${p1.driver.name} on pole, ${p2?.driver.name ?? ''} ${gapWords(p2?.gap ?? 0, lang)} back. ${facts.within.count} drivers within ${CLOSE_WORDS.en[facts.within.gap]}.`,
     lap: 'Pole, on the site, metre by metre.',
     moments: {},
     sectors: [

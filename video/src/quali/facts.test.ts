@@ -19,7 +19,8 @@ describe('qualiFacts', () => {
   it('measures everyone from the pole lap', () => {
     expect(facts.pole.code).toBe('AAA');
     expect(facts.gaps.map(g => [g.driver.code, +g.gap.toFixed(3)])).toEqual([['AAA', 0], ['CCC', 0.05], ['BBB', 0.3], ['DDD', 0.6]]);
-    expect(facts.within).toEqual({ gap: 0.2, count: 2 });
+    // Two within two tenths: counted within half a second, which holds three
+    expect(facts.within).toEqual({ gap: 0.5, count: 3 });
   });
 
   it('finds the quickest in each sector, and the lap someone had in them', () => {

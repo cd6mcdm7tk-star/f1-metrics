@@ -1,0 +1,23 @@
+{
+  "title": [
+    "MALAISIE"
+  ],
+  "hook": "[surprised] Hamilton lui prend trois dixièmes dans un secteur. [ironic] Et pourtant, c'est Verstappen qui part en pole… avec trois dixièmes d'avance.",
+  "grid": "Verstappen en pole, Hamilton à trois dixièmes, Hadjar troisième. Trois pilotes en moins d'une demi-seconde. [ironic] Antonelli, quatrième, la manque d'un millième.",
+  "lap": "[focused] Et la pole, sur le site, mètre par mètre.",
+  "moments": {
+    "@1530": [
+      "Virage quatre : Hamilton passe cinq kilomètres-heure plus vite à la corde, un rapport en dessous.",
+      "Et il en sort encore plus vite.",
+      "[surprised] Un dixième gagné, rien que là."
+    ],
+    "straight": [
+      "Mais dans la ligne droite arrière : six kilomètres-heure de plus pour Verstappen.",
+      "[ironic] Deux dixièmes repris… sans tourner le volant."
+    ]
+  },
+  "sectors": "Dans les secteurs, Verstappen signe le premier et le dernier. [surprised] Mais celui du milieu, le plus sinueux, c'est Hamilton.",
+  "teammates": "Les duels internes : Verstappen devance Hadjar de quatre dixièmes, Hamilton bat Leclerc, Antonelli bat Russell… [surprised] et Norris bat Piastri de cinq millièmes.",
+  "verdict": "[pleased] Au final, Verstappen en pole. [ironic] Hamilton plus rapide dans les virages, Verstappen dans les lignes droites… et ce sont les lignes droites qui gagnent. [focused] Virages ou lignes droites : toi, tu choisis quoi ? Dis-le en commentaire.",
+  "end": "Toute la télémétrie, chaque session : métrik delta point com."
+}

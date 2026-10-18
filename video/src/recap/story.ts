@@ -201,20 +201,27 @@ export function buildRecap(recap: Recap, facts: RaceFacts, lang: Lang, narration
   // The chart reaches the laps the voice names as it names them
   const [raceLine] = scene('race', [script.race]);
   const race = scenes.at(-1)!;
-  const keys = [{ frame: race.from + 10, lap: 1 }];
+  const keys: { frame: number; lap: number }[] = [];
   const stop = facts.neutralised.find(n => heard(raceLine, [], [n.from]) != null);
   if (stop) keys.push({ frame: heard(raceLine, [], [stop.from])!, lap: stop.from });
   const faller = facts.faller;
   const fallerAt = faller && heard(raceLine, named(faller.driver));
   if (faller && fallerAt != null) keys.push({ frame: fallerAt, lap: faller.lap });
-  keys.push({ frame: race.to - 40, lap: facts.totalLaps });
-  // Never faster than the chart can be followed: a voice naming a lap too
-  // early is left to wait for it
-  const raceLaps = keys.filter((k, i) => i === 0 || (k.frame >= keys[i - 1].frame + (k.lap - keys[i - 1].lap) * FRAMES_PER_LAP && k.lap > keys[i - 1].lap));
+  // In the order the voice names them, never faster than the chart can be
+  // followed: a lap named too early is left to wait for it. The last lap is
+  // always reached, just before the cut.
+  const raceLaps = [{ frame: race.from + 10, lap: 1 }];
+  for (const k of [...keys].sort((a, b) => a.frame - b.frame)) {
+    const last = raceLaps[raceLaps.length - 1];
+    if (k.lap > last.lap && k.frame >= last.frame + (k.lap - last.lap) * FRAMES_PER_LAP) raceLaps.push(k);
+  }
+  const reached = raceLaps[raceLaps.length - 1];
+  if (facts.totalLaps > reached.lap) raceLaps.push({ frame: Math.max(race.to - 40, reached.frame + 20), lap: facts.totalLaps });
 
   if (recap.duel.drivers?.length === 2) scene('telemetry', [script.telemetry]);
 
-  const [strategyLine] = scene('strategy', [script.strategy]);
+  // A script leaves the strategy out when the tyre data can't be trusted
+  const [strategyLine] = script.strategy ? scene('strategy', [script.strategy]) : [];
   const longest = faller && facts.followed.find(f => f.driver === faller.driver);
   const stintFrom = faller && heard(strategyLine, named(faller.driver));
   const stint = longest && stintFrom != null ? { from: stintFrom, code: longest.driver.code } : null;

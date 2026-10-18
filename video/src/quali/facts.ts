@@ -7,7 +7,7 @@ export interface QualiFacts {
   /** The drivers followed with a time, and their gap to pole (s) */
   gaps: { driver: QualiDriver; gap: number }[];
   /** How many are within this of pole, pole included */
-  within: { gap: number; count: number };
+  within: { gap: Close; count: number };
   /** The quickest in each sector */
   sectors: { driver: QualiDriver; time: number }[];
   /** A driver whose best sectors add up to less than the pole lap */
@@ -16,8 +16,11 @@ export interface QualiFacts {
   teammates: { ahead: QualiDriver; behind: QualiDriver; gap: number }[];
 }
 
-/** The gap the session's "how close" figure is counted within */
-const CLOSE = 0.2;
+/** The gaps the session's "how close" figure can be counted within: the
+ * smallest that holds a few drivers, or the largest */
+export const CLOSE = [0.2, 0.5, 1] as const;
+export type Close = (typeof CLOSE)[number];
+const GROUP = 3;
 
 export function qualiFacts(quali: Quali): QualiFacts {
   const timed = quali.drivers.filter((d): d is QualiDriver & { best: number } => d.best != null);
@@ -42,5 +45,8 @@ export function qualiFacts(quali: Quali): QualiFacts {
     if (behind) teammates.push({ ahead, behind, gap: behind.best - ahead.best });
   }
 
-  return { pole, gaps, within: { gap: CLOSE, count: gaps.filter(g => g.gap < CLOSE).length }, sectors, ideal, teammates };
+  const counts = CLOSE.map(gap => ({ gap, count: gaps.filter(g => g.gap < gap).length }));
+  const within = counts.find(c => c.count >= GROUP) ?? counts[counts.length - 1];
+
+  return { pole, gaps, within, sectors, ideal, teammates };
 }

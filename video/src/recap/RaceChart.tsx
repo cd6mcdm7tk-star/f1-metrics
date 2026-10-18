@@ -10,6 +10,8 @@ import { RECAP_STRINGS } from './strings';
 const PLOT = { left: 96, right: PANEL.w - 130, top: 130, bottom: PANEL.h - 70 };
 /** Heads closer than this are spread apart so their codes stay readable */
 const LABEL_GAP = 30;
+/** Room a neutralisation's label takes: one closer to the last label keeps its band only */
+const NEUTRAL_LABEL = 170;
 /** Zoom following the lines as they draw, and onto the faller when named */
 const FOLLOW = 1.55;
 const PUNCH = 2.1;
@@ -39,6 +41,9 @@ export default function RaceChart({ facts, story, scene, lang }: { facts: RaceFa
   const maxGap = Math.max(10, Math.ceil(Math.max(...shown.flatMap(f => f.gaps)) / 10) * 10);
   const x = (l: number) => PLOT.left + ((l - 1) / (total - 1)) * (PLOT.right - PLOT.left);
   const y = (gap: number) => PLOT.top + (Math.min(gap, maxGap) / maxGap) * (PLOT.bottom - PLOT.top);
+  const labelled = facts.neutralised.reduce<RaceFacts['neutralised']>(
+    (kept, n) => (kept.length && x(n.from) - x(kept[kept.length - 1].from) < NEUTRAL_LABEL ? kept : [...kept, n]), [],
+  );
   const gapAt = (gaps: number[], l: number) => {
     const k = Math.min(Math.floor(l), gaps.length) - 1;
     return k + 1 >= gaps.length ? gaps[gaps.length - 1] : gaps[k] + (gaps[k + 1] - gaps[k]) * (l - Math.floor(l));
@@ -74,7 +79,9 @@ export default function RaceChart({ facts, story, scene, lang }: { facts: RaceFa
         {facts.neutralised.map(n => (
           <g key={n.from} opacity={interpolate(lap, [n.from - 1, n.from], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' })}>
             <rect x={x(n.from - 0.5)} y={PLOT.top} width={x(n.to + 0.5) - x(n.from - 0.5)} height={PLOT.bottom - PLOT.top} fill={BRAND.bg} opacity={0.13} />
-            <text x={x(n.from - 0.5) + 6} y={PLOT.top - 12} fontFamily={MONO} fontSize={15} letterSpacing="0.14em" fill={BRAND.bg}>{s.neutralised.toUpperCase()}</text>
+            {labelled.includes(n) && (
+              <text x={x(n.from - 0.5) + 6} y={PLOT.top - 12} fontFamily={MONO} fontSize={15} letterSpacing="0.14em" fill={BRAND.bg}>{s.neutralised.toUpperCase()}</text>
+            )}
           </g>
         ))}
         {Array.from({ length: maxGap / 10 + 1 }, (_, k) => k * 10).map(g => (

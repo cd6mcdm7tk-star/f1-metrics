@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { placeList } from '../i18n';
-import { analyse } from './analysis';
+import { cornerName, placeList } from '../i18n';
+import { analyse, type Analysis } from './analysis';
 import { testDuel } from './fixture';
 import type { Narration } from '../voice';
 import { buildStory, dominance, momentBeats, pickMoments, replayDistance } from './story';
@@ -15,6 +15,19 @@ describe('pickMoments', () => {
     expect(moment).toMatchObject({ label: 'T1', winner: 0 });
     expect(moment.window[0]).toBeLessThan(575);
     expect(moment.window[1]).toBeGreaterThan(870);
+  });
+
+  it("takes a script's straight where the most time went", () => {
+    const straight = (from: number, time: number): Analysis['sections'][number] => ({
+      from, to: from + 1000, gapChange: time, corners: [],
+      straight: { kind: 'straightSpeed', side: 0, by: 6, from: from + 200, to: from + 800, topSpeeds: [300, 294], time, score: 2 },
+    });
+    const flatOut: Analysis = { sections: [straight(0, 0.09), straight(1000, 0.2)], topSpeed: [300, 294], fullThrottle: [0.7, 0.7] };
+
+    const moments = pickMoments(flatOut, 2000, 2, ['straight']);
+
+    expect(moments).toHaveLength(1);
+    expect(moments[0]).toMatchObject({ label: 'straight', from: 1000, gapChange: 0.2 });
   });
 });
 
@@ -96,6 +109,14 @@ describe('placeList', () => {
     expect(placeList(['T1', 'T6', 'T13'], 'en')).toBe('at T1, T6 and T13');
     expect(placeList(['T1', 'straight'], 'en')).toBe('at T1 and on the straight');
     expect(placeList(['T1', 'straight'], 'fr')).toBe('au T1 et en ligne droite');
+    expect(placeList(['@1530', 'straight'], 'fr')).toBe('à 1,5 km et en ligne droite');
+    expect(placeList(['@1530'], 'en')).toBe('at 1.5 km');
+  });
+
+  it('names a corner, or where it is when the circuit numbers none', () => {
+    expect(cornerName('T6', 'fr')).toBe('Virage 6');
+    expect(cornerName('@1530', 'fr')).toBe('À 1,5 km');
+    expect(cornerName('@1530', 'en')).toBe('At 1.5 km');
   });
 });
 

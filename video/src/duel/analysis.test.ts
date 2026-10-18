@@ -8,6 +8,11 @@ describe('analyse', () => {
   const corner = analysis.sections[0].corners[0];
   const find = (kind: string) => corner.findings.find(f => f.kind === kind);
 
+  it('labels a corner by its distance when the circuit numbers none', () => {
+    const unnumbered = { ...duel, telemetry: { ...duel.telemetry, corners: [] } };
+    expect(analyse(unnumbered).sections[0].corners[0].label).toBe('@750');
+  });
+
   it('finds the one corner, and the whole gap in it', () => {
     expect(analysis.sections).toHaveLength(1);
     expect(corner.label).toBe('T1');

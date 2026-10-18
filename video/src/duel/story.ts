@@ -120,8 +120,11 @@ export function pickMoments(analysis: Analysis, lapLength: number, max = MAX_MOM
     }
   }
 
-  // A script picks its own corners
-  if (only) return [...decisive, ...tradeOffs].filter(m => only.includes(m.label)).sort((x, y) => x.from - y.from);
+  // A script picks its own corners, each once: its straight is the one where the most time went
+  if (only) {
+    const all = [...decisive, ...tradeOffs].sort((x, y) => Math.abs(y.gapChange) - Math.abs(x.gapChange));
+    return only.map(label => all.find(m => m.label === label)).filter((m): m is Moment => m !== undefined).sort((x, y) => x.from - y.from);
+  }
 
   // The biggest gains, each driver's best first so both sides of the story
   // show, then the corners where their strengths cancel out

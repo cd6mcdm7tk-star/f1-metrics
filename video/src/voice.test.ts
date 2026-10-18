@@ -28,6 +28,11 @@ describe('spokenPlaces', () => {
     expect(spokenPlaces(['T1', 'T6', 'T13'], 'en')).toBe('at turns 1, 6 and 13');
     expect(spokenPlaces(['straight'], 'en')).toBe('on the straight');
   });
+
+  it('places unnumbered corners by distance', () => {
+    expect(spokenPlaces(['@1530', 'straight'], 'fr')).toBe('à 1,5 kilomètres et en ligne droite');
+    expect(spokenPlaces(['@1530'], 'en')).toBe('1.5 kilometres in');
+  });
 });
 
 describe('VOICE', () => {

@@ -293,7 +293,10 @@ export function analyse(duel: Duel): Analysis {
   const bounds = [0, ...straightMidpoints(distance, flat), end];
   const mean = distance.map((_, i) => (laps[0].speed[i] + laps[1].speed[i]) / 2);
   const label = (at: number) => {
-    const c = duel.telemetry.corners.reduce((a, b) => (Math.abs(b.distance - at) < Math.abs(a.distance - at) ? b : a));
+    const corners = duel.telemetry.corners;
+    // A circuit whose corners aren't numbered: the corner by its place on the lap (m)
+    if (!corners.length) return `@${Math.round(at / 10) * 10}`;
+    const c = corners.reduce((a, b) => (Math.abs(b.distance - at) < Math.abs(a.distance - at) ? b : a));
     return `T${c.number}${c.letter ?? ''}`;
   };
 
