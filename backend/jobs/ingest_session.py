@@ -14,13 +14,13 @@ import sys
 import time
 from typing import Optional
 
-import numpy as np
 import pandas as pd
 import requests
 
 # Allow running from the backend/ directory directly
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from app.lap_samples import lap_samples, lap_window
 from database import db
 
 logging.basicConfig(
@@ -94,17 +94,6 @@ def _sanitize_tel_data(data: dict) -> dict:
                 cleaned_vals.append(v)
         cleaned[key] = cleaned_vals
     return cleaned
-
-
-def _distance_from_speed(dates: list, speeds: list) -> list:
-    """Cumulative distance in metres: speed integrated over time, like
-    FastF1's add_distance() and app.openf1.fetch_lap_telemetry(). Summing the
-    GPS steps instead read OpenF1's positions, in tenths of a metre and
-    jittery, as metres: laps came out about ten times too long."""
-    times = pd.to_datetime(pd.Series(dates), utc=True, format="ISO8601")
-    dt = times.diff().dt.total_seconds().fillna(0).to_numpy()
-    speed_ms = pd.to_numeric(pd.Series(speeds), errors="coerce").fillna(0).to_numpy() / 3.6
-    return np.cumsum(speed_ms * dt).tolist()
 
 
 # ---------------------------------------------------------------------------
@@ -260,6 +249,7 @@ def _ingest_openf1_driver(year: int, gp_round: int, session_type: str, session_k
 
     car_data, pos_data = _fetch_driver_session_data(session_key, driver_num)
     logger.info(f"  {code}: {len(car_data)} car_data points, {len(pos_data)} location points")
+    car_frame, pos_frame = _session_frame(car_data), _session_frame(pos_data)
 
     for lap in driver_laps:
         lap_num = lap.get("lap_number")
@@ -280,7 +270,7 @@ def _ingest_openf1_driver(year: int, gp_round: int, session_type: str, session_k
 
         if date_start and lap_duration and car_data:
             try:
-                tel_data = _extract_lap_telemetry(car_data, pos_data, date_start, lap_duration)
+                tel_data = _extract_lap_telemetry(car_frame, pos_frame, date_start, lap_duration)
                 if tel_data:
                     has_telemetry = True
                     # Stored under its lap number even when it's the personal
@@ -371,73 +361,35 @@ def _fetch_driver_session_data(session_key: int, driver_number: int) -> tuple:
     return car_data, pos_data
 
 
-def _build_telemetry_from_raw(car_data: list, pos_data: list) -> Optional[dict]:
-    """Build column-based telemetry dict from raw OpenF1 car_data and pos_data."""
-    if len(car_data) < 10:
+def _session_frame(rows: list) -> pd.DataFrame:
+    """A driver's session-long OpenF1 rows, dated."""
+    frame = pd.DataFrame(rows)
+    if not frame.empty:
+        frame["date"] = pd.to_datetime(frame["date"], utc=True, format="ISO8601")
+    return frame
+
+
+def _extract_lap_telemetry(car: pd.DataFrame, pos: pd.DataFrame, date_start: str, lap_duration: float) -> Optional[dict]:
+    """One lap's column-based telemetry, cut from line to line out of the
+    driver's session-long car data and positions (app.lap_samples)."""
+    start = pd.to_datetime(date_start, utc=True)
+    begin, end = lap_window(start, lap_duration)
+    lap_car = car[(car["date"] >= begin) & (car["date"] <= end)]
+    if len(lap_car) < 10:
         return None
-
-    dates_car = [d["date"] for d in car_data]
-    speed    = [d.get("speed", 0) for d in car_data]
-    rpm      = [d.get("rpm", 0) for d in car_data]
-    gear     = [d.get("n_gear", 0) for d in car_data]
-    throttle = [d.get("throttle", 0) for d in car_data]
-    brake    = [bool(d.get("brake", 0)) for d in car_data]
-    drs      = [d.get("drs", 0) for d in car_data]
-
-    x_vals = [0.0] * len(car_data)
-    y_vals = [0.0] * len(car_data)
-
-    if pos_data:
-        pos_dates = [d["date"] for d in pos_data]
-        pos_x = [d.get("x", 0) for d in pos_data]
-        pos_y = [d.get("y", 0) for d in pos_data]
-        j = 0
-        for i, dc in enumerate(dates_car):
-            while j < len(pos_dates) - 1 and pos_dates[j + 1] <= dc:
-                j += 1
-            x_vals[i] = pos_x[j]
-            y_vals[i] = pos_y[j]
-
-    dist = _distance_from_speed(dates_car, speed)
-
+    lap_pos = pos[(pos["date"] >= begin) & (pos["date"] <= end)] if not pos.empty else None
+    lap = lap_samples(lap_car, lap_pos, start, lap_duration)
     return _sanitize_tel_data({
-        "distance": dist,
-        "speed":    speed,
-        "throttle": throttle,
-        "brake":    brake,
-        "gear":     gear,
-        "drs":      drs,
-        "rpm":      rpm,
-        "x":        x_vals,
-        "y":        y_vals,
+        "distance": lap["distance"].tolist(),
+        "speed":    lap["speed"].tolist(),
+        "throttle": lap["throttle"].tolist(),
+        "brake":    (lap["brake"] > 0).tolist(),
+        "gear":     lap["n_gear"].astype(int).tolist(),
+        "drs":      lap["drs"].astype(int).tolist(),
+        "rpm":      lap["rpm"].tolist(),
+        "x":        lap["x"].tolist(),
+        "y":        lap["y"].tolist(),
     })
-
-
-def _extract_lap_telemetry(car_data: list, pos_data: list, date_start: str, lap_duration: float) -> Optional[dict]:
-    """
-    Slice pre-fetched session car_data/pos_data for a single lap window.
-    Avoids making additional API calls per lap.
-    """
-    from datetime import datetime, timedelta
-
-    try:
-        dt_start = datetime.fromisoformat(date_start.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-
-    dt_end = dt_start + timedelta(seconds=lap_duration + 1)
-
-    def in_window(d: dict) -> bool:
-        try:
-            dt = datetime.fromisoformat(d.get("date", "").replace("Z", "+00:00"))
-            return dt_start <= dt <= dt_end
-        except Exception:
-            return False
-
-    lap_car = [d for d in car_data if in_window(d)]
-    lap_pos = [d for d in pos_data if in_window(d)]
-
-    return _build_telemetry_from_raw(lap_car, lap_pos)
 
 
 # ---------------------------------------------------------------------------

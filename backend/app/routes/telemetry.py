@@ -14,7 +14,9 @@ from starlette.background import BackgroundTask
 
 from app.cache import redis_cache
 from app.limiter import limiter
-from app.telemetry import LapRef, circuit_corners, corner_distances, db_lap_ref, fetch_raw_lap, raw_lap_from_db_row
+from app.telemetry import (
+    LapRef, aligned_distance, circuit_corners, corner_distances, db_lap_ref, fetch_raw_lap, raw_lap_from_db_row,
+)
 from database import db
 
 logger = logging.getLogger(__name__)
@@ -23,6 +25,12 @@ router = APIRouter(prefix="/api")
 
 class TelemetryMultiRequest(BaseModel):
     laps: List[LapRef]
+
+
+def _channel(dist: np.ndarray, values: np.ndarray, kind: str = "linear") -> interp1d:
+    """One channel of a lap over distance. An aligned lap can stop a few
+    metres short of the grid's ends: its end values carry on."""
+    return interp1d(dist, values, kind=kind, bounds_error=False, fill_value=(values[0], values[-1]))
 
 
 @router.post("/telemetry/multi")
@@ -91,21 +99,24 @@ async def get_telemetry_multi(request: Request, body: TelemetryMultiRequest):
     common_dist = np.linspace(min_d, max_d, N)
 
     # Each lap's distance is scaled onto the reference lap's range, so laps
-    # from other seasons (slightly different lengths) line up corner for corner
-    kw = dict(bounds_error=False)
+    # from other seasons (slightly different lengths) line up corner for corner,
+    # then a lap of the same event is put onto the reference by their positions
+    ref_x, ref_y = raw_laps[0]["x"].astype(float), raw_laps[0]["y"].astype(float)
     i_speed, i_throttle, i_brake, i_gear, i_rpm = [], [], [], [], []
     i_x = i_y = None
     ref_range = max_d - min_d
-    for idx, raw in enumerate(raw_laps):
+    for idx, (lap_ref, raw) in enumerate(zip(body.laps, raw_laps)):
         d = raw["dist"].astype(float)
         d_range = d.max() - d.min()
         d_sc = (d - d.min()) / d_range * ref_range + min_d if d_range > 0 and ref_range > 0 else d
+        if idx > 0 and (lap_ref.year, lap_ref.gp) == (ref.year, ref.gp):
+            d_sc = aligned_distance(d_sc, raw["x"].astype(float), raw["y"].astype(float), ref_dist, ref_x, ref_y)
 
-        i_speed.append(interp1d(d_sc, raw["speed"],       kind="linear",  fill_value=0,     **kw))
-        i_throttle.append(interp1d(d_sc, raw["throttle"], kind="linear",  fill_value=0,     **kw))
-        i_brake.append(interp1d(d_sc, raw["brake"],       kind="nearest", fill_value=0,     **kw))
-        i_gear.append(interp1d(d_sc, raw["gear"],         kind="nearest", fill_value=1,     **kw))
-        i_rpm.append(interp1d(d_sc, raw["rpm"],           kind="linear",  fill_value=10000, **kw))
+        i_speed.append(_channel(d_sc, raw["speed"]))
+        i_throttle.append(_channel(d_sc, raw["throttle"]))
+        i_brake.append(_channel(d_sc, raw["brake"], "nearest"))
+        i_gear.append(_channel(d_sc, raw["gear"], "nearest"))
+        i_rpm.append(_channel(d_sc, raw["rpm"]))
         if idx == 0:
             i_x = interp1d(d_sc, raw["x"], kind="linear", fill_value="extrapolate")
             i_y = interp1d(d_sc, raw["y"], kind="linear", fill_value="extrapolate")

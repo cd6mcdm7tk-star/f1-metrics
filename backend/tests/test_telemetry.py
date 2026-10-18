@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from app.telemetry import corner_distances, prepare_tel
+from app.telemetry import aligned_distance, corner_distances, path_distances, prepare_tel
 
 
 def test_prepare_tel_makes_distance_strictly_increasing_and_fills_channels():
@@ -40,3 +40,35 @@ def test_corner_distances_search_forward_along_the_lap():
 
     assert placed[0]["distance"] == 90.0
     assert placed[1]["distance"] == 116.0  # on the way back (x=85, second leg), not 85.0
+
+
+# A 1 km straight sampled every 20 m, positions in tenths of a metre like OpenF1's
+REF_DIST = np.arange(0, 1001, 20, dtype=float)
+REF_X, REF_Y = REF_DIST * 10, np.zeros(len(REF_DIST))
+
+
+def test_path_distances_measure_along_the_reference_path():
+    x = np.array([55.0, 1234.0, 5000.0])
+    y = np.array([20.0, -30.0, 2000.0])  # the last one is 200 m off the path
+
+    along = path_distances(x, y, REF_X, REF_Y, REF_DIST)
+
+    assert along[:2].tolist() == [5.5, 123.4]
+    assert np.isnan(along[2])
+
+
+def test_a_lap_measured_10_m_short_is_put_back_onto_the_reference():
+    true = np.arange(5, 996, 15, dtype=float)
+
+    aligned = aligned_distance(true - 10, true * 10, np.zeros(len(true)), REF_DIST, REF_X, REF_Y)
+
+    assert np.allclose(aligned, true, atol=1e-3)
+    assert np.all(np.diff(aligned) > 0)
+
+
+def test_a_lap_without_usable_positions_keeps_its_distance():
+    dist = np.arange(0, 1000, 15, dtype=float)
+
+    assert aligned_distance(dist, np.zeros(len(dist)), np.zeros(len(dist)), REF_DIST, REF_X, REF_Y) is dist
+    elsewhere = aligned_distance(dist, dist * 10, np.full(len(dist), 9000.0), REF_DIST, REF_X, REF_Y)
+    assert elsewhere is dist

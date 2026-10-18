@@ -25,6 +25,8 @@ The backend serves four kinds of data:
 
 Responses are cached in Redis. Accounts and subscriptions live in Supabase.
 
+OpenF1 streams car data and positions for the whole session, about four samples a second: a lap is cut from line to line and its distance integrated from its speed, counted from the line (`app/lap_samples.py`). Laps compared from the same event are then lined up by their positions on the reference lap's path (`aligned_distance` in `app/telemetry.py`), so a lap start time a tenth out doesn't move every braking point.
+
 ```
 backend/
   main.py              app setup

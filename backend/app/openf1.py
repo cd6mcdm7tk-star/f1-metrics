@@ -6,11 +6,11 @@ import os
 import time
 
 import httpx
-import numpy as np
 import pandas as pd
 from fastapi import HTTPException
 
 from app.cache import redis_cache
+from app.lap_samples import lap_samples, lap_window
 from app.schedule import get_grands_prix
 from database import db
 
@@ -169,10 +169,10 @@ async def get_lap_info(session_key: int, driver_number: int, lap_number: int | N
 
 
 async def fetch_lap_telemetry(session_key: int, driver_number: int, date_start: str, lap_duration: float) -> pd.DataFrame:
-    """car_data + location over a lap's time window, merged into a DataFrame
-    with FastF1's column names and a cumulative Distance."""
-    lap_start_dt = pd.to_datetime(date_start, utc=True)
-    lap_end_dt = lap_start_dt + pd.Timedelta(seconds=lap_duration + 2.0)
+    """car_data + location over a lap, cut from line to line by
+    app.lap_samples, with FastF1's column names."""
+    start = pd.to_datetime(date_start, utc=True)
+    begin, end = lap_window(start, lap_duration)
 
     base_params = {"session_key": session_key, "driver_number": driver_number}
     car_raw, loc_raw = await asyncio.gather(
@@ -182,25 +182,17 @@ async def fetch_lap_telemetry(session_key: int, driver_number: int, date_start: 
     if not car_raw:
         return pd.DataFrame()
 
-    df_car = pd.DataFrame(car_raw)
-    df_car["date"] = pd.to_datetime(df_car["date"], utc=True, format="ISO8601")
-    df_car = df_car[(df_car["date"] >= lap_start_dt) & (df_car["date"] <= lap_end_dt)]
-    df_car = df_car.sort_values("date").reset_index(drop=True)
-    if df_car.empty:
+    def around_lap(rows: list) -> pd.DataFrame:
+        frame = pd.DataFrame(rows)
+        frame["date"] = pd.to_datetime(frame["date"], utc=True, format="ISO8601")
+        return frame[(frame["date"] >= begin) & (frame["date"] <= end)]
+
+    df_car = around_lap(car_raw)
+    if len(df_car) < 2:
         return pd.DataFrame()
 
-    if loc_raw:
-        df_loc = pd.DataFrame(loc_raw)
-        df_loc["date"] = pd.to_datetime(df_loc["date"], utc=True, format="ISO8601")
-        df_loc = df_loc[(df_loc["date"] >= lap_start_dt) & (df_loc["date"] <= lap_end_dt)]
-        df_loc = df_loc.sort_values("date").reset_index(drop=True)
-        df = pd.merge_asof(df_car, df_loc[["date", "x", "y"]], on="date", direction="nearest")
-    else:
-        df = df_car.copy()
-        df["x"] = 0.0
-        df["y"] = 0.0
-
-    df = df.rename(columns={
+    df = lap_samples(df_car, around_lap(loc_raw) if loc_raw else None, start, lap_duration)
+    return df.rename(columns={
         "speed": "Speed",
         "throttle": "Throttle",
         "brake": "Brake",
@@ -209,12 +201,5 @@ async def fetch_lap_telemetry(session_key: int, driver_number: int, date_start: 
         "rpm": "RPM",
         "x": "X",
         "y": "Y",
+        "distance": "Distance",
     })
-
-    # Speed integrated over time, like FastF1's add_distance(). Summing X/Y
-    # steps instead turns GPS jitter into ~8-10x the real lap length.
-    dt = df["date"].diff().dt.total_seconds().fillna(0).values
-    speed_ms = pd.to_numeric(df.get("Speed", 0), errors="coerce").fillna(0).values / 3.6
-    df["Distance"] = np.cumsum(speed_ms * dt)
-
-    return df

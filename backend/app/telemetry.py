@@ -174,6 +174,59 @@ def circuit_corners(year: int, gp: int, session_type: str) -> dict:
     return {"corners": corners, "rotation": float(ci.rotation)}
 
 
+# Positions further than this from the reference path aren't used to align a lap (X/Y units: 0.1 m)
+ALIGN_MAX_MISS = 300.0
+# Half-width of the window the alignment's correction is smoothed over (m)
+ALIGN_SMOOTHING = 100.0
+# Corrections larger than this mean the positions can't be trusted (m)
+ALIGN_MAX_SHIFT = 150.0
+
+
+def path_distances(x: np.ndarray, y: np.ndarray, ref_x: np.ndarray, ref_y: np.ndarray, ref_dist: np.ndarray) -> np.ndarray:
+    """How far along the reference lap each position is, NaN when it's off
+    the reference's path. Projected onto the path's segments, searching only
+    forward from the previous match, like corner_distances()."""
+    seg_x, seg_y = np.diff(ref_x), np.diff(ref_y)
+    seg_len2 = np.maximum(seg_x ** 2 + seg_y ** 2, 1e-9)
+    out = np.full(len(x), np.nan)
+    k = 0
+    for i, (px, py) in enumerate(zip(x, y)):
+        lo, hi = max(k - 5, 0), min(k + 60, len(seg_x))
+        u = np.clip(((px - ref_x[lo:hi]) * seg_x[lo:hi] + (py - ref_y[lo:hi]) * seg_y[lo:hi]) / seg_len2[lo:hi], 0, 1)
+        miss = np.hypot(ref_x[lo:hi] + u * seg_x[lo:hi] - px, ref_y[lo:hi] + u * seg_y[lo:hi] - py)
+        best = int(np.argmin(miss))
+        if miss[best] <= ALIGN_MAX_MISS:
+            k = lo + best
+            out[i] = ref_dist[k] + u[best] * (ref_dist[k + 1] - ref_dist[k])
+    return out
+
+
+def aligned_distance(dist: np.ndarray, x: np.ndarray, y: np.ndarray,
+                     ref_dist: np.ndarray, ref_x: np.ndarray, ref_y: np.ndarray) -> np.ndarray:
+    """A lap's distance put onto the reference lap's by their positions.
+
+    Speed integrated from a lap's start is smooth but drifts: OpenF1's lap
+    start times are a tenth of a second or so out, and its car data has gaps,
+    so two laps can sit 10 m apart, enough to make up a braking point or
+    20 km/h into a corner. Where each sample is along the reference's path,
+    against where its own distance puts it, gives the drift; smoothed, it
+    corrects the distance. Unchanged when the positions can't be used."""
+    if len(dist) < 10 or not np.any(x) or not np.any(ref_x):
+        return dist
+    along = path_distances(x, y, ref_x, ref_y, ref_dist)
+    valid = ~np.isnan(along)
+    if valid.mean() < 0.8:
+        return dist
+    drift = along[valid] - dist[valid]
+    at = dist[valid]
+    smooth = np.array([np.median(drift[np.abs(at - d) <= ALIGN_SMOOTHING]) for d in at])
+    if np.abs(smooth).max() > ALIGN_MAX_SHIFT:
+        return dist
+    corrected = dist + np.interp(dist, at, smooth)
+    # Still strictly increasing, for the interpolation onto the shared grid
+    return np.maximum.accumulate(corrected) + np.arange(len(corrected)) * 1e-6
+
+
 def corner_distances(raw_corners: list[dict], ref_x: np.ndarray, ref_y: np.ndarray, ref_dist: np.ndarray) -> list[dict]:
     """Places each corner at a distance along the reference lap by nearest
     (X, Y) point. FIA corners are numbered in lap order, so each one is only
