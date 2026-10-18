@@ -2,6 +2,7 @@ import { Composition, Still } from 'remotion';
 import TelemetryDuel, { calculateDuelMetadata, DUEL_FRAMES, type TelemetryDuelProps } from './duel/TelemetryDuel';
 import { VIDEO } from './format';
 import { LANGS } from './i18n';
+import MascotAvatar, { AVATAR_SIZE } from './mascot/MascotAvatar';
 import MascotLine, { calculateMascotLine } from './mascot/MascotLine';
 import QualiRecap, { calculateQualiMetadata, QUALI_FRAMES } from './quali/QualiRecap';
 import type { QualiNarration } from './quali/story';
@@ -63,6 +64,7 @@ export default function Root() {
         />
       ))}
       <Still id="MascotSheet" component={MascotSheet} width={VIDEO.width} height={VIDEO.height} />
+      <Still id="MascotAvatar" component={MascotAvatar} width={AVATAR_SIZE} height={AVATAR_SIZE} />
       {LANGS.map(lang => (
         <Composition
           key={lang}
