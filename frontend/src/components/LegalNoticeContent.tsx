@@ -12,25 +12,19 @@ const h3: React.CSSProperties = {
 const p: React.CSSProperties = { margin: '0 0 8px', fontSize: 13, lineHeight: 1.6 };
 const strong: React.CSSProperties = { color: text, fontWeight: 700 };
 const section: React.CSSProperties = { marginBottom: 22 };
-// Flags a field that still needs a real value before this page can be
-// considered complete — see TODO comment below.
-const pending: React.CSSProperties = { color: '#ff6b6b', fontStyle: 'italic' };
 
-// TODO: replace the two `pending` values below (SIRET + address) once
-// provided — this page is not legally complete without them for a site
-// with commercial activity (paid subscriptions via Stripe).
 const LegalNoticeContent: React.FC = () => {
   return (
     <div>
-      <p style={{ ...p, color: text3, fontSize: 11 }}>Last updated: September 27, 2026</p>
+      <p style={{ ...p, color: text3, fontSize: 11 }}>Last updated: October 21, 2026</p>
 
       <section style={section}>
         <h3 style={h3}>Site Publisher</h3>
         <p style={p}>
           <span style={strong}>METRIK DELTA</span> — sole proprietorship (auto-entrepreneur), France.
         </p>
-        <p style={p}>SIRET: <span style={pending}>to be completed</span></p>
-        <p style={p}>Address: <span style={pending}>to be completed</span></p>
+        <p style={p}>SIRET: 993 106 186 00014</p>
+        <p style={p}>Address: France</p>
         <p style={p}>
           Email: <a href="mailto:contact@metrikdelta.com" style={link}>contact@metrikdelta.com</a>
         </p>
