@@ -104,7 +104,7 @@ def token(user_id: str, secret: str) -> str:
 
 
 def test_checkout_needs_a_signed_in_user_and_uses_theirs(client, monkeypatch):
-    monkeypatch.setattr(payments, "SUPABASE_JWT_SECRET", TEST_SECRET)
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", TEST_SECRET)
     monkeypatch.setattr(payments, "PLANS", {"monthly": ("metrik_pro_monthly", "price_m"), "annual": ("metrik_pro_annual", "price_a")})
     created = {}
 
@@ -127,7 +127,7 @@ def test_checkout_needs_a_signed_in_user_and_uses_theirs(client, monkeypatch):
 
 
 def test_checkout_records_the_withdrawal_waiver_and_needs_it(client, monkeypatch):
-    monkeypatch.setattr(payments, "SUPABASE_JWT_SECRET", TEST_SECRET)
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", TEST_SECRET)
     monkeypatch.setattr(payments, "PLANS", {"monthly": ("metrik_pro_monthly", "price_m"), "annual": ("metrik_pro_annual", "price_a")})
     created = {}
     monkeypatch.setattr(payments.stripe.checkout.Session, "create",

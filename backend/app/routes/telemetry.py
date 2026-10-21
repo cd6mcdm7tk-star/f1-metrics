@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from scipy.interpolate import interp1d
 from starlette.background import BackgroundTask
 
+from app.access import check_season_access
 from app.cache import redis_cache
 from app.limiter import limiter
 from app.telemetry import (
@@ -41,6 +42,8 @@ async def get_telemetry_multi(request: Request, body: TelemetryMultiRequest):
         raise HTTPException(status_code=400, detail="At least 2 laps required")
     if len(body.laps) > 10:
         raise HTTPException(status_code=400, detail="Maximum 10 laps allowed")
+    # Before the cache: a comparison cached for a subscriber isn't served to anyone else
+    await check_season_access(request, max(lap.year for lap in body.laps))
 
     cache_key = "tel:multi:" + hashlib.md5(
         json.dumps([l.model_dump() for l in body.laps], sort_keys=True).encode()

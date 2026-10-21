@@ -4,14 +4,13 @@ subscription: a user who subscribes again gets a new row beside the old one."""
 import logging
 import os
 from datetime import datetime, timezone
-from functools import cache
 
-import jwt
 import stripe
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from supabase import Client, create_client
+
+from app.access import CURRENT, subscriptions, user_from_token
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
@@ -24,8 +23,6 @@ PLANS = {
 }
 # A subscription's billing interval, back to its plan (a portal plan switch changes it)
 PLAN_BY_INTERVAL = {"month": "metrik_pro_monthly", "year": "metrik_pro_annual"}
-# The statuses that give PRO access, as the site reads them
-CURRENT = ("active", "trialing")
 # Shown above Stripe's pay button: PRO starts at once, so the subscriber gives up the
 # 14-day withdrawal period (French Consumer Code, art. L221-28 13°), as they agreed on the site
 WAIVER_NOTICE = (
@@ -36,28 +33,11 @@ WAIVER_NOTICE = (
 
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
-SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")
-
-
-@cache
-def _supabase() -> Client:
-    """Supabase with the service key, which bypasses the table's row security."""
-    return create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_SERVICE_KEY"))
-
-
-def subscriptions():
-    return _supabase().table("subscriptions")
 
 
 def get_authenticated_user_id(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
     """The user id from a valid Supabase access token."""
-    try:
-        payload = jwt.decode(credentials.credentials, SUPABASE_JWT_SECRET, algorithms=["HS256"], audience="authenticated")
-        return payload["sub"]
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token expired")
-    except Exception:
-        raise HTTPException(status_code=401, detail="Invalid token")
+    return user_from_token(credentials.credentials)
 
 
 @router.post("/create-checkout-session")

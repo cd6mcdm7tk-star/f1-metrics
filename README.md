@@ -25,6 +25,8 @@ The backend serves four kinds of data:
 
 Responses are cached in Redis. Accounts and subscriptions live in Supabase.
 
+Past seasons are free; the current one is PRO, checked by the API itself (`app/access.py`): its laps, telemetry and season bundle need a signed-in subscriber's Supabase token, or the `X-Admin-Secret` header for our own tools.
+
 OpenF1 streams car data and positions for the whole session, about four samples a second: a lap is cut from line to line and its distance integrated from its speed, counted from the line (`app/lap_samples.py`). Laps compared from the same event are then lined up by their positions on the reference lap's path (`aligned_distance` in `app/telemetry.py`), so a lap start time a tenth out doesn't move every braking point.
 
 ```
@@ -76,7 +78,7 @@ npm run render -- duel --year 2025 --gp 1 --session Q --drivers NOR,PIA   # out/
 npm run studio                                                           # live preview
 ```
 
-`--laps 19,17` compares specific laps instead of the fastest ones; `--lang fr` renders one language only.
+`--laps 19,17` compares specific laps instead of the fastest ones; `--lang fr` renders one language only. The current season needs the API's admin secret in `METRIK_ADMIN_SECRET`.
 
 A Grand Prix recap (60–80 s) tells a race from its classification and the top ten's laps (`video/src/recap/`): the podium, the gap to the leader lap by lap with the neutralised laps, the tyre stints, the top two's pace on the site's own lap chart (`LapTimesChart`, shared with the session explorer), the biggest climbs and the retirements, then what the race changes in the championship. Scenes cut under a sweeping band, the camera follows the charts and dives onto what the voice names, and the voice plays 12 % faster than recorded (`VOICE_PACE`). The race's data is fetched once into `video/out/cache/`.
 

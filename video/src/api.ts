@@ -8,13 +8,19 @@ import type { RaceResult } from './recap/data';
 
 export const API_BASE = 'https://metrikdelta-backend-eu-production.up.railway.app/api';
 
+// The current season is METRIK PRO: our own tools read it with the API's admin secret.
+// Also bundled for Remotion's browser, where there may be no `process`.
+const ADMIN_SECRET = globalThis.process?.env?.METRIK_ADMIN_SECRET;
+
 /** Waits out the API's per-minute limits, then tries again */
 async function getJson<T>(url: string, init?: RequestInit, retries = 8): Promise<T> {
-  const response = await fetch(url, init);
+  const headers = { ...(init?.headers as Record<string, string>), ...(ADMIN_SECRET ? { 'X-Admin-Secret': ADMIN_SECRET } : {}) };
+  const response = await fetch(url, { ...init, headers });
   if (response.status === 429 && retries > 0) {
     await new Promise(resolve => setTimeout(resolve, 15_000));
     return getJson(url, init, retries - 1);
   }
+  if (response.status === 401 && !ADMIN_SECRET) throw new Error(`${url}: the current season needs METRIK_ADMIN_SECRET`);
   if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`);
   return response.json();
 }
