@@ -95,12 +95,16 @@ def client():
     return TestClient(app)
 
 
+# As long as Supabase's own: PyJWT warns about HMAC keys under 32 bytes
+TEST_SECRET = "a-test-secret-as-long-as-supabase-ones"
+
+
 def token(user_id: str, secret: str) -> str:
     return jwt.encode({"sub": user_id, "aud": "authenticated"}, secret, algorithm="HS256")
 
 
 def test_checkout_needs_a_signed_in_user_and_uses_theirs(client, monkeypatch):
-    monkeypatch.setattr(payments, "SUPABASE_JWT_SECRET", "test-secret")
+    monkeypatch.setattr(payments, "SUPABASE_JWT_SECRET", TEST_SECRET)
     monkeypatch.setattr(payments, "PLANS", {"monthly": ("metrik_pro_monthly", "price_m"), "annual": ("metrik_pro_annual", "price_a")})
     created = {}
 
@@ -110,16 +114,33 @@ def test_checkout_needs_a_signed_in_user_and_uses_theirs(client, monkeypatch):
 
     monkeypatch.setattr(payments.stripe.checkout.Session, "create", fake_create)
 
-    assert client.post("/api/create-checkout-session", json={"user_id": "victim", "plan_type": "monthly"}).status_code in (401, 403)
+    body = {"user_id": "victim", "plan_type": "monthly", "withdrawal_waiver": True}
+    assert client.post("/api/create-checkout-session", json=body).status_code in (401, 403)
 
     response = client.post(
-        "/api/create-checkout-session",
-        json={"user_id": "victim", "plan_type": "monthly"},
-        headers={"Authorization": f"Bearer {token('user-1', 'test-secret')}"},
+        "/api/create-checkout-session", json=body,
+        headers={"Authorization": f"Bearer {token('user-1', TEST_SECRET)}"},
     )
     assert response.status_code == 200
     assert created["client_reference_id"] == "user-1"
     assert created["line_items"] == [{"price": "price_m", "quantity": 1}]
+
+
+def test_checkout_records_the_withdrawal_waiver_and_needs_it(client, monkeypatch):
+    monkeypatch.setattr(payments, "SUPABASE_JWT_SECRET", TEST_SECRET)
+    monkeypatch.setattr(payments, "PLANS", {"monthly": ("metrik_pro_monthly", "price_m"), "annual": ("metrik_pro_annual", "price_a")})
+    created = {}
+    monkeypatch.setattr(payments.stripe.checkout.Session, "create",
+                        lambda **kwargs: created.update(kwargs) or type("Session", (), {"id": "cs_1", "url": "https://checkout.stripe.com"}))
+    headers = {"Authorization": f"Bearer {token('user-1', TEST_SECRET)}"}
+
+    assert client.post("/api/create-checkout-session", json={"plan_type": "annual"}, headers=headers).status_code == 400
+    assert not created
+
+    assert client.post("/api/create-checkout-session", json={"plan_type": "annual", "withdrawal_waiver": True}, headers=headers).status_code == 200
+    assert created["metadata"]["withdrawal_waiver"] == "accepted"
+    assert created["subscription_data"]["metadata"]["withdrawal_waiver_at"] == created["metadata"]["withdrawal_waiver_at"]
+    assert "right of withdrawal" in created["custom_text"]["submit"]["message"]
 
 
 def test_an_event_that_cannot_be_recorded_is_sent_again(client, monkeypatch):

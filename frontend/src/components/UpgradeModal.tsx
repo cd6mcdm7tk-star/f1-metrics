@@ -52,7 +52,14 @@ const display = "'Rajdhani', sans-serif"
 export default function UpgradeModal({ isOpen, onClose, reason = 'current_season' }: UpgradeModalProps) {
   const [loading, setLoading] = useState(false)
   const [selectedPlan, setSelectedPlan] = useState<PlanType>('annual')
+  // PRO starts at once: the 14-day withdrawal period is waived, as the Terms (section 5) explain
+  const [waived, setWaived] = useState(false)
   const { user, setAuthModalOpen } = useAuth()
+
+  // Asked again each time the modal opens
+  useEffect(() => {
+    if (!isOpen) setWaived(false)
+  }, [isOpen])
 
   useEffect(() => {
     if (!isOpen) return
@@ -79,7 +86,7 @@ export default function UpgradeModal({ isOpen, onClose, reason = 'current_season
 
     setLoading(true)
     try {
-      window.location.href = await checkoutUrl(selectedPlan)
+      window.location.href = await checkoutUrl(selectedPlan, true)
     } catch (error) {
       console.error('Error creating checkout session:', error)
       alert('Error creating payment session')
@@ -214,21 +221,39 @@ export default function UpgradeModal({ isOpen, onClose, reason = 'current_season
           })}
         </div>
 
+        {/* Withdrawal waiver: required before paying */}
+        <label style={{
+          display: 'flex', gap: 10, alignItems: 'flex-start', margin: '0 0 14px', cursor: loading ? 'not-allowed' : 'pointer',
+          fontFamily: mono, fontSize: 10, lineHeight: 1.6, color: 'var(--text-2)',
+        }}>
+          <input
+            type="checkbox"
+            checked={waived}
+            onChange={e => setWaived(e.target.checked)}
+            disabled={loading}
+            style={{ marginTop: 2, accentColor: 'var(--accent)', flexShrink: 0 }}
+          />
+          <span>
+            I want PRO to start right away, and I acknowledge that I lose my 14-day right of
+            withdrawal once it starts (Terms, section 5).
+          </span>
+        </label>
+
         {/* CTA */}
         <button
           onClick={handleUpgrade}
-          disabled={loading}
+          disabled={loading || !waived}
           style={{
             width: '100%', padding: '14px 0',
             background: 'var(--accent)', color: '#f2e6d8',
             border: 'none', borderRadius: 'var(--r)',
             fontFamily: mono, fontWeight: 700, fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase',
-            cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1,
+            cursor: loading || !waived ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : waived ? 1 : 0.45,
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
             transition: 'opacity 0.15s',
           }}
-          onMouseEnter={e => { if (!loading) e.currentTarget.style.opacity = '0.88' }}
-          onMouseLeave={e => { if (!loading) e.currentTarget.style.opacity = '1' }}
+          onMouseEnter={e => { if (!loading && waived) e.currentTarget.style.opacity = '0.88' }}
+          onMouseLeave={e => { if (!loading && waived) e.currentTarget.style.opacity = '1' }}
         >
           {loading
             ? <><Loader2 size={15} className="animate-spin" />Redirecting to payment…</>

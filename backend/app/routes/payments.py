@@ -3,6 +3,7 @@ Subscription state lives in Supabase's `subscriptions` table, a row per Stripe
 subscription: a user who subscribes again gets a new row beside the old one."""
 import logging
 import os
+from datetime import datetime, timezone
 from functools import cache
 
 import jwt
@@ -25,6 +26,13 @@ PLANS = {
 PLAN_BY_INTERVAL = {"month": "metrik_pro_monthly", "year": "metrik_pro_annual"}
 # The statuses that give PRO access, as the site reads them
 CURRENT = ("active", "trialing")
+# Shown above Stripe's pay button: PRO starts at once, so the subscriber gives up the
+# 14-day withdrawal period (French Consumer Code, art. L221-28 13°), as they agreed on the site
+WAIVER_NOTICE = (
+    "You asked for METRIK PRO to start immediately: by paying, you acknowledge that you lose "
+    "your 14-day right of withdrawal (French Consumer Code, art. L221-28 13°). You can cancel "
+    "any time; PRO stays until the end of the period paid for."
+)
 
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
@@ -54,15 +62,25 @@ def get_authenticated_user_id(credentials: HTTPAuthorizationCredentials = Depend
 
 @router.post("/create-checkout-session")
 async def create_checkout_session(request: Request, user_id: str = Depends(get_authenticated_user_id)):
-    """Stripe Checkout for the signed-in user: the token says who subscribes, not the request."""
+    """Stripe Checkout for the signed-in user: the token says who subscribes, not the
+    request. The user must have waived their withdrawal period on the site."""
     body = await request.json()
     plan_type = body.get("plan_type", "annual")
+    if body.get("withdrawal_waiver") is not True:
+        raise HTTPException(status_code=400, detail="The immediate start and the withdrawal waiver must be accepted")
     if plan_type not in PLANS:
         raise HTTPException(status_code=400, detail="Invalid plan_type. Use 'monthly' or 'annual'")
     plan_name, price_id = PLANS[plan_type]
     if not price_id:
         raise HTTPException(status_code=500, detail=f"STRIPE_PRICE_ID_{plan_type.upper()} not configured")
 
+    # Kept on the session and on the subscription: the record of the waiver and when it was given
+    metadata = {
+        "user_id": user_id,
+        "plan_type": plan_type,
+        "withdrawal_waiver": "accepted",
+        "withdrawal_waiver_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    }
     try:
         checkout_session = stripe.checkout.Session.create(
             payment_method_types=["card"],
@@ -71,7 +89,9 @@ async def create_checkout_session(request: Request, user_id: str = Depends(get_a
             success_url=f"{SITE_URL}/success?session_id={{CHECKOUT_SESSION_ID}}",
             cancel_url=f"{SITE_URL}/cancel",
             client_reference_id=user_id,
-            metadata={"user_id": user_id, "plan_type": plan_type},
+            metadata=metadata,
+            subscription_data={"metadata": metadata},
+            custom_text={"submit": {"message": WAIVER_NOTICE}},
         )
     except Exception as e:
         logger.error(f"Checkout session creation failed: {e}")

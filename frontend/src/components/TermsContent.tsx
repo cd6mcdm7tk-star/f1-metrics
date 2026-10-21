@@ -18,7 +18,7 @@ const section: React.CSSProperties = { marginBottom: 22 };
 const TermsContent: React.FC = () => {
   return (
     <div>
-      <p style={{ ...p, color: text3, fontSize: 11 }}>Last updated: September 27, 2026</p>
+      <p style={{ ...p, color: text3, fontSize: 11 }}>Last updated: October 21, 2026</p>
 
       <section style={section}>
         <h3 style={h3}>1. Acceptance of Terms</h3>
@@ -64,7 +64,22 @@ const TermsContent: React.FC = () => {
       </section>
 
       <section style={section}>
-        <h3 style={h3}>5. Cancellation and Refunds</h3>
+        <h3 style={h3}>5. Right of Withdrawal</h3>
+        <p style={p}>
+          As a consumer, you would normally have 14 days to withdraw from a contract made online
+          (French Consumer Code, art. L221-18). PRO gives you immediate access to digital content
+          that is not supplied on a physical medium. Before paying, you ask for that access to
+          start right away and expressly acknowledge that you lose your right of withdrawal once
+          it starts (art. L221-28 13°): you tick a box to confirm it on METRIK DELTA, the payment
+          page reminds you of it, and we keep a record of when you agreed.
+        </p>
+        <p style={p}>
+          This doesn't stop you from cancelling: see section 6.
+        </p>
+      </section>
+
+      <section style={section}>
+        <h3 style={h3}>6. Cancellation and Refunds</h3>
         <p style={p}>
           Cancel any time from your account settings. Cancelling stops future renewals; you keep PRO
           access until the end of the period already paid for. Amounts already charged are not refunded,
@@ -73,15 +88,15 @@ const TermsContent: React.FC = () => {
       </section>
 
       <section style={section}>
-        <h3 style={h3}>6. Intellectual Property</h3>
+        <h3 style={h3}>7. Intellectual Property</h3>
         <p style={p}>
           The METRIK DELTA name, interface, and original content are ours. The underlying F1 data is
-          sourced from third parties (section 7) and remains subject to their own terms.
+          sourced from third parties (section 8) and remains subject to their own terms.
         </p>
       </section>
 
       <section style={section}>
-        <h3 style={h3}>7. Data Attribution</h3>
+        <h3 style={h3}>8. Data Attribution</h3>
         <p style={p}>
           METRIK DELTA uses data from the FastF1 library, the OpenF1 API, and the Ergast/Jolpica API.
           Formula 1 trademarks, names, and official data belong to Formula One World Championship
@@ -91,7 +106,7 @@ const TermsContent: React.FC = () => {
       </section>
 
       <section style={section}>
-        <h3 style={h3}>8. Limitation of Liability</h3>
+        <h3 style={h3}>9. Limitation of Liability</h3>
         <p style={p}>
           METRIK DELTA is provided "as is," without warranty of any kind. Underlying F1 data can be
           incomplete, delayed, or occasionally incorrect at the source. We're not liable for damages
@@ -101,7 +116,7 @@ const TermsContent: React.FC = () => {
       </section>
 
       <section style={section}>
-        <h3 style={h3}>9. Changes to Terms</h3>
+        <h3 style={h3}>10. Changes to Terms</h3>
         <p style={p}>
           We may modify these Terms at any time. Material changes will be notified via email or a
           notice on the service. Continued use after a change means you accept the update.
@@ -109,12 +124,12 @@ const TermsContent: React.FC = () => {
       </section>
 
       <section style={section}>
-        <h3 style={h3}>10. Governing Law</h3>
+        <h3 style={h3}>11. Governing Law</h3>
         <p style={p}>These Terms are governed by French law. Disputes fall under the jurisdiction of the French courts.</p>
       </section>
 
       <section style={{ ...section, marginBottom: 0 }}>
-        <h3 style={h3}>11. Contact</h3>
+        <h3 style={h3}>12. Contact</h3>
         <div style={{ padding: '12px 14px', background: 'rgba(0,0,0,0.15)', border: `1px solid ${border}`, borderRadius: 'var(--r)' }}>
           <p style={{ ...p, color: text, margin: 0 }}>
             <span style={strong}>Email:</span>{' '}

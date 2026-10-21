@@ -63,13 +63,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return premium
   }, [user])
 
-  // Checkout picked before signing in (see UpgradeModal): resumed once signed in
+  // Checkout picked before signing in, the waiver already ticked (see UpgradeModal): resumed once signed in
   useEffect(() => {
     if (!user || premiumLoading || isPremium) return
     const pending = sessionStorage.getItem('pendingUpgrade') as PlanType | null
     if (!pending) return
     sessionStorage.removeItem('pendingUpgrade')
-    checkoutUrl(pending)
+    checkoutUrl(pending, true)
       .then(url => { window.location.href = url })
       .catch(err => console.error('Pending checkout failed:', err))
   }, [user, premiumLoading, isPremium])
