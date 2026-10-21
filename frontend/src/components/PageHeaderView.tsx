@@ -31,9 +31,10 @@ export function SignInButton({ onClick }: { onClick?: () => void }) {
 }
 
 /** Top bar of the app pages: wordmark, Telemetry / Statistics switch, account.
- * Display only — PageHeader plugs the signed-in account into it. */
+ * Display only — PageHeader plugs the signed-in account into it. Pages outside
+ * the switch (About, Methodology) leave `page` out. */
 export default function PageHeaderView({ page, leading, actions, isPremium = false, account }: {
-  page: AppPage;
+  page?: AppPage;
   leading?: ReactNode;
   actions?: ReactNode;
   isPremium?: boolean;

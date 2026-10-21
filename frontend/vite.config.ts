@@ -23,6 +23,8 @@ function seoPages(): Plugin {
         ['index.html', pages.home],
         ['app/index.html', pages.telemetry],
         ['stats/index.html', pages.statistics],
+        ['about/index.html', pages.about],
+        ['methodology/index.html', pages.methodology],
         ['404.html', NOT_FOUND],
       ]
       for (const [file, page] of files) {

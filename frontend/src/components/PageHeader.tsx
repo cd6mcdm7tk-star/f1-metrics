@@ -4,7 +4,7 @@ import AccountMenu from './AccountMenu';
 import PageHeaderView, { SignInButton, type AppPage } from './PageHeaderView';
 
 /** PageHeaderView with the visitor's account: their menu and sign out, or sign in. */
-export default function PageHeader({ page, leading, actions }: { page: AppPage; leading?: ReactNode; actions?: ReactNode }) {
+export default function PageHeader({ page, leading, actions }: { page?: AppPage; leading?: ReactNode; actions?: ReactNode }) {
   const { user, isPremium, signOut, setAuthModalOpen } = useAuth();
   const account = user ? (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

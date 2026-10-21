@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import Modal from './Modal';
 import PrivacyContent from './PrivacyContent';
 import TermsContent from './TermsContent';
@@ -10,7 +11,7 @@ interface LegalLinksProps {
   fontSize?: number;
 }
 
-// Privacy · Terms · Legal notice, as a row of text links opening each document
+// About · Methodology (pages) · Privacy · Terms · Legal notice (documents in a modal), as a row of text links
 export default function LegalLinks({
   color = 'rgba(242,230,216,0.32)',
   hoverColor = 'rgba(242,230,216,0.7)',
@@ -25,12 +26,20 @@ export default function LegalLinks({
     transition: 'color 0.15s',
   };
 
-  const onEnter = (e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.color = hoverColor; };
-  const onLeave = (e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.color = color; };
+  const onEnter = (e: React.MouseEvent<HTMLElement>) => { e.currentTarget.style.color = hoverColor; };
+  const onLeave = (e: React.MouseEvent<HTMLElement>) => { e.currentTarget.style.color = color; };
 
   return (
     <>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', justifyContent: 'center', rowGap: 6 }}>
+        <Link to="/about" style={{ ...linkStyle, textDecoration: 'none' }} onMouseEnter={onEnter} onMouseLeave={onLeave}>
+          About
+        </Link>
+        <span style={{ color, fontSize }}>·</span>
+        <Link to="/methodology" style={{ ...linkStyle, textDecoration: 'none' }} onMouseEnter={onEnter} onMouseLeave={onLeave}>
+          Methodology
+        </Link>
+        <span style={{ color, fontSize }}>·</span>
         <button style={linkStyle} onMouseEnter={onEnter} onMouseLeave={onLeave} onClick={() => setOpen('privacy')}>
           Privacy
         </button>

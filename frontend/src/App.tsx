@@ -9,6 +9,8 @@ const TelemetryPage  = lazy(() => import('./pages/TelemetryPage'));
 const StatisticsPage = lazy(() => import('./pages/StatisticsPage'));
 const SuccessPage    = lazy(() => import('./pages/SuccessPage'));
 const CancelPage     = lazy(() => import('./pages/CancelPage'));
+const AboutPage      = lazy(() => import('./pages/AboutPage'));
+const MethodologyPage = lazy(() => import('./pages/MethodologyPage'));
 const NotFoundPage   = lazy(() => import('./pages/NotFoundPage'));
 
 const Spinner = () => (
@@ -30,6 +32,8 @@ function App() {
             <Route path="/stats"   element={<StatisticsPage />} />
             <Route path="/success" element={<SuccessPage />} />
             <Route path="/cancel"  element={<CancelPage />} />
+            <Route path="/about"   element={<AboutPage />} />
+            <Route path="/methodology" element={<MethodologyPage />} />
             <Route path="*"        element={<NotFoundPage />} />
           </Routes>
         </Suspense>

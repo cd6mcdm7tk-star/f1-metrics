@@ -11,6 +11,14 @@
       "destination": "/stats/index.html"
     },
     {
+      "source": "/about",
+      "destination": "/about/index.html"
+    },
+    {
+      "source": "/methodology",
+      "destination": "/methodology/index.html"
+    },
+    {
       "source": "/success",
       "destination": "/index.html"
     },

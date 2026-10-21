@@ -37,7 +37,8 @@ describe('page heads written at build time', () => {
 describe('sitemap', () => {
   it('lists the indexable pages with the date given', () => {
     const xml = sitemap([...Object.values(pages), NOT_FOUND], '2026-10-21');
-    expect(xml.match(/<loc>/g)).toHaveLength(3);
+    expect(xml.match(/<loc>/g)).toHaveLength(5);
+    expect(xml).toContain('<loc>https://metrikdelta.com/methodology</loc>');
     expect(xml).toContain('<loc>https://metrikdelta.com/stats</loc>');
     expect(xml).not.toContain('/404');
     expect(xml).toContain('<lastmod>2026-10-21</lastmod>');
