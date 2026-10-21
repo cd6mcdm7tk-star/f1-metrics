@@ -101,9 +101,9 @@ export const NOT_FOUND: PageSeo = {
 /** The image link previews show */
 export const SHARE_IMAGE = {
   url: `${SITE_URL}/og-image.png`,
-  width: 1000,
-  height: 1000,
-  alt: 'METRIK DELTA — F1 telemetry and statistics platform',
+  width: 1200,
+  height: 630,
+  alt: 'METRIK DELTA — F1 telemetry and statistics, with its donkey mascot in a race-engineer headset',
 };
 
 export interface HeadTag {

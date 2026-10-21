@@ -12,6 +12,7 @@ describe('page heads written at build time', () => {
     expect(html).toContain('<title data-rh="true">F1 Telemetry Comparison — Speed, Throttle &amp; Brake Charts | METRIK DELTA</title>');
     expect(html).toContain('<link data-rh="true" rel="canonical" href="https://metrikdelta.com/app" />');
     expect(html).toContain('property="og:image" content="https://metrikdelta.com/og-image.png"');
+    expect(html).toContain('property="og:image:width" content="1200"');
     expect(html).toContain('application/ld+json');
     expect(html).toContain('<meta name="theme-color" content="#5e1018" />');
   });

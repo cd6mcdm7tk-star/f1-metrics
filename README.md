@@ -115,7 +115,7 @@ curl -L -o rhubarb.zip https://github.com/DanielSWolf/rhubarb-lip-sync/releases/
 unzip rhubarb.zip && mv Rhubarb-Lip-Sync-1.14.0-macOS app && rm rhubarb.zip
 ```
 
-`RHUBARB` points elsewhere if needed. Its expression follows tags in the script: `[focused]`, `[surprised]`, `[ironic]`, `[disappointed]`, `[pleased]` change its face from the next word, and are not said. `npm run still -- --id MascotSheet` renders its model sheet; the `MascotLine-fr` / `MascotLine-en` compositions show it saying a video's hook (`npx remotion render MascotLine-fr out/mascot-line-fr.mp4`, once the video has been rendered with its voice).
+`RHUBARB` points elsewhere if needed. Its expression follows tags in the script: `[focused]`, `[surprised]`, `[ironic]`, `[disappointed]`, `[pleased]` change its face from the next word, and are not said. `npm run still -- --id MascotSheet` renders its model sheet, `--id MascotAvatar` the social networks' profile picture and `--id ShareImage` the site's link preview (`frontend/public/og-image.png`, reduced to 256 colours); the `MascotLine-fr` / `MascotLine-en` compositions show it saying a video's hook (`npx remotion render MascotLine-fr out/mascot-line-fr.mp4`, once the video has been rendered with its voice).
 
 ## Checks
 

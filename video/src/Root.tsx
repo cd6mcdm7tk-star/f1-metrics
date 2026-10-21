@@ -4,6 +4,7 @@ import { VIDEO } from './format';
 import { LANGS } from './i18n';
 import MascotAvatar, { AVATAR_SIZE } from './mascot/MascotAvatar';
 import MascotLine, { calculateMascotLine } from './mascot/MascotLine';
+import ShareImage, { SHARE_SIZE } from './mascot/ShareImage';
 import QualiRecap, { calculateQualiMetadata, QUALI_FRAMES } from './quali/QualiRecap';
 import type { QualiNarration } from './quali/story';
 import GrandPrixRecap, { calculateRecapMetadata, RECAP_FRAMES } from './recap/GrandPrixRecap';
@@ -65,6 +66,7 @@ export default function Root() {
       ))}
       <Still id="MascotSheet" component={MascotSheet} width={VIDEO.width} height={VIDEO.height} />
       <Still id="MascotAvatar" component={MascotAvatar} width={AVATAR_SIZE} height={AVATAR_SIZE} />
+      <Still id="ShareImage" component={ShareImage} width={SHARE_SIZE.width} height={SHARE_SIZE.height} />
       {LANGS.map(lang => (
         <Composition
           key={lang}
