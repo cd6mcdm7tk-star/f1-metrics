@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { CURRENT_SEASON_YEAR } from '../hooks/useSubscription'
-import { getApiBase } from '../config'
+import { checkoutUrl, type PlanType } from '../lib/subscription'
 
 export type UpgradeReason = 'current_season' | 'export'
 
@@ -13,7 +13,6 @@ interface UpgradeModalProps {
   reason?: UpgradeReason
 }
 
-type PlanType = 'monthly' | 'annual'
 
 const PLANS: Record<PlanType, { label: string; price: string; period: string; note: string }> = {
   annual:  { label: 'Annual',  price: '14,99€', period: '/ year',  note: '1,25€/mo · save 37%' },
@@ -80,14 +79,7 @@ export default function UpgradeModal({ isOpen, onClose, reason = 'current_season
 
     setLoading(true)
     try {
-      const response = await fetch(`${getApiBase()}/create-checkout-session`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: user.id, plan_type: selectedPlan }),
-      })
-      const data = await response.json()
-      if (!data.checkout_url) throw new Error('No checkout URL received')
-      window.location.href = data.checkout_url
+      window.location.href = await checkoutUrl(selectedPlan)
     } catch (error) {
       console.error('Error creating checkout session:', error)
       alert('Error creating payment session')

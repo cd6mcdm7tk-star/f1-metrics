@@ -1,7 +1,7 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import type { User } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
-import { getApiBase } from '../config'
+import { checkoutUrl, hasSubscription, type PlanType } from '../lib/subscription'
 import AuthModal from '../components/AuthModal'
 
 const signUp = (email: string, password: string) => supabase.auth.signUp({ email, password })
@@ -16,6 +16,8 @@ interface AuthContextType {
   setAuthModalOpen: (open: boolean) => void
   isPremium: boolean
   premiumLoading: boolean
+  /** Reads the subscription again, e.g. while a payment is being confirmed */
+  refreshPremium: () => Promise<boolean>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -48,31 +50,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     let cancelled = false
     setPremiumLoading(true)
-    supabase
-      .from('subscriptions')
-      .select('status')
-      .eq('user_id', user.id)
-      .in('status', ['active', 'trialing'])
-      .single()
-      .then(({ data, error }) => { if (!cancelled) setIsPremium(Boolean(data) && !error) },
-            () => { if (!cancelled) setIsPremium(false) })
+    hasSubscription(user.id)
+      .then(premium => { if (!cancelled) setIsPremium(premium) }, () => { if (!cancelled) setIsPremium(false) })
       .then(() => { if (!cancelled) setPremiumLoading(false) })
     return () => { cancelled = true }
+  }, [user])
+
+  const refreshPremium = useCallback(async () => {
+    if (!user) return false
+    const premium = await hasSubscription(user.id)
+    setIsPremium(premium)
+    return premium
   }, [user])
 
   // Checkout picked before signing in (see UpgradeModal): resumed once signed in
   useEffect(() => {
     if (!user || premiumLoading || isPremium) return
-    const pending = sessionStorage.getItem('pendingUpgrade') as 'monthly' | 'annual' | null
+    const pending = sessionStorage.getItem('pendingUpgrade') as PlanType | null
     if (!pending) return
     sessionStorage.removeItem('pendingUpgrade')
-    fetch(`${getApiBase()}/create-checkout-session`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: user.id, plan_type: pending }),
-    })
-      .then(r => r.json())
-      .then(data => { if (data.checkout_url) window.location.href = data.checkout_url })
+    checkoutUrl(pending)
+      .then(url => { window.location.href = url })
       .catch(err => console.error('Pending checkout failed:', err))
   }, [user, premiumLoading, isPremium])
 
@@ -82,7 +80,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, signUp, signIn, signOut, setAuthModalOpen, isPremium, premiumLoading }}>
+    <AuthContext.Provider value={{ user, loading, signUp, signIn, signOut, setAuthModalOpen, isPremium, premiumLoading, refreshPremium }}>
       {children}
       <AuthModal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} />
     </AuthContext.Provider>
