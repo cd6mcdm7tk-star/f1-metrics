@@ -10,7 +10,8 @@ export async function checkoutUrl(plan: PlanType): Promise<string> {
   const response = await fetch(`${getApiBase()}/create-checkout-session`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-    body: JSON.stringify({ plan_type: plan }),
+    // The backend takes the user from the token; the id stays for a backend deployed before it did
+    body: JSON.stringify({ plan_type: plan, user_id: session.user.id }),
   })
   const data = await response.json()
   if (!response.ok || !data.checkout_url) throw new Error(data.detail ?? `HTTP ${response.status}`)
