@@ -11,7 +11,11 @@
       "destination": "/stats/index.html"
     },
     {
-      "source": "/(.*)",
+      "source": "/success",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/cancel",
       "destination": "/index.html"
     }
   ],

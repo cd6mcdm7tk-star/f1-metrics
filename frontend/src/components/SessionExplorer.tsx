@@ -10,11 +10,12 @@ import { formatLapTime, lapChartDomain, lapChartRows } from './lapChart';
 import LapTimesChart from './LapTimesChart';
 import { useLineColors, useLineTransitions } from './lineTransitions';
 import Watermark from './Watermark';
+import { TELEMETRY_SINCE } from '../seo/pages';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 // Telemetry exists from 2018 (FastF1)
-const YEARS = Array.from({ length: CURRENT_SEASON_YEAR - 2018 + 1 }, (_, i) => CURRENT_SEASON_YEAR - i);
+const YEARS = Array.from({ length: CURRENT_SEASON_YEAR - TELEMETRY_SINCE + 1 }, (_, i) => CURRENT_SEASON_YEAR - i);
 const SESSIONS = ['Q', 'R', 'FP1', 'FP2', 'FP3'];
 const SPRINT_SESSIONS = ['SQ', 'S'];
 const SESSION_LABELS: Record<string, string> = {

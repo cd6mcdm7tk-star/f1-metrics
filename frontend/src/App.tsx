@@ -9,6 +9,7 @@ const TelemetryPage  = lazy(() => import('./pages/TelemetryPage'));
 const StatisticsPage = lazy(() => import('./pages/StatisticsPage'));
 const SuccessPage    = lazy(() => import('./pages/SuccessPage'));
 const CancelPage     = lazy(() => import('./pages/CancelPage'));
+const NotFoundPage   = lazy(() => import('./pages/NotFoundPage'));
 
 const Spinner = () => (
   <div className="flex items-center justify-center h-screen" style={{ background: '#3d0c10' }}>
@@ -29,6 +30,7 @@ function App() {
             <Route path="/stats"   element={<StatisticsPage />} />
             <Route path="/success" element={<SuccessPage />} />
             <Route path="/cancel"  element={<CancelPage />} />
+            <Route path="*"        element={<NotFoundPage />} />
           </Routes>
         </Suspense>
       </BrowserRouter>

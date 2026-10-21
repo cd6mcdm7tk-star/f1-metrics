@@ -1,10 +1,44 @@
-import { defineConfig } from 'vite'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import { sitemap, withHead } from './src/seo/html'
+import { NOT_FOUND, sitePages, type PageSeo } from './src/seo/pages'
+
+/** Each page's head written into its own HTML file, a 404 page and the
+ * sitemap: crawlers and link previews that don't run JavaScript read them */
+function seoPages(): Plugin {
+  let outDir = 'dist'
+  return {
+    name: 'seo-pages',
+    apply: 'build',
+    configResolved(config) {
+      outDir = resolve(config.root, config.build.outDir)
+    },
+    closeBundle() {
+      const shell = readFileSync(resolve(outDir, 'index.html'), 'utf8')
+      const pages = sitePages(new Date().getFullYear())
+      const files: [string, PageSeo][] = [
+        ['index.html', pages.home],
+        ['app/index.html', pages.telemetry],
+        ['stats/index.html', pages.statistics],
+        ['404.html', NOT_FOUND],
+      ]
+      for (const [file, page] of files) {
+        const path = resolve(outDir, file)
+        mkdirSync(dirname(path), { recursive: true })
+        writeFileSync(path, withHead(shell, page))
+      }
+      writeFileSync(resolve(outDir, 'sitemap.xml'), sitemap(Object.values(pages), new Date().toISOString().slice(0, 10)))
+    },
+  }
+}
 
 export default defineConfig({
   plugins: [
     react(),
+    seoPages(),
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: 'script-defer', // don't block first render on the SW registration script

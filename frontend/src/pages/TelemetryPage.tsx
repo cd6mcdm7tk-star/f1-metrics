@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useSubscription, CURRENT_SEASON_YEAR } from '../hooks/useSubscription';
 import UpgradeModal, { type UpgradeReason } from '../components/UpgradeModal';
 import SEO from '../components/SEO';
+import { sitePages } from '../seo/pages';
 import PageHeader from '../components/PageHeader';
 import SessionExplorer from '../components/SessionExplorer';
 import TelemetryViewMulti from '../components/TelemetryViewMulti';
@@ -272,26 +273,7 @@ export default function TelemetryPage() {
 
   return (
     <>
-    <SEO
-      path="/app"
-      title="F1 Telemetry Comparison — Speed, Throttle & Brake Charts | METRIK DELTA"
-      description={`Compare any two Formula 1 drivers' telemetry lap by lap: speed, throttle, braking, gear shifts, sector times and tire strategy for every session from 2018 to ${CURRENT_SEASON_YEAR}.`}
-      keywords="f1 telemetry comparison, formula 1 speed trace, f1 throttle brake data, f1 lap comparison, f1 sector times, f1 tire strategy, télémétrie f1"
-      structuredData={{
-        "@context": "https://schema.org",
-        "@type": "WebPage",
-        "name": "F1 Telemetry Comparison",
-        "description": "Compare Formula 1 drivers' telemetry lap by lap — speed, throttle, braking, gear and tire strategy.",
-        "url": "https://metrikdelta.com/app",
-        "breadcrumb": {
-          "@type": "BreadcrumbList",
-          "itemListElement": [
-            { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://metrikdelta.com" },
-            { "@type": "ListItem", "position": 2, "name": "Telemetry", "item": "https://metrikdelta.com/app" }
-          ]
-        }
-      }}
-    />
+    <SEO page={sitePages(CURRENT_SEASON_YEAR).telemetry} />
     <div className="data-zone" style={{
       ...(isMobile ? { minHeight: '100vh', height: 'auto' } : { height: '100vh', overflow: 'hidden' }),
       display: 'grid',

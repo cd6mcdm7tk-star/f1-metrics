@@ -14,19 +14,11 @@
 <link rel="dns-prefetch" href="https://api.openf1.org" />
 
 <!--
-  No description/keywords/robots/author/canonical/og:*/twitter:* tags here on
-  purpose — <SEO> (react-helmet-async) renders all of those, on every one of
-  the app's real routes, with page-specific content. Helmet only manages tags
-  it renders itself: it can't detect or replace ones already sitting in this
-  static file, so duplicating any of them here would just produce two of
-  each per built page (once Helmet mounts, or once scripts/prerender.mjs
-  bakes its output into the static file) — and per the OG spec the FIRST tag
-  wins, which would silently discard the page-specific one every route now
-  sets in favour of this generic fallback. The <title> below is the one safe
-  exception: document.title has no duplication mode, so it's kept as a
-  last-resort fallback (matching SEO.tsx's DEFAULTS) for the rare case a
-  future route forgets to render <SEO> at all, or prerendering fails and
-  falls back to this plain, un-rendered shell.
+  The page's description, canonical address, link preview tags and its own
+  JSON-LD are written in at build time for each page (the seoPages plugin in
+  vite.config.ts, from src/seo/pages.ts), marked as react-helmet-async's own
+  so <SEO> replaces them once the app runs instead of adding a second copy.
+  The title below is replaced the same way; it stays for `vite dev`.
 -->
 <title>METRIK DELTA - Professional F1 Telemetry Analysis</title>
 <meta name="theme-color" content="#5e1018" />

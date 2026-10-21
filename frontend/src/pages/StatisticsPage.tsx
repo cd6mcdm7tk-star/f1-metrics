@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import SEO from '../components/SEO';
+import { sitePages, STATISTICS_SINCE } from '../seo/pages';
 import PageHeader from '../components/PageHeader';
 import UpgradeModal from '../components/UpgradeModal';
 import LegalLinks from '../components/LegalLinks';
@@ -18,8 +19,6 @@ import {
 } from '../stats/season';
 import type { HoveredMetric, SeasonBundle, SeasonDriver } from '../stats/types';
 import { teamColor } from '../utils/teamColors';
-
-const FIRST_SEASON = 2003;
 
 const labelStyle = {
   fontFamily: MONO, fontSize: 7, letterSpacing: '0.22em', textTransform: 'uppercase', color: 'var(--text-3)',
@@ -141,26 +140,7 @@ export default function StatisticsPage() {
 
   return (
     <>
-    <SEO
-      path="/stats"
-      title="F1 Driver Statistics & Head-to-Head Comparison - METRIK DELTA"
-      description={`Compare Formula 1 drivers head-to-head: wins, podiums, poles, fastest laps, qualifying performance and career stats from 1950 to ${CURRENT_SEASON_YEAR}.`}
-      keywords="f1 driver statistics, formula 1 h2h, f1 driver comparison, f1 qualifying stats, f1 race stats, f1 career stats, compare f1 drivers"
-      structuredData={{
-        "@context": "https://schema.org",
-        "@type": "WebPage",
-        "name": "F1 Driver Statistics",
-        "description": "Compare Formula 1 drivers head-to-head with full career statistics.",
-        "url": "https://metrikdelta.com/stats",
-        "breadcrumb": {
-          "@type": "BreadcrumbList",
-          "itemListElement": [
-            { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://metrikdelta.com" },
-            { "@type": "ListItem", "position": 2, "name": "Statistics", "item": "https://metrikdelta.com/stats" }
-          ]
-        }
-      }}
-    />
+    <SEO page={sitePages(CURRENT_SEASON_YEAR).statistics} />
     <div className="data-zone" style={{
       ...(isMobile ? { minHeight: '100vh', height: 'auto' } : { height: '100vh', overflow: 'hidden' }),
       display: 'grid', gridTemplateRows: isMobile ? 'auto 1fr' : '44px 1fr', gridTemplateColumns: 'minmax(0, 1fr)',
@@ -199,7 +179,7 @@ export default function StatisticsPage() {
                   appearance: 'none',
                 }}
               >
-                {Array.from({ length: CURRENT_SEASON_YEAR - FIRST_SEASON + 1 }, (_, i) => CURRENT_SEASON_YEAR - i).map(y => (
+                {Array.from({ length: CURRENT_SEASON_YEAR - STATISTICS_SINCE + 1 }, (_, i) => CURRENT_SEASON_YEAR - i).map(y => (
                   <option key={y} value={y}>{y}</option>
                 ))}
               </select>

@@ -2,6 +2,7 @@ import { Fragment, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import LegalLinks from '../components/LegalLinks';
 import SEO from '../components/SEO';
+import { sitePages } from '../seo/pages';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { getApiBase } from '../config';
 import { CURRENT_SEASON_YEAR } from '../hooks/useSubscription';
@@ -90,12 +91,7 @@ export default function LandingPage() {
 
   return (
     <>
-    <SEO
-      path="/"
-      title="METRIK DELTA - Professional F1 Telemetry Analysis"
-      description={`Compare Formula 1 drivers lap by lap — speed, throttle, braking and gear telemetry, tire strategy and full head-to-head statistics from 2018 to ${CURRENT_SEASON_YEAR}.`}
-      keywords="f1 telemetry, formula 1 analysis, f1 data, f1 standings, f1 results, grand prix results, f1 telemetry comparison, race strategy f1, télémétrie f1"
-    />
+    <SEO page={sitePages(CURRENT_SEASON_YEAR).home} />
     <main style={{
       ...(isMobile ? { minHeight: '100dvh', height: 'auto', overflowX: 'hidden', overflowY: 'visible' }
                    : { height: '100dvh', overflow: 'hidden' }),
