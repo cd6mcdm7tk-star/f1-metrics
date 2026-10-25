@@ -2,7 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useState } from 'rea
 import type { User } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import { checkoutUrl, hasSubscription, type PlanType } from '../lib/subscription'
-import AuthModal from '../components/AuthModal'
+import AuthModal, { type AuthMode } from '../components/AuthModal'
+import { RESET_PASSWORD_PATH } from '../lib/recovery'
 
 const signUp = (email: string, password: string) => supabase.auth.signUp({ email, password })
 const signIn = (email: string, password: string) => supabase.auth.signInWithPassword({ email, password })
@@ -13,7 +14,8 @@ interface AuthContextType {
   signUp: typeof signUp
   signIn: typeof signIn
   signOut: () => Promise<void>
-  setAuthModalOpen: (open: boolean) => void
+  /** Opens the sign-in window on the login form, or on sign-up */
+  setAuthModalOpen: (open: boolean, mode?: AuthMode) => void
   isPremium: boolean
   premiumLoading: boolean
   /** Reads the subscription again, e.g. while a payment is being confirmed */
@@ -25,7 +27,11 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
-  const [authModalOpen, setAuthModalOpen] = useState(false)
+  // Each opening starts the window afresh, on the form asked for
+  const [authModal, setAuthModal] = useState<{ open: boolean; mode: AuthMode; opened: number }>({ open: false, mode: 'login', opened: 0 })
+  const setAuthModalOpen = useCallback((open: boolean, mode: AuthMode = 'login') => {
+    setAuthModal(current => (open ? { open, mode, opened: current.opened + 1 } : { ...current, open }))
+  }, [])
   const [isPremium, setIsPremium] = useState(false)
   const [premiumLoading, setPremiumLoading] = useState(true)
 
@@ -34,9 +40,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(session?.user ?? null)
       setLoading(false)
     })
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null)
       setLoading(false)
+      // A reset link that Supabase sent to another page still ends on the form to choose the new password
+      if (event === 'PASSWORD_RECOVERY' && window.location.pathname !== RESET_PASSWORD_PATH) window.location.assign(RESET_PASSWORD_PATH)
     })
     return () => subscription.unsubscribe()
   }, [])
@@ -82,7 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   return (
     <AuthContext.Provider value={{ user, loading, signUp, signIn, signOut, setAuthModalOpen, isPremium, premiumLoading, refreshPremium }}>
       {children}
-      <AuthModal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} />
+      <AuthModal key={authModal.opened} isOpen={authModal.open} mode={authModal.mode} onClose={() => setAuthModalOpen(false)} />
     </AuthContext.Provider>
   )
 }

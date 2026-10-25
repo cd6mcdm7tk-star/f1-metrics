@@ -1,22 +1,17 @@
 import { useState } from 'react'
-import { X, Mail, CheckCircle, Loader2 } from 'lucide-react'
+import { Mail, CheckCircle, Loader2 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
+import { Card, ErrorBanner } from './AuthCard'
+import { googleButtonStyle, headingStyle, inputStyle, labelStyle, linkStyle, P, primaryButtonStyle, subStyle } from './authStyle'
+
+export type AuthMode = 'login' | 'signup'
 
 interface AuthModalProps {
   isOpen: boolean
   onClose: () => void
-}
-
-// Cream `.data-zone` palette (index.css), matching UpgradeModal — hardcoded
-// rather than read via CSS vars so the modal looks the same wherever it opens.
-// `bg` is the text colour on accent buttons. #b42318 errors: 5.3:1 on `panel`.
-const P = {
-  bg: '#f2e6d8', surface: '#e5dcc9', panel: '#ede5d5', input: '#f6f1e8',
-  accent: '#5e1018', text: '#1c0407',
-  text2: 'rgba(28,4,7,0.62)', text3: 'rgba(28,4,7,0.58)',
-  border: 'rgba(94,16,24,0.22)', borderHi: 'rgba(94,16,24,0.48)',
-  error: '#b42318', errorBg: 'rgba(180,35,24,0.07)', errorBorder: 'rgba(180,35,24,0.35)',
+  /** The form it opens on: signing up when the user came for PRO */
+  mode?: AuthMode
 }
 
 function GoogleIcon() {
@@ -27,74 +22,6 @@ function GoogleIcon() {
       <path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
       <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
     </svg>
-  )
-}
-
-// ── Shared style fragments (mirrors SessionExplorer's SelectField / label
-//    conventions: JetBrains Mono, uppercase, letter-spaced) ──────────────────
-
-const labelStyle: React.CSSProperties = {
-  display: 'block', marginBottom: 6,
-  fontFamily: "'JetBrains Mono', monospace",
-  fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase',
-  color: P.text3,
-}
-
-const inputStyle: React.CSSProperties = {
-  width: '100%', padding: '10px 12px', boxSizing: 'border-box',
-  background: P.input,
-  border: `1px solid ${P.borderHi}`,
-  borderRadius: 'var(--r)',
-  color: P.text,
-  fontFamily: "'JetBrains Mono', monospace", fontSize: 12,
-  outline: 'none',
-}
-
-const headingStyle: React.CSSProperties = {
-  fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 24,
-  letterSpacing: '0.04em', textTransform: 'uppercase',
-  color: P.text, margin: '0 0 6px', lineHeight: 1.1,
-}
-
-const subStyle: React.CSSProperties = {
-  fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: '0.02em',
-  color: P.text2, margin: '0 0 22px', lineHeight: 1.5,
-}
-
-const primaryButtonStyle: React.CSSProperties = {
-  width: '100%', padding: '12px 0',
-  background: P.accent, color: P.bg,
-  border: 'none', borderRadius: 'var(--r)',
-  fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 11,
-  letterSpacing: '0.14em', textTransform: 'uppercase',
-  cursor: 'pointer', transition: 'opacity 0.15s',
-}
-
-const googleButtonStyle: React.CSSProperties = {
-  width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-  padding: '11px 0', background: '#ffffff', color: '#3c4043',
-  border: '1px solid rgba(0,0,0,0.12)', borderRadius: 'var(--r)',
-  fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, letterSpacing: '0.04em',
-  cursor: 'pointer', transition: 'opacity 0.15s',
-}
-
-const linkStyle: React.CSSProperties = {
-  fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: '0.08em',
-  textTransform: 'uppercase', color: P.text2,
-  background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-  transition: 'color 0.15s',
-}
-
-function ErrorBanner({ children }: { children: React.ReactNode }) {
-  return (
-    <div style={{
-      background: P.errorBg, border: `1px solid ${P.errorBorder}`,
-      borderRadius: 'var(--r)', color: P.error,
-      fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, lineHeight: 1.4,
-      padding: '10px 12px', marginBottom: 16,
-    }}>
-      {children}
-    </div>
   )
 }
 
@@ -114,41 +41,8 @@ function Divider({ label }: { label: string }) {
   )
 }
 
-function Card({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
-  return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: 50,
-      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
-      background: 'rgba(28,4,7,0.55)', backdropFilter: 'blur(4px)',
-    }}>
-      <div role="dialog" aria-modal="true" style={{
-        position: 'relative', width: '100%', maxWidth: 420,
-        background: P.panel, color: P.text,
-        border: `1px solid ${P.borderHi}`, borderTop: `3px solid ${P.accent}`, borderRadius: 'var(--r2)',
-        boxShadow: '0 24px 60px rgba(28,4,7,0.35)',
-        padding: '32px 28px 28px',
-      }}>
-        <button
-          onClick={onClose}
-          aria-label="Close"
-          style={{
-            position: 'absolute', top: 16, right: 16,
-            color: P.text3, background: 'transparent', border: 'none',
-            cursor: 'pointer', padding: 4, lineHeight: 0, transition: 'color 0.15s',
-          }}
-          onMouseEnter={e => { e.currentTarget.style.color = P.text }}
-          onMouseLeave={e => { e.currentTarget.style.color = P.text3 }}
-        >
-          <X size={18} />
-        </button>
-        {children}
-      </div>
-    </div>
-  )
-}
-
-export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
-  const [isLogin, setIsLogin] = useState(true)
+export default function AuthModal({ isOpen, onClose, mode = 'login' }: AuthModalProps) {
+  const [isLogin, setIsLogin] = useState(mode === 'login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)

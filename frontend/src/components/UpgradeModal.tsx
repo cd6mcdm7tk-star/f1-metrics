@@ -77,9 +77,10 @@ export default function UpgradeModal({ isOpen, onClose, reason = 'current_season
 
   const handleUpgrade = async () => {
     if (!user) {
-      // Remembered intent: checkout starts automatically after sign-in
+      // Remembered intent: checkout starts automatically after sign-in.
+      // Someone without an account yet is far likelier to be new: sign-up first
       sessionStorage.setItem('pendingUpgrade', selectedPlan)
-      setAuthModalOpen(true)
+      setAuthModalOpen(true, 'signup')
       onClose()
       return
     }

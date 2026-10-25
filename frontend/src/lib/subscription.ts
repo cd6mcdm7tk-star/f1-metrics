@@ -11,8 +11,8 @@ export async function checkoutUrl(plan: PlanType, withdrawalWaived: true): Promi
   const response = await fetch(`${getApiBase()}/create-checkout-session`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-    // The backend takes the user from the token; the id stays for a backend deployed before it did
-    body: JSON.stringify({ plan_type: plan, withdrawal_waiver: withdrawalWaived, user_id: session.user.id }),
+    // The backend takes the user from the token
+    body: JSON.stringify({ plan_type: plan, withdrawal_waiver: withdrawalWaived }),
   })
   const data = await response.json()
   if (!response.ok || !data.checkout_url) throw new Error(data.detail ?? `HTTP ${response.status}`)

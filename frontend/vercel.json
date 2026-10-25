@@ -25,6 +25,10 @@
     {
       "source": "/cancel",
       "destination": "/index.html"
+    },
+    {
+      "source": "/reset-password",
+      "destination": "/index.html"
     }
   ],
   "headers": [

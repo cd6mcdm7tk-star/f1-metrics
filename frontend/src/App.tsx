@@ -3,6 +3,7 @@ import { lazy, Suspense } from 'react';
 import { AuthProvider } from './contexts/AuthContext';
 import GoogleAnalytics from './components/GoogleAnalytics';
 import CookieConsent from './components/CookieConsent';
+import { RESET_PASSWORD_PATH } from './lib/recovery';
 
 const LandingPage    = lazy(() => import('./pages/LandingPage'));
 const TelemetryPage  = lazy(() => import('./pages/TelemetryPage'));
@@ -12,6 +13,7 @@ const CancelPage     = lazy(() => import('./pages/CancelPage'));
 const AboutPage      = lazy(() => import('./pages/AboutPage'));
 const MethodologyPage = lazy(() => import('./pages/MethodologyPage'));
 const NotFoundPage   = lazy(() => import('./pages/NotFoundPage'));
+const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
 
 const Spinner = () => (
   <div className="flex items-center justify-center h-screen" style={{ background: '#3d0c10' }}>
@@ -34,6 +36,7 @@ function App() {
             <Route path="/cancel"  element={<CancelPage />} />
             <Route path="/about"   element={<AboutPage />} />
             <Route path="/methodology" element={<MethodologyPage />} />
+            <Route path={RESET_PASSWORD_PATH} element={<ResetPasswordPage />} />
             <Route path="*"        element={<NotFoundPage />} />
           </Routes>
         </Suspense>
