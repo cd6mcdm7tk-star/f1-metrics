@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { linkError, passwordProblem } from './recovery'
+import { linkError, passwordProblem, recoveryToken } from './recovery'
 
 describe('password reset link', () => {
   it('reads nothing wrong in a valid link', () => {
@@ -11,6 +11,14 @@ describe('password reset link', () => {
     expect(linkError('https://metrikdelta.com/reset-password#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid'))
       .toBe('This reset link has expired or was already used. Ask for a new one.')
     expect(linkError('https://metrikdelta.com/reset-password?error=server_error&error_description=Something+broke')).toBe('Something broke')
+  })
+})
+
+describe('reset link pointing at the site', () => {
+  it('reads its one-time token, for recovery links only', () => {
+    expect(recoveryToken('https://metrikdelta.com/reset-password?token_hash=abc123&type=recovery')).toBe('abc123')
+    expect(recoveryToken('https://metrikdelta.com/reset-password?token_hash=abc123&type=signup')).toBeNull()
+    expect(recoveryToken('https://metrikdelta.com/reset-password')).toBeNull()
   })
 })
 

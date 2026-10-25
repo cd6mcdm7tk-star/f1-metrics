@@ -1,11 +1,11 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Helmet } from 'react-helmet-async'
 import { useNavigate } from 'react-router-dom'
 import { KeyRound, Loader2 } from 'lucide-react'
 import { Card, ErrorBanner } from '../components/AuthCard'
 import { headingStyle, inputStyle, labelStyle, P, primaryButtonStyle, subStyle } from '../components/authStyle'
 import { useAuth } from '../contexts/AuthContext'
-import { linkError, MIN_PASSWORD_LENGTH, passwordProblem } from '../lib/recovery'
+import { EXPIRED_LINK, linkError, MIN_PASSWORD_LENGTH, passwordProblem, RESET_PASSWORD_PATH, recoveryToken } from '../lib/recovery'
 import { supabase } from '../lib/supabase'
 
 function Icon() {
@@ -21,12 +21,29 @@ function Icon() {
   )
 }
 
-/** Where a password reset email leads: Supabase has signed the user in from
- * the link, and they choose their new password. An expired or used link says so. */
+/** Where a password reset email leads. Our email's link carries a one-time
+ * token the page exchanges for a session; a link through Supabase arrives
+ * signed in already. Then the user chooses their new password. An expired or
+ * used link says so. */
 export default function ResetPasswordPage() {
   const navigate = useNavigate()
   const { user, loading, setAuthModalOpen } = useAuth()
-  const [problem] = useState(() => linkError(window.location.href))
+  const [problem, setProblem] = useState(() => linkError(window.location.href))
+  const [token] = useState(() => recoveryToken(window.location.href))
+  const [verifying, setVerifying] = useState(token != null)
+  const exchanged = useRef(false)
+
+  useEffect(() => {
+    // Once: the token works a single time (React runs effects twice in development)
+    if (!token || exchanged.current) return
+    exchanged.current = true
+    supabase.auth.verifyOtp({ token_hash: token, type: 'recovery' }).then(({ error: failed }) => {
+      if (failed) setProblem(EXPIRED_LINK)
+      // A refresh must not try the used token again
+      window.history.replaceState(null, '', RESET_PASSWORD_PATH)
+      setVerifying(false)
+    })
+  }, [token])
   const [password, setPassword] = useState('')
   const [confirmation, setConfirmation] = useState('')
   const [error, setError] = useState('')
@@ -49,7 +66,7 @@ export default function ResetPasswordPage() {
   }
 
   const content = () => {
-    if (loading) {
+    if (loading || verifying) {
       return (
         <div style={{ display: 'flex', justifyContent: 'center', padding: '24px 0' }}>
           <Loader2 size={24} color={P.accent} className="animate-spin" />

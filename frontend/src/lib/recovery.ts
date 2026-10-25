@@ -1,6 +1,9 @@
 /** Where Supabase's password reset links land (also in vercel.json's rewrites) */
 export const RESET_PASSWORD_PATH = '/reset-password'
 
+/** What an expired or already used reset link says */
+export const EXPIRED_LINK = 'This reset link has expired or was already used. Ask for a new one.'
+
 /** Supabase's own minimum password length */
 export const MIN_PASSWORD_LENGTH = 6
 
@@ -12,8 +15,16 @@ export function linkError(url: string): string | null {
   const code = fragment.get('error_code') ?? searchParams.get('error_code')
   const description = fragment.get('error_description') ?? searchParams.get('error_description')
   if (!code && !description) return null
-  if (code === 'otp_expired') return 'This reset link has expired or was already used. Ask for a new one.'
+  if (code === 'otp_expired') return EXPIRED_LINK
   return description ?? 'This reset link is not valid. Ask for a new one.'
+}
+
+/** The one-time token of a reset link that points at the site itself
+ * (`/reset-password?token_hash=…&type=recovery`, from our email template),
+ * which the page exchanges for a session */
+export function recoveryToken(url: string): string | null {
+  const { searchParams } = new URL(url)
+  return searchParams.get('type') === 'recovery' ? searchParams.get('token_hash') : null
 }
 
 /** What is wrong with a new password and its confirmation, if anything */
