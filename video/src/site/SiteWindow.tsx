@@ -20,7 +20,7 @@ const NO_TRANSITIONS = '.site-capture *, .site-capture *::before, .site-capture 
 
 /** Holds the first frame until the charts have measured their size, which
  * Recharts' ResponsiveContainer does after the first paint. */
-function useChartsMeasured() {
+export function useChartsMeasured() {
   const [handle] = useState(() => delayRender('Charts measuring their size'));
   useEffect(() => {
     let id = requestAnimationFrame(() => { id = requestAnimationFrame(() => continueRender(handle)); });

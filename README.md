@@ -92,6 +92,16 @@ A qualifying recap (`video/src/quali/`) shows the top ten as a starting grid, te
 npm run render -- quali --year 2026 --gp 17 --lang fr   # out/2026-marinabay-quali-fr.mp4
 ```
 
+The newer series are animations first, with the site as the proof (`video/src/kit/`): the circuit in 3D from the laps' positions under a perspective camera that can fly over it or ride behind a car (`Track3D`, `projection.ts`), the car's instruments, schematics drawn as the voice explains them, and the site's own charts as the proof. Each video is told beat by beat, one line of its script per beat (`kit/timeline.ts`).
+
+- **La Bible F1** (`video/src/bible/`): one technical idea per episode, explained by animation, then proven on a real lap. Episode 1, the apex, on Austin 2025's pole lap.
+- **Qualifying** (`video/src/pole/`): the top six as a starting grid, the pole lap against the runner-up's on the same clock, the corner it was won in, P3 to P6 one by one, the sectors and top speeds. The official order comes from OpenF1, as Jolpica publishes it hours later; a circuit the current season has no corner numbers for yet takes last year's, matched by position.
+
+```bash
+npm run render -- bible --episode corde --lang fr
+npm run render -- pole --year 2026 --gp 18 --lang fr   # needs narration/2026-austin-pole.fr.json
+```
+
 Telemetry whose distances disagree with its lap time is scaled back to the lap's length before anything is measured (`withLapLength`): some of the API's 2026 laps come with distances about ten times too long.
 
 **Voiceover.** What the voice says comes from `video/narration/<video>.<lang>.json` when a script has been written for that video, or is generated from the analysis. The render speaks it with [Chatterbox](https://huggingface.co/mlx-community/chatterbox-multilingual-v3) on Apple Silicon, times the video to it and writes the script as `.srt` next to the video (`--silent` skips the voice). One-time setup:

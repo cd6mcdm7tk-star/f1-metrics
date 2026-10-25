@@ -133,6 +133,18 @@ export function showWords(words: { word: string; start: number; end: number }[],
       shown.push({ text: `${value}${trailing(w.word)}`, start: w.start, end: w.end, figure: true });
       continue;
     }
+    // "quarante pour cent" → "40 %", "forty percent" → "40 %"
+    // How many words after this one the percentage takes, or -1 when it isn't one
+    const percent = lang === 'fr'
+      ? normalise(w.word) === 'pour' && /^cents?$/.test(normalise(words[i + 1]?.word ?? '')) ? 1 : -1
+      : normalise(w.word) === 'percent' ? 0 : -1;
+    if (percent >= 0 && shown[shown.length - 1]?.figure) {
+      const last = words[i + percent];
+      const figure = shown[shown.length - 1];
+      shown[shown.length - 1] = { ...figure, text: `${figure.text} %${trailing(last.word)}`, end: last.end };
+      i += percent;
+      continue;
+    }
     if (lang === 'fr' && normalise(w.word) === 'kilometresheure') {
       shown.push({ text: `km/h${trailing(w.word)}`, start: w.start, end: w.end, figure: true });
       continue;

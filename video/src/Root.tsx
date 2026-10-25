@@ -5,6 +5,11 @@ import { LANGS } from './i18n';
 import MascotAvatar, { AVATAR_SIZE } from './mascot/MascotAvatar';
 import MascotLine, { calculateMascotLine } from './mascot/MascotLine';
 import ShareImage, { SHARE_SIZE } from './mascot/ShareImage';
+import StyleFrames, { calculateStyleFrames } from './kit/StyleFrames';
+import CordeEpisode, { calculateCordeMetadata } from './bible/CordeEpisode';
+import cordeFr from '../narration/bible-01-corde.fr.json';
+import PoleRecap, { calculatePoleMetadata } from './pole/PoleRecap';
+import austinPoleFr from '../narration/2026-austin-pole.fr.json';
 import QualiRecap, { calculateQualiMetadata, QUALI_FRAMES } from './quali/QualiRecap';
 import type { QualiNarration } from './quali/story';
 import GrandPrixRecap, { calculateRecapMetadata, RECAP_FRAMES } from './recap/GrandPrixRecap';
@@ -67,6 +72,15 @@ export default function Root() {
       <Still id="MascotSheet" component={MascotSheet} width={VIDEO.width} height={VIDEO.height} />
       <Still id="MascotAvatar" component={MascotAvatar} width={AVATAR_SIZE} height={AVATAR_SIZE} />
       <Still id="ShareImage" component={ShareImage} width={SHARE_SIZE.width} height={SHARE_SIZE.height} />
+      <Composition
+        id="BibleCorde-fr" component={CordeEpisode} durationInFrames={4200} fps={VIDEO.fps} width={VIDEO.width} height={VIDEO.height}
+        defaultProps={{ lang: 'fr', duel: null, narration: cordeFr, voiceover: null }} calculateMetadata={calculateCordeMetadata}
+      />
+      <Composition
+        id="PoleRecap-fr" component={PoleRecap} durationInFrames={4500} fps={VIDEO.fps} width={VIDEO.width} height={VIDEO.height}
+        defaultProps={{ lang: 'fr', query: { year: 2026, gp: 18 }, session: null, narration: austinPoleFr, voiceover: null }} calculateMetadata={calculatePoleMetadata}
+      />
+      <Composition id="StyleFrames" component={StyleFrames} durationInFrames={4} fps={VIDEO.fps} width={VIDEO.width} height={VIDEO.height} defaultProps={{ duel: null }} calculateMetadata={calculateStyleFrames} />
       {LANGS.map(lang => (
         <Composition
           key={lang}

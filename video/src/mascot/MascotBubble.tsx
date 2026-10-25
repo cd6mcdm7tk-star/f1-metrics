@@ -11,13 +11,13 @@ const HEADROOM = 104;
 const MUZZLE_BOTTOM = 610;
 
 /** The mascot in a round window in the corner while the data is on screen,
- * still saying the lines: it pops in at `from` */
-export default function MascotBubble({ lines, from, to }: { lines: VoiceLine[]; from: number; to: number }) {
+ * still saying the lines: it pops in at `from`. `at` moves it elsewhere. */
+export default function MascotBubble({ lines, from, to, at = BUBBLE }: { lines: VoiceLine[]; from: number; to: number; at?: { x: number; y: number; size: number } }) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   if (frame < from || frame >= to) return null;
   const pop = spring({ frame: frame - from, fps, config: { damping: 13, stiffness: 170 } });
-  const { x, y, size } = BUBBLE;
+  const { x, y, size } = at;
   const r = size / 2;
   const scale = size / 400;
   // Inside the circle, or anywhere above its middle

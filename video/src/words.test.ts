@@ -55,6 +55,12 @@ describe('showWords', () => {
     expect(showWords(at(['deux', 'trois']), 'fr').map(w => w.text)).toEqual(['2', '3']);
   });
 
+  it('shows a percentage as a figure with its sign', () => {
+    expect(showWords(at(['quarante', 'pour', 'cent', 'de', 'plus.']), 'fr').map(w => w.text)).toEqual(['40 %', 'de', 'plus.']);
+    expect(showWords(at(['forty', 'percent.']), 'en').map(w => w.text)).toEqual(['40 %.']);
+    expect(showWords(at(['pour', 'cent']), 'fr').map(w => w.text)).toEqual(['pour', '100']);
+  });
+
   it('shows numbers as figures and speeds as km/h', () => {
     expect(showWords(at(['Neuf', 'kilomètres-heure', 'de', 'moins.']), 'fr').map(w => w.text)).toEqual(['9', 'km/h', 'de', 'moins.']);
     expect(showWords(at(['nine', 'kilometres', 'an', 'hour', 'down.']), 'en').map(w => w.text)).toEqual(['9', 'km/h', 'down.']);

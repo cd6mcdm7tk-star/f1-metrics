@@ -4,12 +4,18 @@
 //   npm run render -- duel --year 2025 --gp 1 --session Q --drivers NOR,PIA [--laps 19,17] [--lang fr] [--silent]
 //   npm run render -- recap --year 2026 --gp 17 [--lang fr] [--silent]
 //   npm run render -- quali --year 2026 --gp 17 [--lang fr] [--silent]
+//   npm run render -- bible --episode corde [--lang fr] [--silent]
+//   npm run render -- pole --year 2026 --gp 18 [--lang fr] [--silent]
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { bundle } from '@remotion/bundler';
 import { renderMedia, selectComposition } from '@remotion/renderer';
 import { fetchDuel, fetchQuali, fetchRecap, type DuelQuery } from '../src/api';
+import { buildCorde, CORDE_QUERY, type CordeNarration } from '../src/bible/corde';
+import type { Duel } from '../src/duel/data';
+import { fetchPoleSession, type PoleSession } from '../src/pole/data';
+import { buildPole, type PoleNarration } from '../src/pole/story';
 import { analyse } from '../src/duel/analysis';
 import { buildStory } from '../src/duel/story';
 import { VIDEO } from '../src/format';
@@ -28,6 +34,8 @@ const USAGE = [
   'npm run render -- duel --year 2025 --gp 1 --session Q --drivers NOR,PIA [--laps 19,17] [--lang fr] [--silent]',
   'npm run render -- recap --year 2026 --gp 17 [--lang fr] [--silent]',
   'npm run render -- quali --year 2026 --gp 17 [--lang fr] [--silent]',
+  'npm run render -- bible --episode corde [--lang fr] [--silent]',
+  'npm run render -- pole --year 2026 --gp 18 [--lang fr] [--silent]',
 ].join('\n');
 
 const { positionals, values } = parseArgs({
@@ -38,13 +46,17 @@ const { positionals, values } = parseArgs({
     session: { type: 'string', default: 'Q' },
     drivers: { type: 'string' },
     laps: { type: 'string' },
+    episode: { type: 'string' },
     lang: { type: 'string' },
     silent: { type: 'boolean', default: false },
   },
 });
 
 const [template] = positionals;
-if (!values.year || !values.gp || !['duel', 'recap', 'quali'].includes(template) || (template === 'duel' && !values.drivers)) {
+const valid = template === 'bible'
+  ? values.episode === 'corde'
+  : !!values.year && !!values.gp && ['duel', 'recap', 'quali', 'pole'].includes(template) && (template !== 'duel' || !!values.drivers);
+if (!valid) {
   console.error(USAGE);
   process.exit(1);
 }
@@ -126,7 +138,41 @@ async function qualiJob(): Promise<Job> {
   };
 }
 
-const job = template === 'duel' ? await duelJob() : template === 'recap' ? await recapJob() : await qualiJob();
+/** La Bible F1: an episode explained on one lap, its script required */
+async function bibleJob(): Promise<Job> {
+  const { year, gp, session, drivers } = CORDE_QUERY;
+  const duel = await cached<Duel>(`duel-${year}-${gp}-${session}-${drivers.join('-')}`, () => fetchDuel(CORDE_QUERY));
+  const slug = 'bible-01-corde';
+  return {
+    slug,
+    output: slug,
+    composition: lang => `BibleCorde-${lang}`,
+    take: (lang, voiceover) => {
+      const narration = readScript<CordeNarration>(slug, lang);
+      if (!narration) throw new Error(`narration/${slug}.${lang}.json is missing: this episode has no generated script`);
+      return { inputProps: { lang, duel, narration, voiceover }, voice: buildCorde(narration, lang, voiceover).voice };
+    },
+  };
+}
+
+/** Saturday's video: qualifying through its top six, its script required */
+async function poleJob(): Promise<Job> {
+  const query = { year: Number(values.year), gp: Number(values.gp) };
+  const session = await cached<PoleSession>(`pole-${query.year}-${query.gp}`, () => fetchPoleSession(query));
+  const slug = [query.year, session.location, 'pole'].join('-').toLowerCase().replace(/[^a-z0-9-]+/g, '');
+  return {
+    slug,
+    output: slug,
+    composition: lang => `PoleRecap-${lang}`,
+    take: (lang, voiceover) => {
+      const narration = readScript<PoleNarration>(slug, lang);
+      if (!narration) throw new Error(`narration/${slug}.${lang}.json is missing: write the script from the session's facts first`);
+      return { inputProps: { lang, query, session, narration, voiceover }, voice: buildPole(narration, session.drivers, lang, voiceover).voice };
+    },
+  };
+}
+
+const job = template === 'pole' ? await poleJob() : template === 'bible' ? await bibleJob() : template === 'duel' ? await duelJob() : template === 'recap' ? await recapJob() : await qualiJob();
 
 // Each language's voiceover, spoken before bundling, which copies public/.
 // The lines don't depend on the timing: speak them, then time the video to them.
