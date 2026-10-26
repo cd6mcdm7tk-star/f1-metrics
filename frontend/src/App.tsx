@@ -1,8 +1,10 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import { AuthProvider } from './contexts/AuthContext';
 import GoogleAnalytics from './components/GoogleAnalytics';
 import CookieConsent from './components/CookieConsent';
+import { beforeSend } from './lib/analytics';
 import { RESET_PASSWORD_PATH } from './lib/recovery';
 
 const LandingPage    = lazy(() => import('./pages/LandingPage'));
@@ -25,6 +27,8 @@ function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
+        {/* Cookieless, so it counts every visit, consent or not */}
+        <Analytics beforeSend={beforeSend} />
         <GoogleAnalytics />
         <CookieConsent />
         <Suspense fallback={<Spinner />}>
