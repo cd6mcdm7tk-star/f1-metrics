@@ -97,7 +97,7 @@ async def get_session_laps(request: Request, year: int, gp_round: int, session_t
         if cached_data:
             return cached_data
 
-        if year >= 2026:
+        if year >= openf1.FIRST_SEASON:
             session_key = await openf1.get_session_key(year, gp_round, session_type)
             driver_num = await openf1.get_driver_number(session_key, driver)
             raw_laps = await openf1.request("laps", {"session_key": session_key, "driver_number": driver_num})

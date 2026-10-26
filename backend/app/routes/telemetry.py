@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from scipy.interpolate import interp1d
 from starlette.background import BackgroundTask
 
+from app import openf1
 from app.access import check_season_access
 from app.cache import redis_cache
 from app.limiter import limiter
@@ -74,17 +75,18 @@ async def get_telemetry_multi(request: Request, body: TelemetryMultiRequest):
         row = db_rows.get(db_lap_ref(lap_ref))
         raw = raw_lap_from_db_row(lap_ref, row) if row else None
         if raw is None:
-            if openf1_used and lap_ref.year >= 2026:
+            from_openf1 = lap_ref.year >= openf1.FIRST_SEASON
+            if openf1_used and from_openf1:
                 await asyncio.sleep(0.5)
             raw = await fetch_raw_lap(lap_ref)
-            openf1_used = openf1_used or lap_ref.year >= 2026
+            openf1_used = openf1_used or from_openf1
         raw_laps.append(raw)
 
     corners: list[dict] = []
     rotation: float = 0.0
     try:
         if circuit_data is None:
-            circuit_data = await asyncio.to_thread(circuit_corners, ref.year, ref.gp, ref.session)
+            circuit_data = await circuit_corners(ref.year, ref.gp, ref.session)
             await asyncio.to_thread(redis_cache.set, corners_key, circuit_data, 2592000)  # 30 days: layouts are static
         rotation = circuit_data["rotation"]
         # FastF1 and OpenF1 share the same X/Y frame (the F1 live-timing feed)

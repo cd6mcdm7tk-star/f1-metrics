@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from app.telemetry import aligned_distance, corner_distances, path_distances, prepare_tel
+from app.telemetry import aligned_distance, corner_distances, corners_from_multiviewer, path_distances, prepare_tel
 
 
 def test_prepare_tel_makes_distance_strictly_increasing_and_fills_channels():
@@ -72,3 +72,21 @@ def test_a_lap_without_usable_positions_keeps_its_distance():
     assert aligned_distance(dist, np.zeros(len(dist)), np.zeros(len(dist)), REF_DIST, REF_X, REF_Y) is dist
     elsewhere = aligned_distance(dist, dist * 10, np.full(len(dist), 9000.0), REF_DIST, REF_X, REF_Y)
     assert elsewhere is dist
+
+
+def test_multiviewer_layouts_give_corners_and_rotation():
+    data = {
+        "rotation": 280,
+        "corners": [
+            {"number": 1, "angle": -35.3, "trackPosition": {"x": 4294.86, "y": 2690.72}},
+            {"number": 9, "letter": "a", "trackPosition": {"x": -120, "y": 55.5}},
+        ],
+    }
+
+    assert corners_from_multiviewer(data) == {
+        "corners": [
+            {"number": 1, "letter": None, "x": 4294.86, "y": 2690.72},
+            {"number": 9, "letter": "a", "x": -120.0, "y": 55.5},
+        ],
+        "rotation": 280.0,
+    }

@@ -80,7 +80,7 @@ async def get_drivers(request: Request, year: int, gp_round: int, session_type: 
         if cached_data:
             return cached_data
 
-        if year >= 2023:
+        if year >= openf1.FIRST_SEASON:
             session_key = await openf1.get_session_key(year, gp_round, session_type)
             raw = await openf1.request("drivers", {"session_key": session_key})
             drivers = [

@@ -1,4 +1,5 @@
-"""OpenF1 client: the data source for the current season, read live."""
+"""OpenF1 client: the data source, read live, for every season it covers
+that isn't stored in PostgreSQL."""
 import asyncio
 import datetime
 import logging
@@ -17,6 +18,10 @@ from database import db
 logger = logging.getLogger(__name__)
 
 OPENF1_BASE = "https://api.openf1.org/v1"
+# OpenF1's first season. Earlier ones come from FastF1: F1's timing archive
+# is behind an F1 TV login since October 2026, and FastF1's mirror of it only
+# holds some seasons (2021 and 2022 in October 2026).
+FIRST_SEASON = 2023
 SESSION_NAMES = {
     "Q": "Qualifying",
     "R": "Race",
@@ -143,6 +148,14 @@ async def get_session_key(year: int, gp_round: int, session_type: str) -> int:
         await asyncio.to_thread(db.save_session_key, year, gp_round, session_type, session_key)
     redis_cache.set(redis_key, {"session_key": session_key}, ttl=86400)
     return session_key
+
+
+async def get_circuit_key(session_key: int) -> int:
+    """The circuit's key in F1's timing data, which MultiViewer's layouts use too."""
+    sessions = await request("sessions", {"session_key": session_key})
+    if not sessions or sessions[0].get("circuit_key") is None:
+        raise HTTPException(status_code=404, detail=f"No circuit found for session {session_key}")
+    return int(sessions[0]["circuit_key"])
 
 
 async def get_driver_number(session_key: int, driver_code: str) -> int:

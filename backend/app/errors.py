@@ -1,6 +1,9 @@
 import logging
 
 from fastapi import HTTPException
+from fastf1.core import DataNotLoadedError
+
+from app.openf1 import FIRST_SEASON
 
 logger = logging.getLogger(__name__)
 
@@ -8,6 +11,14 @@ logger = logging.getLogger(__name__)
 def fastf1_http_error(e: Exception, context: str = "") -> HTTPException:
     """Turns a FastF1 / data-source failure into an HTTP error with a clear message."""
     message = str(e).lower()
+
+    # What FastF1 raises once neither F1's archive nor its mirror had the session
+    if isinstance(e, DataNotLoadedError):
+        return HTTPException(status_code=503, detail={
+            "error": "Season unavailable",
+            "message": f"F1's timing archive now requires an account, so this session can't be loaded for now. {context}",
+            "suggestion": f"Sessions from {FIRST_SEASON} onwards are available.",
+        })
 
     if "session" in message and ("not found" in message or "does not exist" in message):
         return HTTPException(status_code=404, detail={

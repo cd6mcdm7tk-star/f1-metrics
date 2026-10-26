@@ -4,14 +4,18 @@ import logging
 from typing import Optional
 
 import fastf1
+import httpx
 import numpy as np
 import pandas as pd
 from fastapi import HTTPException
 from pydantic import BaseModel
 
 from app import openf1
+from app.errors import fastf1_http_error
 
 logger = logging.getLogger(__name__)
+
+MULTIVIEWER_CIRCUITS = "https://api.multiviewer.app/api/v1/circuits"
 
 
 class LapRef(BaseModel):
@@ -88,10 +92,10 @@ def raw_lap_from_db_row(lap_ref: LapRef, row: dict) -> dict | None:
 
 async def fetch_raw_lap(lap_ref: LapRef) -> dict:
     """Raw telemetry for one lap that isn't in PostgreSQL: OpenF1 for the
-    current season, FastF1 before that."""
+    seasons it covers, FastF1 before that."""
     year, gp, session, driver, lap = lap_ref.year, lap_ref.gp, lap_ref.session, lap_ref.driver, lap_ref.lap
 
-    if year >= 2026:
+    if year >= openf1.FIRST_SEASON:
         session_key = await openf1.get_session_key(year, gp, session)
         await asyncio.sleep(0.3)
         d_num = await openf1.get_driver_number(session_key, driver)
@@ -153,12 +157,43 @@ async def fetch_raw_lap(lap_ref: LapRef) -> dict:
             "lap_number": int(lap_row["LapNumber"]) if pd.notna(lap_row.get("LapNumber")) else (lap or 0),
         }
 
-    return await asyncio.to_thread(_ff1_fetch)
+    try:
+        return await asyncio.to_thread(_ff1_fetch)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise fastf1_http_error(e, f"Driver {driver}, {year} round {gp} {session}.")
 
 
-def circuit_corners(year: int, gp: int, session_type: str) -> dict:
+def corners_from_multiviewer(data: dict) -> dict:
+    """A MultiViewer circuit layout as {corners, rotation}: the data FastF1's
+    get_circuit_info reads, in the same X/Y frame as the laps."""
+    corners = [
+        {
+            "number": int(c["number"]),
+            "letter": (c.get("letter") or "").strip() or None,
+            "x": float(c["trackPosition"]["x"]),
+            "y": float(c["trackPosition"]["y"]),
+        }
+        for c in data.get("corners", [])
+    ]
+    return {"corners": corners, "rotation": float(data.get("rotation", 0.0))}
+
+
+async def circuit_corners(year: int, gp: int, session_type: str) -> dict:
     """Official FIA corner numbers with their (X, Y) positions, and the
-    circuit's display rotation — FastF1's circuit reference data."""
+    circuit's display rotation: MultiViewer's layout, found through OpenF1's
+    circuit key, or through FastF1 before OpenF1's first season."""
+    if year < openf1.FIRST_SEASON:
+        return await asyncio.to_thread(_fastf1_circuit_corners, year, gp, session_type)
+    circuit_key = await openf1.get_circuit_key(await openf1.get_session_key(year, gp, session_type))
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.get(f"{MULTIVIEWER_CIRCUITS}/{circuit_key}/{year}")
+        resp.raise_for_status()
+        return corners_from_multiviewer(resp.json())
+
+
+def _fastf1_circuit_corners(year: int, gp: int, session_type: str) -> dict:
     sess = fastf1.get_session(year, gp, session_type)
     sess.load(laps=True, telemetry=False, weather=False, messages=False)
     ci = sess.get_circuit_info()
