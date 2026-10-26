@@ -34,6 +34,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
   const [isPremium, setIsPremium] = useState(false)
   const [premiumLoading, setPremiumLoading] = useState(true)
+  // Whose subscription isPremium was read for: right after signing in it is still the previous user's
+  const [premiumFor, setPremiumFor] = useState<string | null>(null)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -60,7 +62,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setPremiumLoading(true)
     hasSubscription(user.id)
       .then(premium => { if (!cancelled) setIsPremium(premium) }, () => { if (!cancelled) setIsPremium(false) })
-      .then(() => { if (!cancelled) setPremiumLoading(false) })
+      .then(() => { if (!cancelled) { setPremiumLoading(false); setPremiumFor(user.id) } })
     return () => { cancelled = true }
   }, [user])
 
@@ -71,16 +73,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return premium
   }, [user])
 
-  // Checkout picked before signing in, the waiver already ticked (see UpgradeModal): resumed once signed in
+  // Checkout picked before signing in, the waiver already ticked (see UpgradeModal): resumed once
+  // signed in and known not to be PRO already
   useEffect(() => {
-    if (!user || premiumLoading || isPremium) return
+    if (!user || premiumFor !== user.id || isPremium) return
     const pending = sessionStorage.getItem('pendingUpgrade') as PlanType | null
     if (!pending) return
     sessionStorage.removeItem('pendingUpgrade')
     checkoutUrl(pending, true)
       .then(url => { window.location.href = url })
       .catch(err => console.error('Pending checkout failed:', err))
-  }, [user, premiumLoading, isPremium])
+  }, [user, premiumFor, isPremium])
 
   const signOut = async () => {
     await supabase.auth.signOut()

@@ -39,9 +39,13 @@ def current_season() -> int:
 
 def user_from_token(token: str) -> str:
     """The user id of a valid Supabase access token."""
+    return token_claims(token)["sub"]
+
+
+def token_claims(token: str) -> dict:
+    """What a valid Supabase access token says: `sub` the user id, `email` their address."""
     try:
-        payload = jwt.decode(token, os.getenv("SUPABASE_JWT_SECRET"), algorithms=["HS256"], audience="authenticated")
-        return payload["sub"]
+        return jwt.decode(token, os.getenv("SUPABASE_JWT_SECRET"), algorithms=["HS256"], audience="authenticated")
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
     except Exception:

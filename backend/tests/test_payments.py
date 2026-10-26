@@ -99,11 +99,17 @@ def client():
 TEST_SECRET = "a-test-secret-as-long-as-supabase-ones"
 
 
-def token(user_id: str, secret: str) -> str:
-    return jwt.encode({"sub": user_id, "aud": "authenticated"}, secret, algorithm="HS256")
+def token(user_id: str, secret: str, email: str | None = None) -> str:
+    claims = {"sub": user_id, "aud": "authenticated", **({"email": email} if email else {})}
+    return jwt.encode(claims, secret, algorithm="HS256")
 
 
-def test_checkout_needs_a_signed_in_user_and_uses_theirs(client, monkeypatch):
+@pytest.fixture
+def not_subscribed(monkeypatch):
+    monkeypatch.setattr(payments, "has_subscription", lambda _user_id: False)
+
+
+def test_checkout_needs_a_signed_in_user_and_uses_theirs(client, monkeypatch, not_subscribed):
     monkeypatch.setenv("SUPABASE_JWT_SECRET", TEST_SECRET)
     monkeypatch.setattr(payments, "PLANS", {"monthly": ("metrik_pro_monthly", "price_m"), "annual": ("metrik_pro_annual", "price_a")})
     created = {}
@@ -126,7 +132,7 @@ def test_checkout_needs_a_signed_in_user_and_uses_theirs(client, monkeypatch):
     assert created["line_items"] == [{"price": "price_m", "quantity": 1}]
 
 
-def test_checkout_records_the_withdrawal_waiver_and_needs_it(client, monkeypatch):
+def test_checkout_records_the_withdrawal_waiver_and_needs_it(client, monkeypatch, not_subscribed):
     monkeypatch.setenv("SUPABASE_JWT_SECRET", TEST_SECRET)
     monkeypatch.setattr(payments, "PLANS", {"monthly": ("metrik_pro_monthly", "price_m"), "annual": ("metrik_pro_annual", "price_a")})
     created = {}
@@ -141,6 +147,26 @@ def test_checkout_records_the_withdrawal_waiver_and_needs_it(client, monkeypatch
     assert created["metadata"]["withdrawal_waiver"] == "accepted"
     assert created["subscription_data"]["metadata"]["withdrawal_waiver_at"] == created["metadata"]["withdrawal_waiver_at"]
     assert "right of withdrawal" in created["custom_text"]["submit"]["message"]
+
+
+def test_checkout_starts_with_the_users_address_and_never_charges_a_subscriber_twice(client, monkeypatch):
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", TEST_SECRET)
+    monkeypatch.setattr(payments, "PLANS", {"monthly": ("metrik_pro_monthly", "price_m"), "annual": ("metrik_pro_annual", "price_a")})
+    created = {}
+    monkeypatch.setattr(payments.stripe.checkout.Session, "create",
+                        lambda **kwargs: created.update(kwargs) or type("Session", (), {"id": "cs_1", "url": "https://checkout.stripe.com"}))
+    subscribers = {"user-2"}
+    monkeypatch.setattr(payments, "has_subscription", lambda user_id: user_id in subscribers)
+    body = {"plan_type": "annual", "withdrawal_waiver": True}
+
+    headers = {"Authorization": f"Bearer {token('user-1', TEST_SECRET, 'fan@example.com')}"}
+    assert client.post("/api/create-checkout-session", json=body, headers=headers).status_code == 200
+    assert created["customer_email"] == "fan@example.com"
+
+    created.clear()
+    headers = {"Authorization": f"Bearer {token('user-2', TEST_SECRET, 'pro@example.com')}"}
+    assert client.post("/api/create-checkout-session", json=body, headers=headers).status_code == 409
+    assert not created
 
 
 def test_an_event_that_cannot_be_recorded_is_sent_again(client, monkeypatch):

@@ -1,6 +1,7 @@
 """METRIK PRO subscriptions: Stripe Checkout, its webhook, and the customer portal.
 Subscription state lives in Supabase's `subscriptions` table, a row per Stripe
 subscription: a user who subscribes again gets a new row beside the old one."""
+import asyncio
 import logging
 import os
 from datetime import datetime, timezone
@@ -10,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from app.access import CURRENT, subscriptions, user_from_token
+from app.access import CURRENT, has_subscription, subscriptions, token_claims, user_from_token
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
@@ -40,10 +41,15 @@ def get_authenticated_user_id(credentials: HTTPAuthorizationCredentials = Depend
     return user_from_token(credentials.credentials)
 
 
+def get_token_claims(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
+    return token_claims(credentials.credentials)
+
+
 @router.post("/create-checkout-session")
-async def create_checkout_session(request: Request, user_id: str = Depends(get_authenticated_user_id)):
+async def create_checkout_session(request: Request, claims: dict = Depends(get_token_claims)):
     """Stripe Checkout for the signed-in user: the token says who subscribes, not the
     request. The user must have waived their withdrawal period on the site."""
+    user_id = claims["sub"]
     body = await request.json()
     plan_type = body.get("plan_type", "annual")
     if body.get("withdrawal_waiver") is not True:
@@ -53,6 +59,9 @@ async def create_checkout_session(request: Request, user_id: str = Depends(get_a
     plan_name, price_id = PLANS[plan_type]
     if not price_id:
         raise HTTPException(status_code=500, detail=f"STRIPE_PRICE_ID_{plan_type.upper()} not configured")
+    # A subscriber sent here again (e.g. signing in from the paywall) isn't charged twice
+    if await asyncio.to_thread(has_subscription, user_id):
+        raise HTTPException(status_code=409, detail="This account already has METRIK PRO")
 
     # Kept on the session and on the subscription: the record of the waiver and when it was given
     metadata = {
@@ -69,6 +78,8 @@ async def create_checkout_session(request: Request, user_id: str = Depends(get_a
             success_url=f"{SITE_URL}/success?session_id={{CHECKOUT_SESSION_ID}}",
             cancel_url=f"{SITE_URL}/cancel",
             client_reference_id=user_id,
+            # Stripe's form starts with the address they signed up with
+            **({"customer_email": claims["email"]} if claims.get("email") else {}),
             metadata=metadata,
             subscription_data={"metadata": metadata},
             custom_text={"submit": {"message": WAIVER_NOTICE}},
