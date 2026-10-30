@@ -2,6 +2,7 @@ import { Users } from 'lucide-react';
 import type { H2HData, HoveredMetric } from '../../stats/types';
 import { lastName } from '../../stats/season';
 import { DISPLAY, MONO, share } from './shared';
+import { teamBadge } from '../../utils/teamColors';
 
 interface Row {
   label: string;
@@ -75,16 +76,16 @@ function StatRow({ row, color1, color2, hovered, onHover }: {
     >
       <span style={{
         width: 92, flexShrink: 0, lineHeight: 1.2,
-        fontFamily: MONO, fontSize: 7.5, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-3)',
+        fontFamily: MONO, fontSize: 'var(--fs-7-5)', letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-3)',
       }}>{label}</span>
-      <span style={{ fontFamily: DISPLAY, fontWeight: 800, fontSize: 12, color: color1, minWidth: 34, textAlign: 'right' }}>{display1}</span>
+      <span style={{ fontFamily: DISPLAY, fontWeight: 800, fontSize: 12, color: 'var(--text)', minWidth: 34, textAlign: 'right' }}>{display1}</span>
       {bar ? (
         <div style={{ flex: 1, height: 6, background: 'var(--bg)', borderRadius: 'var(--r)', overflow: 'hidden', border: '1px solid var(--border)', display: 'flex' }}>
           <div style={{ width: `${percent1}%`, background: color1, transition: 'width 0.4s' }} />
           <div style={{ width: `${percent2}%`, background: color2, transition: 'width 0.4s' }} />
         </div>
       ) : <div style={{ flex: 1 }} />}
-      <span style={{ fontFamily: DISPLAY, fontWeight: 800, fontSize: 12, color: color2, minWidth: 34, textAlign: 'left' }}>{display2}</span>
+      <span style={{ fontFamily: DISPLAY, fontWeight: 800, fontSize: 12, color: 'var(--text)', minWidth: 34, textAlign: 'left' }}>{display2}</span>
     </div>
   );
 }
@@ -105,7 +106,7 @@ export default function ComparisonCard({ h2h, placeholder, color1, color2, hover
         padding: '60px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
       }}>
         <Users size={40} style={{ color: 'var(--text-3)', marginBottom: 16 }} />
-        <p style={{ fontFamily: MONO, fontSize: 11, color: 'var(--text-2)', textAlign: 'center', margin: 0 }}>{placeholder}</p>
+        <p style={{ fontFamily: MONO, fontSize: 'var(--fs-11)', color: 'var(--text-2)', textAlign: 'center', margin: 0 }}>{placeholder}</p>
       </div>
     );
   }
@@ -115,20 +116,20 @@ export default function ComparisonCard({ h2h, placeholder, color1, color2, hover
     <div style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 'var(--r2)', padding: '10px 14px', height: '100%', display: 'flex', flexDirection: 'column' }}>
       <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 8, marginBottom: 2, borderBottom: '1px solid var(--border-hi)' }}>
         <div>
-          <h2 style={{ fontFamily: DISPLAY, fontWeight: 800, fontSize: 15, margin: '0 0 2px', color: color1, whiteSpace: 'nowrap' }}>{lastName(d1.name)}</h2>
-          <p style={{ fontFamily: MONO, fontSize: 8, color: 'var(--text-3)', margin: 0 }}>{d1.team}</p>
+          <h2 style={{ fontFamily: DISPLAY, fontWeight: 800, fontSize: 15, margin: '0 0 2px', color: 'var(--text)', whiteSpace: 'nowrap', display: 'inline-block', borderBottom: `3px solid ${color1}` }}>{lastName(d1.name)}</h2>
+          <p style={{ fontFamily: MONO, fontSize: 'var(--fs-8)', color: 'var(--text-3)', margin: 0 }}>{d1.team}</p>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-            <span style={{ fontFamily: DISPLAY, fontWeight: 800, fontSize: 18, color: color1, lineHeight: 1 }}>{d1.stats.points}</span>
-            <span style={{ fontFamily: MONO, fontSize: 8, color: 'var(--text-3)' }}>vs</span>
-            <span style={{ fontFamily: DISPLAY, fontWeight: 800, fontSize: 18, color: color2, lineHeight: 1 }}>{d2.stats.points}</span>
+            <span style={{ ...teamBadge(color1), fontFamily: DISPLAY, fontWeight: 800, fontSize: 18, lineHeight: 1.1 }}>{d1.stats.points}</span>
+            <span style={{ fontFamily: MONO, fontSize: 'var(--fs-8)', color: 'var(--text-3)' }}>vs</span>
+            <span style={{ ...teamBadge(color2), fontFamily: DISPLAY, fontWeight: 800, fontSize: 18, lineHeight: 1.1 }}>{d2.stats.points}</span>
           </div>
-          <span style={{ fontFamily: MONO, fontSize: 7, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text-3)' }}>Points</span>
+          <span style={{ fontFamily: MONO, fontSize: 'var(--fs-7)', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text-3)' }}>Points</span>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <h2 style={{ fontFamily: DISPLAY, fontWeight: 800, fontSize: 15, margin: '0 0 2px', color: color2, whiteSpace: 'nowrap' }}>{lastName(d2.name)}</h2>
-          <p style={{ fontFamily: MONO, fontSize: 8, color: 'var(--text-3)', margin: 0 }}>{d2.team}</p>
+          <h2 style={{ fontFamily: DISPLAY, fontWeight: 800, fontSize: 15, margin: '0 0 2px', color: 'var(--text)', whiteSpace: 'nowrap', display: 'inline-block', borderBottom: `3px solid ${color2}` }}>{lastName(d2.name)}</h2>
+          <p style={{ fontFamily: MONO, fontSize: 'var(--fs-8)', color: 'var(--text-3)', margin: 0 }}>{d2.team}</p>
         </div>
       </div>
 

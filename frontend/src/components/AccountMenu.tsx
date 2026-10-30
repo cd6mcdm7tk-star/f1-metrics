@@ -30,7 +30,7 @@ export default function AccountMenu() {
   const name = user.email?.split('@')[0];
 
   if (!isPremium) {
-    return <span style={{ fontFamily: MONO, fontSize: 9, color: 'var(--text-2)' }}>{name}</span>;
+    return <span style={{ fontFamily: MONO, fontSize: 'var(--fs-9)', color: 'var(--text-2)' }}>{name}</span>;
   }
 
   const openPortal = async () => {
@@ -59,7 +59,7 @@ export default function AccountMenu() {
         aria-expanded={open}
         style={{
           display: 'flex', alignItems: 'center', gap: 3,
-          fontFamily: MONO, fontSize: 9, color: open ? 'var(--text)' : 'var(--text-2)',
+          fontFamily: MONO, fontSize: 'var(--fs-9)', color: open ? 'var(--text)' : 'var(--text-2)',
           background: 'transparent', border: 'none', padding: '2px 0', cursor: 'pointer', outline: 'none',
         }}
         onMouseEnter={e => { e.currentTarget.style.color = 'var(--text)'; }}
@@ -75,7 +75,7 @@ export default function AccountMenu() {
           background: 'var(--bg)', border: '1px solid var(--border-hi)', borderTop: '2px solid var(--accent)',
           borderRadius: 'var(--r2)', boxShadow: '0 12px 30px rgba(28,4,7,0.18)', padding: 6,
         }}>
-          <p style={{ fontFamily: MONO, fontSize: 8, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--accent)', margin: '4px 8px 6px' }}>
+          <p style={{ fontFamily: MONO, fontSize: 'var(--fs-8)', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--accent)', margin: '4px 8px 6px' }}>
             METRIK PRO
           </p>
           <button
@@ -90,16 +90,16 @@ export default function AccountMenu() {
             onMouseEnter={e => { e.currentTarget.style.background = 'var(--accent-10)'; }}
             onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
           >
-            <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: MONO, fontSize: 10, fontWeight: 700, color: 'var(--text)' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: MONO, fontSize: 'var(--fs-10)', fontWeight: 700, color: 'var(--text)' }}>
               Manage subscription
               {opening && <Loader2 size={11} className="animate-spin" />}
             </span>
-            <span style={{ display: 'block', marginTop: 3, fontFamily: MONO, fontSize: 8.5, lineHeight: 1.5, color: 'var(--text-2)' }}>
+            <span style={{ display: 'block', marginTop: 3, fontFamily: MONO, fontSize: 'var(--fs-8-5)', lineHeight: 1.5, color: 'var(--text-2)' }}>
               Cancel, change card, invoices
             </span>
           </button>
           {failed && (
-            <p style={{ fontFamily: MONO, fontSize: 8.5, lineHeight: 1.5, color: '#b42318', margin: '4px 8px' }}>
+            <p style={{ fontFamily: MONO, fontSize: 'var(--fs-8-5)', lineHeight: 1.5, color: '#b42318', margin: '4px 8px' }}>
               Couldn't open the portal. Try again, or write to contact@metrikdelta.com.
             </p>
           )}

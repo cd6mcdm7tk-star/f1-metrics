@@ -12,7 +12,7 @@ export default function PageHeader({ page, leading, actions }: { page?: AppPage;
       <button
         onClick={() => signOut()}
         style={{
-          fontFamily: 'JetBrains Mono, monospace', fontSize: 9,
+          fontFamily: 'JetBrains Mono, monospace', fontSize: 'var(--fs-9)',
           border: '1px solid var(--border)', borderRadius: 'var(--r)',
           padding: '2px 7px', background: 'transparent', color: 'var(--text-2)', cursor: 'pointer', outline: 'none',
         }}

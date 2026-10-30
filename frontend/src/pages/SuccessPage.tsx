@@ -47,7 +47,7 @@ export default function SuccessPage() {
     return (
       <div style={{ height: '100dvh', background: P.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 20 }}>
         <div style={{ width: 24, height: 24, border: `1.5px solid ${P.textGhost}`, borderTopColor: P.text, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, letterSpacing: '0.24em', textTransform: 'uppercase', color: P.textSub }}>
+        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 'var(--fs-9)', letterSpacing: '0.24em', textTransform: 'uppercase', color: P.textSub }}>
           Activating subscription…
         </span>
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
@@ -75,7 +75,7 @@ export default function SuccessPage() {
         </div>
 
         {/* Content */}
-        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, letterSpacing: '0.30em', textTransform: 'uppercase', color: P.textSub }}>
+        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 'var(--fs-8)', letterSpacing: '0.30em', textTransform: 'uppercase', color: P.textSub }}>
           Subscription activated
         </span>
 
@@ -107,7 +107,7 @@ export default function SuccessPage() {
           ].map(f => (
             <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <div style={{ width: 3, height: 3, borderRadius: '50%', background: P.textSub, flexShrink: 0 }} />
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: '0.10em', color: P.textSub }}>
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 'var(--fs-10)', letterSpacing: '0.10em', color: P.textSub }}>
                 {f}
               </span>
             </div>
@@ -118,7 +118,7 @@ export default function SuccessPage() {
         <button
           onClick={() => navigate('/app')}
           style={{
-            fontFamily: "'JetBrains Mono', monospace", fontWeight: 400, fontSize: 10,
+            fontFamily: "'JetBrains Mono', monospace", fontWeight: 400, fontSize: 'var(--fs-10)',
             letterSpacing: '0.26em', textTransform: 'uppercase',
             color: P.textSub, background: 'transparent',
             border: `1px solid ${P.border}`,
@@ -132,7 +132,7 @@ export default function SuccessPage() {
         </button>
 
         {/* Footer */}
-        <span style={{ position: 'absolute', bottom: 28, fontFamily: "'JetBrains Mono', monospace", fontSize: 8, letterSpacing: '0.16em', textTransform: 'uppercase', color: P.textGhost }}>
+        <span style={{ position: 'absolute', bottom: 28, fontFamily: "'JetBrains Mono', monospace", fontSize: 'var(--fs-8)', letterSpacing: '0.16em', textTransform: 'uppercase', color: P.textGhost }}>
           A confirmation has been sent to your email
         </span>
       </div>

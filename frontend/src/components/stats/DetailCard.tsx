@@ -3,10 +3,11 @@ import { Flag, Target, Trophy, Zap } from 'lucide-react';
 import type { H2HData, HoveredMetric, RaceClassification } from '../../stats/types';
 import { summarizeDnfCauses } from '../../stats/dnf';
 import { DISPLAY, MONO, share } from './shared';
+import { teamBadge } from '../../utils/teamColors';
 
 const panelStyle: CSSProperties = { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 'var(--r2)', padding: 14 };
-const titleStyle: CSSProperties = { fontFamily: MONO, fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--accent)', margin: 0, fontWeight: 700 };
-const bodyStyle: CSSProperties = { fontFamily: MONO, fontSize: 10, lineHeight: 1.7, color: 'var(--text-2)', margin: '0 0 8px' };
+const titleStyle: CSSProperties = { fontFamily: MONO, fontSize: 'var(--fs-10)', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--accent)', margin: 0, fontWeight: 700 };
+const bodyStyle: CSSProperties = { fontFamily: MONO, fontSize: 'var(--fs-10)', lineHeight: 1.7, color: 'var(--text-2)', margin: '0 0 8px' };
 const iconStyle: CSSProperties = { color: 'var(--accent)' };
 
 function Panel({ icon, title, children, style }: { icon: ReactNode; title: string; children: ReactNode; style?: CSSProperties }) {
@@ -24,18 +25,18 @@ function Panel({ icon, title, children, style }: { icon: ReactNode; title: strin
 /** "value / total = result" for one driver */
 function FractionRow({ code, color, num, den, result }: { code: string; color: string; num: number | string; den: number | string; result: string }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 6, fontFamily: MONO, fontSize: 11, color: 'var(--text-2)' }}>
-      <span style={{ color, fontWeight: 700, minWidth: 34, textAlign: 'right' }}>{code}</span>
+    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 6, fontFamily: MONO, fontSize: 'var(--fs-11)', color: 'var(--text-2)' }}>
+      <span style={{ ...teamBadge(color), fontWeight: 700, minWidth: 34, textAlign: 'center' }}>{code}</span>
       <span>{num}</span><span style={{ color: 'var(--text-3)' }}>/</span><span>{den}</span><span style={{ color: 'var(--text-3)' }}>=</span>
-      <span style={{ fontFamily: DISPLAY, fontWeight: 800, fontSize: 16, color, minWidth: 48, textAlign: 'left' }}>{result}</span>
+      <span style={{ fontFamily: DISPLAY, fontWeight: 800, fontSize: 16, color: 'var(--text)', minWidth: 48, textAlign: 'left' }}>{result}</span>
     </div>
   );
 }
 
 function Scores({ items }: { items: { color: string; text: string }[] }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', gap: 18, fontFamily: MONO, fontSize: 11 }}>
-      {items.map(({ color, text }) => <span key={text} style={{ color }}>{text}</span>)}
+    <div style={{ display: 'flex', justifyContent: 'center', gap: 18, fontFamily: MONO, fontSize: 'var(--fs-11)' }}>
+      {items.map(({ color, text }) => <span key={text} style={teamBadge(color)}>{text}</span>)}
     </div>
   );
 }
@@ -44,16 +45,16 @@ function DnfCauses({ code, color, causes, total }: { code: string; color: string
   const counts = Object.entries(summarizeDnfCauses(causes)).filter(([, n]) => n > 0);
   return (
     <div>
-      <div style={{ fontFamily: MONO, fontWeight: 700, fontSize: 10, color, marginBottom: 6 }}>{code}</div>
+      <div style={{ fontFamily: MONO, fontWeight: 700, fontSize: 'var(--fs-10)', marginBottom: 6 }}><span style={teamBadge(color)}>{code}</span></div>
       {total === 0 ? (
-        <p style={{ fontFamily: MONO, fontSize: 10, color: 'var(--text-2)', margin: '0 0 4px' }}>No DNFs this season</p>
+        <p style={{ fontFamily: MONO, fontSize: 'var(--fs-10)', color: 'var(--text-2)', margin: '0 0 4px' }}>No DNFs this season</p>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {counts.map(([cause, n]) => (
             <div key={cause}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
-                <span style={{ fontFamily: MONO, fontSize: 9, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-2)' }}>{cause}</span>
-                <span style={{ fontFamily: DISPLAY, fontWeight: 800, fontSize: 12, color }}>{n}</span>
+                <span style={{ fontFamily: MONO, fontSize: 'var(--fs-9)', letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-2)' }}>{cause}</span>
+                <span style={{ fontFamily: DISPLAY, fontWeight: 800, fontSize: 12, color: 'var(--text)' }}>{n}</span>
               </div>
               <div style={{ height: 5, background: 'var(--bg)', borderRadius: 'var(--r)', overflow: 'hidden', border: '1px solid var(--border)' }}>
                 <div style={{ height: '100%', width: `${(n / total) * 100}%`, background: color }} />
@@ -82,8 +83,8 @@ function RaceDetail({ classification, h2h, color1, color2 }: { classification: R
                   display: 'flex', alignItems: 'center', gap: 6, padding: '1px 4px',
                   background: isD1 || isD2 ? 'var(--accent-10)' : undefined, borderRadius: 'var(--r)',
                 }}>
-                  <span style={{ width: 13, fontFamily: MONO, fontSize: 8, color: 'var(--text-3)' }}>{r.position}</span>
-                  <span style={{ fontFamily: MONO, fontWeight: 700, fontSize: 9, color: isD1 ? color1 : isD2 ? color2 : 'var(--text-2)' }}>{r.code}</span>
+                  <span style={{ width: 13, fontFamily: MONO, fontSize: 'var(--fs-8)', color: 'var(--text-3)' }}>{r.position}</span>
+                  <span style={{ fontFamily: MONO, fontWeight: 700, fontSize: 'var(--fs-9)', color: isD1 ? color1 : isD2 ? color2 : 'var(--text-2)' }}>{r.code}</span>
                 </div>
               );
             })}
@@ -120,7 +121,7 @@ export default function DetailCard({ h2h, hovered, classifications, color1, colo
   if (hovered?.kind !== 'stat') {
     return (
       <div style={{ ...panelStyle, textAlign: 'center' }}>
-        <p style={{ fontFamily: MONO, fontSize: 9, lineHeight: 1.6, color: 'var(--text-3)', margin: 0 }}>
+        <p style={{ fontFamily: MONO, fontSize: 'var(--fs-9)', lineHeight: 1.6, color: 'var(--text-3)', margin: 0 }}>
           Hover a stat, or a Grand Prix in the table below, for details
         </p>
       </div>
@@ -172,7 +173,7 @@ export default function DetailCard({ h2h, hovered, classifications, color1, colo
       return (
         <Panel icon={<Target size={16} style={iconStyle} />} title="Quali → Race">
           <p style={bodyStyle}>Avg race position minus avg qualifying position — negative means positions gained on race day.</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 5, fontFamily: MONO, fontSize: 10 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5, fontFamily: MONO, fontSize: 'var(--fs-10)' }}>
             {[{ d: d1, s: s1, color: color1 }, { d: d2, s: s2, color: color2 }].map(({ d, s, color }) => (
               <div key={d.code}>
                 <span style={{ color, fontWeight: 700 }}>{d.code}</span>: P{s.avgRacePosition} − P{s.avgQualiPosition} → {fmt(s.avgRacePosition - s.avgQualiPosition)} on average

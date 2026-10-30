@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 import Modal from './Modal';
 import PrivacyContent from './PrivacyContent';
@@ -8,14 +8,14 @@ import LegalNoticeContent from './LegalNoticeContent';
 interface LegalLinksProps {
   color?: string;
   hoverColor?: string;
-  fontSize?: number;
+  fontSize?: CSSProperties['fontSize'];
 }
 
 // About · Methodology (pages) · Privacy · Terms · Legal notice (documents in a modal), as a row of text links
 export default function LegalLinks({
   color = 'rgba(242,230,216,0.32)',
   hoverColor = 'rgba(242,230,216,0.7)',
-  fontSize = 9,
+  fontSize = 'var(--fs-9)',
 }: LegalLinksProps) {
   const [open, setOpen] = useState<'privacy' | 'terms' | 'legal' | null>(null);
 

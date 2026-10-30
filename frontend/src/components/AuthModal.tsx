@@ -30,7 +30,7 @@ function Divider({ label }: { label: string }) {
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '20px 0' }}>
       <div style={{ flex: 1, height: 1, background: P.border }} />
       <span style={{
-        fontFamily: "'JetBrains Mono', monospace", fontSize: 8,
+        fontFamily: "'JetBrains Mono', monospace", fontSize: 'var(--fs-8)',
         letterSpacing: '0.16em', textTransform: 'uppercase', color: P.text3,
         whiteSpace: 'nowrap',
       }}>
@@ -169,7 +169,7 @@ export default function AuthModal({ isOpen, onClose, mode = 'login' }: AuthModal
           padding: '10px 14px', marginBottom: 18, textAlign: 'center',
         }}>
           <p style={{
-            fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700,
+            fontFamily: "'JetBrains Mono', monospace", fontSize: 'var(--fs-11)', fontWeight: 700,
             color: P.accent, margin: 0, wordBreak: 'break-all',
           }}>
             {email}
@@ -184,7 +184,7 @@ export default function AuthModal({ isOpen, onClose, mode = 'login' }: AuthModal
           display: 'flex', gap: 10, alignItems: 'flex-start',
         }}>
           <CheckCircle size={16} color={P.accent} style={{ flexShrink: 0, marginTop: 2 }} />
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, lineHeight: 1.5, color: P.text2 }}>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 'var(--fs-9-5)', lineHeight: 1.5, color: P.text2 }}>
             <p style={{ margin: '0 0 3px', color: P.text, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
               Didn't receive it?
             </p>
@@ -262,7 +262,7 @@ export default function AuthModal({ isOpen, onClose, mode = 'login' }: AuthModal
         {isLogin && (
           <button
             onClick={() => { setShowForgotPassword(true); setError('') }}
-            style={{ ...linkStyle, fontSize: 9, color: P.text3 }}
+            style={{ ...linkStyle, fontSize: 'var(--fs-9)', color: P.text3 }}
             onMouseEnter={e => { e.currentTarget.style.color = P.accent }}
             onMouseLeave={e => { e.currentTarget.style.color = P.text3 }}
           >

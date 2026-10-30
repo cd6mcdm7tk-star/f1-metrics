@@ -18,7 +18,7 @@ export function SignInButton({ onClick }: { onClick?: () => void }) {
     <button
       onClick={onClick}
       style={{
-        fontFamily: MONO, fontSize: 9,
+        fontFamily: MONO, fontSize: 'var(--fs-9)',
         border: '1px solid var(--border)', borderRadius: 'var(--r)',
         padding: '3px 8px', background: 'transparent', color: 'var(--text-2)', cursor: 'pointer', outline: 'none',
       }}
@@ -72,7 +72,7 @@ export default function PageHeaderView({ page, leading, actions, isPremium = fal
       }}>
         {PAGES.map((p, i) => {
           const style = {
-            padding: '3px 9px', fontFamily: MONO, fontSize: 9, letterSpacing: '0.1em',
+            padding: '3px 9px', fontFamily: MONO, fontSize: 'var(--fs-9)', letterSpacing: '0.1em',
             borderLeft: i > 0 ? '1px solid var(--border)' : 'none',
           };
           return p.key === page ? (
@@ -98,7 +98,7 @@ export default function PageHeaderView({ page, leading, actions, isPremium = fal
           <span style={{
             display: 'flex', alignItems: 'center', gap: 3,
             padding: '1px 6px', borderRadius: 'var(--r)',
-            fontSize: 9, fontFamily: 'Rajdhani, sans-serif', fontWeight: 900,
+            fontSize: 'var(--fs-9)', fontFamily: 'Rajdhani, sans-serif', fontWeight: 900,
             background: 'var(--accent-10)', color: 'var(--accent)',
             border: '1px solid var(--accent-20)', marginRight: isMobile ? 0 : 4,
           }}>

@@ -7,7 +7,7 @@ export function ErrorBanner({ children }: { children: ReactNode }) {
     <div style={{
       background: P.errorBg, border: `1px solid ${P.errorBorder}`,
       borderRadius: 'var(--r)', color: P.error,
-      fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, lineHeight: 1.4,
+      fontFamily: "'JetBrains Mono', monospace", fontSize: 'var(--fs-10-5)', lineHeight: 1.4,
       padding: '10px 12px', marginBottom: 16,
     }}>
       {children}

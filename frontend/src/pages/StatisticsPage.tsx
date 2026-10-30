@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import SEO from '../components/SEO';
 import { sitePages, STATISTICS_SINCE } from '../seo/pages';
@@ -18,11 +18,17 @@ import {
   raceClassifications, seasonDrivers,
 } from '../stats/season';
 import type { HoveredMetric, SeasonBundle, SeasonDriver } from '../stats/types';
-import { teamColor } from '../utils/teamColors';
+import { inkOn, teamColor } from '../utils/teamColors';
 
 const labelStyle = {
-  fontFamily: MONO, fontSize: 7, letterSpacing: '0.22em', textTransform: 'uppercase', color: 'var(--text-3)',
+  fontFamily: MONO, fontSize: 'var(--fs-7)', letterSpacing: '0.22em', textTransform: 'uppercase', color: 'var(--text-3)',
 } as const;
+
+/** Places held for the drivers and the detail card while a season loads on
+ * mobile, where they sit above the comparison: without them it jumps down by
+ * their height when they arrive. Most seasons have 21 to 24 drivers (6 rows). */
+const DRIVER_PLACES = 24;
+const DETAIL_PLACE = 71;
 
 export default function StatisticsPage() {
   const isMobile = useIsMobile();
@@ -174,7 +180,7 @@ export default function StatisticsPage() {
                   border: '1px solid var(--border)',
                   borderRadius: 'var(--r)',
                   color: 'var(--text)',
-                  fontFamily: MONO, fontSize: 10,
+                  fontFamily: MONO, fontSize: 'var(--fs-10)',
                   outline: 'none', cursor: 'pointer',
                   appearance: 'none',
                 }}
@@ -195,7 +201,7 @@ export default function StatisticsPage() {
                 <button
                   onClick={() => { setDriver1(''); setDriver2(''); }}
                   style={{
-                    fontFamily: MONO, fontSize: 7, letterSpacing: '0.1em', textTransform: 'uppercase',
+                    fontFamily: MONO, fontSize: 'var(--fs-7)', letterSpacing: '0.1em', textTransform: 'uppercase',
                     color: 'var(--accent)', opacity: 0.7, background: 'none', border: 'none', cursor: 'pointer', padding: 0,
                   }}
                 >
@@ -205,6 +211,9 @@ export default function StatisticsPage() {
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 4 }}>
+              {isMobile && loading && drivers.length === 0 && Array.from({ length: DRIVER_PLACES }, (_, i) => (
+                <span key={i} aria-hidden style={{ ...driverBox(isMobile), border: '1px solid var(--border)', opacity: 0.4 }}>{'\u00a0'}</span>
+              ))}
               {drivers.map(driver => {
                 const isFirst = driver1 === driver.code;
                 const isSecond = driver2 === driver.code;
@@ -217,12 +226,10 @@ export default function StatisticsPage() {
                     onClick={() => toggleDriver(driver.code)}
                     disabled={loading}
                     style={{
-                      position: 'relative', padding: isMobile ? '11px 2px' : '6px 2px',
-                      fontFamily: MONO, fontWeight: 600, fontSize: 9, textAlign: 'center',
+                      ...driverBox(isMobile), position: 'relative',
                       border: `1px solid ${isSelected ? color : 'var(--border)'}`,
-                      borderRadius: 'var(--r)',
-                      background: isSelected ? `${color}22` : 'transparent',
-                      color: isSelected ? color : 'var(--text-2)',
+                      background: isSelected ? color : 'transparent',
+                      color: isSelected ? inkOn(color) : 'var(--text-2)',
                       cursor: loading ? 'not-allowed' : 'pointer', outline: 'none',
                       opacity: loading ? 0.5 : 1,
                       transition: 'all 0.12s',
@@ -232,7 +239,7 @@ export default function StatisticsPage() {
                       <div style={{
                         position: 'absolute', top: -6, right: -4, width: 14, height: 14, borderRadius: '50%',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 8, fontWeight: 700, background: color, color: 'var(--bg)',
+                        fontSize: 'var(--fs-8)', fontWeight: 700, background: inkOn(color), color,
                       }}>
                         {isFirst ? '1' : '2'}
                       </div>
@@ -245,11 +252,12 @@ export default function StatisticsPage() {
           </div>
 
           <div style={{ margin: '0 14px', padding: '12px 0', borderTop: '1px solid var(--border)' }}>
-            <p style={{ margin: 0, fontFamily: MONO, fontSize: 10, lineHeight: 1.6, color: 'var(--text-3)', letterSpacing: '0.02em' }}>
+            <p style={{ margin: 0, fontFamily: MONO, fontSize: 'var(--fs-10)', lineHeight: 1.6, color: 'var(--text-3)', letterSpacing: '0.02em' }}>
               Select two drivers to compare their head-to-head record for the season.
             </p>
           </div>
 
+          {isMobile && loading && !h2h && <div aria-hidden style={{ height: DETAIL_PLACE }} />}
           {h2h && (
             <div style={{ margin: '0 14px', paddingBottom: 12 }}>
               <DetailCard h2h={h2h} hovered={hovered} classifications={classifications} color1={color1} color2={color2} />
@@ -258,7 +266,7 @@ export default function StatisticsPage() {
 
           {/* Pinned to the bottom of the sidebar, whatever the detail card's height */}
           <div style={{ margin: isMobile ? '0 14px 14px' : 'auto 14px 14px', paddingTop: 12, borderTop: '1px solid var(--border)' }}>
-            <LegalLinks color="var(--text-3)" hoverColor="var(--text)" fontSize={8} />
+            <LegalLinks color="var(--text-3)" hoverColor="var(--text)" fontSize="var(--fs-8)" />
           </div>
         </div>
 
@@ -270,7 +278,7 @@ export default function StatisticsPage() {
         }}>
           {error && (
             <div style={{ marginBottom: 12, flexShrink: 0, background: 'rgba(255,107,107,0.10)', border: '1px solid rgba(255,107,107,0.35)', borderRadius: 'var(--r)', padding: '10px 14px' }}>
-              <p style={{ color: '#ff6b6b', fontFamily: MONO, fontSize: 11, textAlign: 'center', margin: 0 }}>{error}</p>
+              <p style={{ color: '#ff6b6b', fontFamily: MONO, fontSize: 'var(--fs-11)', textAlign: 'center', margin: 0 }}>{error}</p>
             </div>
           )}
 
@@ -294,4 +302,12 @@ export default function StatisticsPage() {
     <UpgradeModal isOpen={showUpgradeModal} onClose={() => setShowUpgradeModal(false)} reason="current_season" />
     </>
   );
+}
+
+/** A driver button's box, shared with the places held while a season loads */
+function driverBox(isMobile: boolean): CSSProperties {
+  return {
+    padding: isMobile ? '11px 2px' : '6px 2px', borderRadius: 'var(--r)',
+    fontFamily: MONO, fontWeight: 600, fontSize: 'var(--fs-9)', textAlign: 'center',
+  };
 }

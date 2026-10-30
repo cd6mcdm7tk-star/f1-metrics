@@ -10,7 +10,7 @@ const P = {
 };
 
 const button = {
-  fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: '0.26em', textTransform: 'uppercase' as const,
+  fontFamily: "'JetBrains Mono', monospace", fontSize: 'var(--fs-10)', letterSpacing: '0.26em', textTransform: 'uppercase' as const,
   textDecoration: 'none', padding: '12px 36px', border: `1px solid ${P.border}`, color: P.textSub,
 };
 
@@ -24,7 +24,7 @@ export default function NotFoundPage() {
         alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '40px 24px',
         fontFamily: "'Rajdhani', sans-serif",
       }}>
-        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, letterSpacing: '0.30em', textTransform: 'uppercase', color: P.textSub }}>
+        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 'var(--fs-8)', letterSpacing: '0.30em', textTransform: 'uppercase', color: P.textSub }}>
           Error 404
         </span>
         <h1 style={{ fontWeight: 700, fontSize: 'clamp(28px, 4vw, 48px)', letterSpacing: '0.06em', textTransform: 'uppercase', color: P.text, margin: '16px 0 0', lineHeight: 1 }}>

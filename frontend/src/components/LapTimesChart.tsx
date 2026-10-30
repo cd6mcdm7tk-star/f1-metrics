@@ -85,7 +85,7 @@ export default function LapTimesChart({
       }}>
         {drivers.map(code => (
           <span key={code} style={{
-            fontFamily: 'Rajdhani, sans-serif', fontSize: 11, fontWeight: 700,
+            fontFamily: 'Rajdhani, sans-serif', fontSize: 'var(--fs-11)', fontWeight: 700,
             color: colorOf(code),
           }}>
             ● {code}
@@ -116,8 +116,8 @@ export default function LapTimesChart({
           <Tooltip
             cursor={false}
             contentStyle={{ background: 'var(--panel)', border: '1px solid var(--border-hi)', borderRadius: 'var(--r2)', padding: '6px 10px' }}
-            labelStyle={{ color: 'var(--accent)', fontFamily: 'JetBrains Mono', fontSize: 9, marginBottom: 4 }}
-            itemStyle={{ fontFamily: 'JetBrains Mono', fontSize: 10 }}
+            labelStyle={{ color: 'var(--accent)', fontFamily: 'JetBrains Mono', fontSize: 'var(--fs-9)', marginBottom: 4 }}
+            itemStyle={{ fontFamily: 'JetBrains Mono', fontSize: 'var(--fs-10)' }}
             formatter={(v, name) => [formatLapTime(Number(v)), name]}
             labelFormatter={l => `Lap ${l}`}
           />

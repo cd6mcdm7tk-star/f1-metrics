@@ -17,7 +17,7 @@ export const P = {
 export const labelStyle: CSSProperties = {
   display: 'block', marginBottom: 6,
   fontFamily: "'JetBrains Mono', monospace",
-  fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase',
+  fontSize: 'var(--fs-9)', letterSpacing: '0.18em', textTransform: 'uppercase',
   color: P.text3,
 }
 
@@ -38,7 +38,7 @@ export const headingStyle: CSSProperties = {
 }
 
 export const subStyle: CSSProperties = {
-  fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: '0.02em',
+  fontFamily: "'JetBrains Mono', monospace", fontSize: 'var(--fs-10-5)', letterSpacing: '0.02em',
   color: P.text2, margin: '0 0 22px', lineHeight: 1.5,
 }
 
@@ -46,7 +46,7 @@ export const primaryButtonStyle: CSSProperties = {
   width: '100%', padding: '12px 0',
   background: P.accent, color: P.bg,
   border: 'none', borderRadius: 'var(--r)',
-  fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 11,
+  fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 'var(--fs-11)',
   letterSpacing: '0.14em', textTransform: 'uppercase',
   cursor: 'pointer', transition: 'opacity 0.15s',
 }
@@ -55,12 +55,12 @@ export const googleButtonStyle: CSSProperties = {
   width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
   padding: '11px 0', background: '#ffffff', color: '#3c4043',
   border: '1px solid rgba(0,0,0,0.12)', borderRadius: 'var(--r)',
-  fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, letterSpacing: '0.04em',
+  fontFamily: "'JetBrains Mono', monospace", fontSize: 'var(--fs-11)', fontWeight: 600, letterSpacing: '0.04em',
   cursor: 'pointer', transition: 'opacity 0.15s',
 }
 
 export const linkStyle: CSSProperties = {
-  fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: '0.08em',
+  fontFamily: "'JetBrains Mono', monospace", fontSize: 'var(--fs-10)', letterSpacing: '0.08em',
   textTransform: 'uppercase', color: P.text2,
   background: 'none', border: 'none', cursor: 'pointer', padding: 0,
   transition: 'color 0.15s',

@@ -143,7 +143,7 @@ export default function UpgradeModal({ isOpen, onClose, reason = 'current_season
         </button>
 
         {/* Header */}
-        <p style={{ fontFamily: mono, fontSize: 9, fontWeight: 700, letterSpacing: '0.2em', color: 'var(--accent)', margin: '0 0 8px' }}>
+        <p style={{ fontFamily: mono, fontSize: 'var(--fs-9)', fontWeight: 700, letterSpacing: '0.2em', color: 'var(--accent)', margin: '0 0 8px' }}>
           METRIK PRO
         </p>
         <h2 id="upgrade-title" style={{
@@ -152,7 +152,7 @@ export default function UpgradeModal({ isOpen, onClose, reason = 'current_season
         }}>
           {heading.title}
         </h2>
-        <p style={{ fontFamily: mono, fontSize: 11, lineHeight: 1.6, color: 'var(--text-2)', margin: '0 0 20px' }}>
+        <p style={{ fontFamily: mono, fontSize: 'var(--fs-11)', lineHeight: 1.6, color: 'var(--text-2)', margin: '0 0 20px' }}>
           {heading.subtitle}
         </p>
 
@@ -163,7 +163,7 @@ export default function UpgradeModal({ isOpen, onClose, reason = 'current_season
               <Icon size={16} color="var(--accent)" style={{ flexShrink: 0, marginTop: 1 }} aria-hidden="true" />
               <div>
                 <p style={{ fontFamily: display, fontWeight: 700, fontSize: 15, margin: '0 0 2px' }}>{title}</p>
-                <p style={{ fontFamily: mono, fontSize: 10, lineHeight: 1.5, color: 'var(--text-2)', margin: 0 }}>{desc}</p>
+                <p style={{ fontFamily: mono, fontSize: 'var(--fs-10)', lineHeight: 1.5, color: 'var(--text-2)', margin: 0 }}>{desc}</p>
               </div>
             </li>
           ))}
@@ -194,13 +194,13 @@ export default function UpgradeModal({ isOpen, onClose, reason = 'current_season
                 {type === 'annual' && (
                   <span style={{
                     position: 'absolute', top: -8, right: 10, whiteSpace: 'nowrap', lineHeight: 1,
-                    fontFamily: mono, fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
+                    fontFamily: mono, fontSize: 'var(--fs-8)', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
                     padding: '3px 6px', borderRadius: 'var(--r)', background: 'var(--accent)', color: '#f2e6d8',
                   }}>
                     Best value
                   </span>
                 )}
-                <span style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8, fontFamily: mono, fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8, fontFamily: mono, fontSize: 'var(--fs-9)', fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase' }}>
                   <span aria-hidden="true" style={{
                     width: 12, height: 12, borderRadius: '50%', flexShrink: 0,
                     border: `1.5px solid ${selected ? 'var(--accent)' : 'var(--border-hi)'}`,
@@ -212,9 +212,9 @@ export default function UpgradeModal({ isOpen, onClose, reason = 'current_season
                 </span>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 4 }}>
                   <span style={{ fontFamily: display, fontWeight: 700, fontSize: 28, lineHeight: 1 }}>{p.price}</span>
-                  <span style={{ fontFamily: mono, fontSize: 10, color: 'var(--text-2)' }}>{p.period}</span>
+                  <span style={{ fontFamily: mono, fontSize: 'var(--fs-10)', color: 'var(--text-2)' }}>{p.period}</span>
                 </div>
-                <span style={{ fontFamily: mono, fontSize: 9, color: type === 'annual' ? 'var(--accent)' : 'var(--text-2)' }}>
+                <span style={{ fontFamily: mono, fontSize: 'var(--fs-9)', color: type === 'annual' ? 'var(--accent)' : 'var(--text-2)' }}>
                   {p.note}
                 </span>
               </button>
@@ -225,7 +225,7 @@ export default function UpgradeModal({ isOpen, onClose, reason = 'current_season
         {/* Withdrawal waiver: required before paying */}
         <label style={{
           display: 'flex', gap: 10, alignItems: 'flex-start', margin: '0 0 14px', cursor: loading ? 'not-allowed' : 'pointer',
-          fontFamily: mono, fontSize: 10, lineHeight: 1.6, color: 'var(--text-2)',
+          fontFamily: mono, fontSize: 'var(--fs-10)', lineHeight: 1.6, color: 'var(--text-2)',
         }}>
           <input
             type="checkbox"
@@ -261,7 +261,7 @@ export default function UpgradeModal({ isOpen, onClose, reason = 'current_season
             : <>Get PRO · {plan.price} {plan.period}</>}
         </button>
 
-        <p style={{ fontFamily: mono, fontSize: 9, lineHeight: 1.7, color: 'var(--text-2)', textAlign: 'center', margin: '12px 0 0' }}>
+        <p style={{ fontFamily: mono, fontSize: 'var(--fs-9)', lineHeight: 1.7, color: 'var(--text-2)', textAlign: 'center', margin: '12px 0 0' }}>
           {!user && <>You'll sign in first.<br /></>}
           Secure payment by Stripe · Cancel anytime
           <br />

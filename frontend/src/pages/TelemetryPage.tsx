@@ -26,7 +26,7 @@ function EmptyState({ message, loading }: { message: string; loading?: boolean }
       {loading
         ? <Loader2 size={26} className="animate-spin" style={{ color: 'var(--accent)' }} />
         : <div style={{ width: 36, height: 36, borderRadius: '50%', border: '2px solid var(--border-hi)' }} />}
-      <p style={{ fontFamily: MONO, fontSize: 11, color: 'var(--text-2)', letterSpacing: '0.08em' }}>{message}</p>
+      <p style={{ fontFamily: MONO, fontSize: 'var(--fs-11)', color: 'var(--text-2)', letterSpacing: '0.08em' }}>{message}</p>
     </div>
   );
 }
@@ -289,7 +289,7 @@ export default function TelemetryPage() {
             style={{
               display: 'flex', alignItems: 'center', gap: 5,
               padding: '3px 8px', marginRight: 2,
-              fontFamily: MONO, fontSize: 9, letterSpacing: '0.1em',
+              fontFamily: MONO, fontSize: 'var(--fs-9)', letterSpacing: '0.1em',
               color: 'var(--text-2)', background: 'transparent',
               border: '1px solid var(--border)', borderRadius: 'var(--r)',
               cursor: 'pointer', outline: 'none',
@@ -367,11 +367,11 @@ export default function TelemetryPage() {
       {/* Desktop: fixed in the corner (the page never scrolls). Mobile: at the end of the page. */}
       {isMobile ? (
         <div style={{ padding: '14px 16px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'center' }}>
-          <LegalLinks color="var(--text-3)" hoverColor="var(--text)" fontSize={8} />
+          <LegalLinks color="var(--text-3)" hoverColor="var(--text)" fontSize="var(--fs-8)" />
         </div>
       ) : (
         <div style={{ position: 'fixed', bottom: 8, left: 12, zIndex: 40 }}>
-          <LegalLinks color="var(--text-3)" hoverColor="var(--text)" fontSize={8} />
+          <LegalLinks color="var(--text-3)" hoverColor="var(--text)" fontSize="var(--fs-8)" />
         </div>
       )}
 

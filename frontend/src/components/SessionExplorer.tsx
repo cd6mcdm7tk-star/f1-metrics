@@ -38,7 +38,7 @@ function SelectField({ label, value, onChange, options, placeholder, disabled }:
       <span style={{
         display: 'block', marginBottom: 5,
         fontFamily: 'JetBrains Mono, monospace',
-        fontSize: 7, letterSpacing: '0.22em', textTransform: 'uppercase',
+        fontSize: 'var(--fs-7)', letterSpacing: '0.22em', textTransform: 'uppercase',
         color: 'var(--text-3)',
       }}>
         {label}
@@ -54,7 +54,7 @@ function SelectField({ label, value, onChange, options, placeholder, disabled }:
           border: '1px solid var(--border)',
           borderRadius: 'var(--r)',
           color: disabled ? 'var(--text-3)' : 'var(--text)',
-          fontFamily: 'JetBrains Mono, monospace', fontSize: 10,
+          fontFamily: 'JetBrains Mono, monospace', fontSize: 'var(--fs-10)',
           outline: 'none', cursor: disabled ? 'not-allowed' : 'pointer',
           opacity: disabled ? 0.5 : 1,
           appearance: 'none',
@@ -281,7 +281,7 @@ export default function SessionExplorer({
           }}>
             <span style={{
               fontFamily: 'JetBrains Mono, monospace',
-              fontSize: 7, letterSpacing: '0.22em', textTransform: 'uppercase',
+              fontSize: 'var(--fs-7)', letterSpacing: '0.22em', textTransform: 'uppercase',
               color: 'var(--text-3)',
             }}>
               Drivers
@@ -289,7 +289,7 @@ export default function SessionExplorer({
             {selectedDrivers.length > 0 && (
               <span style={{
                 fontFamily: 'JetBrains Mono, monospace',
-                fontSize: 7, letterSpacing: '0.10em',
+                fontSize: 'var(--fs-7)', letterSpacing: '0.10em',
                 color: 'var(--accent)', opacity: 0.7,
               }}>
                 {selectedDrivers.length} selected
@@ -325,7 +325,7 @@ export default function SessionExplorer({
                     style={{
                       padding: '6px 2px',
                       fontFamily: 'JetBrains Mono, monospace',
-                      fontSize: 9, fontWeight: 600,
+                      fontSize: 'var(--fs-9)', fontWeight: 600,
                       textAlign: 'center',
                       border: `1px solid ${isSelected ? color : 'var(--border)'}`,
                       borderRadius: 'var(--r)',
@@ -352,7 +352,7 @@ export default function SessionExplorer({
             style={{
               width: '100%', padding: '10px 0',
               fontFamily: 'JetBrains Mono, monospace',
-              fontSize: 8, letterSpacing: '0.18em', textTransform: 'uppercase',
+              fontSize: 'var(--fs-8)', letterSpacing: '0.18em', textTransform: 'uppercase',
               background: canCompare ? 'var(--accent-10)' : 'transparent',
               border: `1px solid ${canCompare ? 'var(--accent)' : 'var(--border)'}`,
               borderRadius: 'var(--r)',
@@ -374,7 +374,7 @@ export default function SessionExplorer({
           <p style={{
             margin: 0,
             fontFamily: 'JetBrains Mono, monospace',
-            fontSize: 10, lineHeight: 1.6,
+            fontSize: 'var(--fs-10)', lineHeight: 1.6,
             color: 'var(--text-3)', letterSpacing: '0.02em',
           }}>
             To view full telemetry, click Compare Fastest Laps or select individual laps from the chart and table.
@@ -391,7 +391,7 @@ export default function SessionExplorer({
           }}>
             <span style={{
               fontFamily: 'JetBrains Mono, monospace',
-              fontSize: 7, letterSpacing: '0.22em', textTransform: 'uppercase',
+              fontSize: 'var(--fs-7)', letterSpacing: '0.22em', textTransform: 'uppercase',
               color: 'var(--text-3)',
             }}>
               Selected laps ({selectedLapRefs.length})
@@ -413,7 +413,7 @@ export default function SessionExplorer({
                   >
                     <span style={{
                       fontFamily: 'JetBrains Mono, monospace',
-                      fontSize: 9, fontWeight: 700, color: c,
+                      fontSize: 'var(--fs-9)', fontWeight: 700, color: c,
                     }}>
                       {driver} L{String(lapNumber).padStart(2, '0')}
                     </span>
@@ -422,7 +422,7 @@ export default function SessionExplorer({
                       style={{
                         background: 'none', border: 'none', padding: 0,
                         cursor: 'pointer', color: c, opacity: 0.6,
-                        fontSize: 10, lineHeight: 1, fontFamily: 'monospace',
+                        fontSize: 'var(--fs-10)', lineHeight: 1, fontFamily: 'monospace',
                         display: 'flex', alignItems: 'center',
                       }}
                       title="Remove"
@@ -439,7 +439,7 @@ export default function SessionExplorer({
               style={{
                 width: '100%', padding: '10px 0',
                 fontFamily: 'JetBrains Mono, monospace',
-                fontSize: 8, letterSpacing: '0.18em', textTransform: 'uppercase',
+                fontSize: 'var(--fs-8)', letterSpacing: '0.18em', textTransform: 'uppercase',
                 background: 'var(--accent)',
                 border: '1px solid var(--accent)',
                 borderRadius: 'var(--r)',
@@ -470,7 +470,7 @@ export default function SessionExplorer({
           {lines.length === 0 ? (
             <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <span style={{
-                fontFamily: 'JetBrains Mono, monospace', fontSize: 10,
+                fontFamily: 'JetBrains Mono, monospace', fontSize: 'var(--fs-10)',
                 color: 'var(--text-3)', letterSpacing: '0.12em',
               }}>
                 Select drivers to visualise
@@ -522,7 +522,7 @@ export default function SessionExplorer({
                     position: 'sticky', left: 0, zIndex: 6, background: 'var(--surface)',
                     width: 80, padding: '8px 14px', textAlign: 'left',
                     borderBottom: '1px solid var(--border-hi)', borderRight: '1px solid var(--border-hi)',
-                    fontFamily: 'JetBrains Mono, monospace', fontSize: 7,
+                    fontFamily: 'JetBrains Mono, monospace', fontSize: 'var(--fs-7)',
                     color: 'var(--text-3)', letterSpacing: '0.18em', textTransform: 'uppercase',
                   }}>
                     Driver
@@ -532,7 +532,7 @@ export default function SessionExplorer({
                       minWidth: 76, padding: '8px 4px', textAlign: 'center',
                       borderBottom: '1px solid var(--border-hi)',
                       borderRight: '1px solid var(--border)',
-                      fontFamily: 'JetBrains Mono, monospace', fontSize: 8,
+                      fontFamily: 'JetBrains Mono, monospace', fontSize: 'var(--fs-8)',
                       color: 'var(--text-3)', letterSpacing: '0.08em',
                       fontWeight: 400,
                     }}>
@@ -557,7 +557,7 @@ export default function SessionExplorer({
                           <div style={{ width: 2, height: 14, background: color, borderRadius: 1, flexShrink: 0 }} />
                           <span style={{
                             fontFamily: 'JetBrains Mono, monospace',
-                            fontSize: 10, fontWeight: 700, color,
+                            fontSize: 'var(--fs-10)', fontWeight: 700, color,
                           }}>
                             {code}
                           </span>
@@ -605,7 +605,7 @@ export default function SessionExplorer({
                             {t ? (
                               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
                                 <span style={{
-                                  fontFamily: 'JetBrains Mono, monospace', fontSize: 10,
+                                  fontFamily: 'JetBrains Mono, monospace', fontSize: 'var(--fs-10)',
                                   color: isPersonalBest ? color : 'var(--text)',
                                   fontWeight: isPersonalBest ? 700 : 400,
                                 }}>
@@ -618,7 +618,7 @@ export default function SessionExplorer({
                             ) : (
                               <span style={{
                                 fontFamily: 'JetBrains Mono, monospace',
-                                fontSize: 9, color: 'var(--text-3)',
+                                fontSize: 'var(--fs-9)', color: 'var(--text-3)',
                               }}>
                                 —
                               </span>

@@ -32,7 +32,7 @@ export default function CancelPage() {
         </div>
 
         {/* Content */}
-        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, letterSpacing: '0.30em', textTransform: 'uppercase', color: P.textSub }}>
+        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 'var(--fs-8)', letterSpacing: '0.30em', textTransform: 'uppercase', color: P.textSub }}>
           Payment not completed
         </span>
 
@@ -52,7 +52,7 @@ export default function CancelPage() {
           <button
             onClick={() => navigate('/')}
             style={{
-              fontFamily: "'JetBrains Mono', monospace", fontWeight: 400, fontSize: 10,
+              fontFamily: "'JetBrains Mono', monospace", fontWeight: 400, fontSize: 'var(--fs-10)',
               letterSpacing: '0.26em', textTransform: 'uppercase',
               color: P.textSub, background: 'transparent',
               border: `1px solid ${P.border}`,
@@ -68,7 +68,7 @@ export default function CancelPage() {
           <button
             onClick={() => navigate('/app')}
             style={{
-              fontFamily: "'JetBrains Mono', monospace", fontWeight: 400, fontSize: 10,
+              fontFamily: "'JetBrains Mono', monospace", fontWeight: 400, fontSize: 'var(--fs-10)',
               letterSpacing: '0.26em', textTransform: 'uppercase',
               color: P.text, background: 'transparent',
               border: `1px solid ${P.text}`,
@@ -83,7 +83,7 @@ export default function CancelPage() {
         </div>
 
         {/* Footer */}
-        <span style={{ position: 'absolute', bottom: 28, fontFamily: "'JetBrains Mono', monospace", fontSize: 8, letterSpacing: '0.16em', textTransform: 'uppercase', color: P.textGhost }}>
+        <span style={{ position: 'absolute', bottom: 28, fontFamily: "'JetBrains Mono', monospace", fontSize: 'var(--fs-8)', letterSpacing: '0.16em', textTransform: 'uppercase', color: P.textGhost }}>
           Questions? @metrikdelta on X
         </span>
       </div>

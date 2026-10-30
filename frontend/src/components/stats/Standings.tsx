@@ -12,7 +12,7 @@ const panelStyle = (isMobile: boolean): CSSProperties => ({
 
 const titleStyle: CSSProperties = {
   display: 'block', marginBottom: 10, flexShrink: 0,
-  fontFamily: MONO, fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--accent)', fontWeight: 700,
+  fontFamily: MONO, fontSize: 'var(--fs-9)', letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--accent)', fontWeight: 700,
 };
 
 /** Laid out like a starting grid: odd positions left, even positions right and staggered down. */
@@ -43,18 +43,19 @@ export function DriverStandings({ standings, selected, disabled, isMobile, onSel
                     padding: isMobile ? '9px 2px' : '4px 2px',
                     background: isSelected ? `${color}18` : 'transparent',
                     border: `1px solid ${isSelected ? color : 'var(--border)'}`,
+                    borderLeft: `3px solid ${color}`,
                     borderRadius: 'var(--r)',
                     cursor: disabled ? 'not-allowed' : 'pointer', outline: 'none',
                     transition: 'all 0.12s',
                   }}
                 >
-                  <span style={{ position: 'absolute', top: 2, left: 4, fontFamily: MONO, fontSize: 8, color: 'var(--text-3)' }}>
+                  <span style={{ position: 'absolute', top: 2, left: 4, fontFamily: MONO, fontSize: 'var(--fs-8)', color: 'var(--text-3)' }}>
                     {entry.position ?? '—'}
                   </span>
-                  <span style={{ fontFamily: MONO, fontWeight: 700, fontSize: 10, color, whiteSpace: 'nowrap' }}>
+                  <span style={{ fontFamily: MONO, fontWeight: 700, fontSize: 'var(--fs-10)', color: 'var(--text)', whiteSpace: 'nowrap' }}>
                     {lastName(entry.name)}
                   </span>
-                  <span style={{ fontFamily: MONO, fontWeight: 600, fontSize: 8, color: 'var(--text-2)' }}>
+                  <span style={{ fontFamily: MONO, fontWeight: 600, fontSize: 'var(--fs-8)', color: 'var(--text-2)' }}>
                     {entry.points}
                   </span>
                 </button>
@@ -79,9 +80,10 @@ export function ConstructorStandings({ standings, isMobile }: { standings: Const
             <div key={c.name} style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 6px', borderRadius: 'var(--r)', overflow: 'hidden' }}>
               {/* Points as a share of the leader's */}
               <div style={{ position: 'absolute', inset: 0, width: `${maxPoints > 0 ? (c.points / maxPoints) * 100 : 0}%`, background: `${color}18` }} />
-              <span style={{ position: 'relative', fontFamily: MONO, fontSize: 10, color: 'var(--text-2)', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ position: 'relative', fontFamily: MONO, fontSize: 'var(--fs-10)', color: 'var(--text-2)', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ color: 'var(--text-3)', minWidth: 12 }}>{c.position ?? '—'}</span>
-                <span style={{ color, fontWeight: 700 }}>{c.name}</span>
+                <span aria-hidden style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
+                <span style={{ color: 'var(--text)', fontWeight: 700 }}>{c.name}</span>
               </span>
               <span style={{ position: 'relative', fontFamily: DISPLAY, fontWeight: 800, fontSize: 13, color: 'var(--accent)' }}>{c.points}</span>
             </div>

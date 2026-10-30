@@ -18,7 +18,7 @@ const section: React.CSSProperties = { marginBottom: 22 };
 const PrivacyContent: React.FC = () => {
   return (
     <div>
-      <p style={{ ...p, color: text3, fontSize: 11 }}>Last updated: September 27, 2026</p>
+      <p style={{ ...p, color: text3, fontSize: 'var(--fs-11)' }}>Last updated: September 27, 2026</p>
 
       <section style={section}>
         <h3 style={h3}>1. Information We Collect</h3>

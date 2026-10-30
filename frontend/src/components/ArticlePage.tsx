@@ -26,7 +26,7 @@ export default function ArticlePage({ seo, eyebrow, title, lead, children }: {
         </article>
       </main>
       <footer style={{ display: 'flex', justifyContent: 'center', padding: '16px 20px 24px', borderTop: '1px solid var(--border)' }}>
-        <LegalLinks color="var(--text-3)" hoverColor="var(--text)" fontSize={9} />
+        <LegalLinks color="var(--text-3)" hoverColor="var(--text)" fontSize="var(--fs-9)" />
       </footer>
     </div>
   );

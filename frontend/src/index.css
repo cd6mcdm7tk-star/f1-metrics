@@ -34,6 +34,34 @@
   /* Radius — minimal for "engineering software" feel */
   --r:  2px;
   --r2: 4px;
+
+  /* Small text, set inline as var(--fs-9) and so on: these sizes on a
+     computer, at least 12 px on a phone (below) */
+  --fs-7:    7px;
+  --fs-7-5:  7.5px;
+  --fs-8:    8px;
+  --fs-8-5:  8.5px;
+  --fs-9:    9px;
+  --fs-9-5:  9.5px;
+  --fs-10:   10px;
+  --fs-10-5: 10.5px;
+  --fs-11:   11px;
+}
+
+/* Phones: no text under 12 px, the smallest a phone reads comfortably; the
+   two largest small sizes stay a step above the rest */
+@media (max-width: 768px) {
+  :root {
+    --fs-7:    12px;
+    --fs-7-5:  12px;
+    --fs-8:    12px;
+    --fs-8-5:  12px;
+    --fs-9:    12px;
+    --fs-9-5:  12px;
+    --fs-10:   12px;
+    --fs-10-5: 12.5px;
+    --fs-11:   13px;
+  }
 }
 
 /* ── Data zone — cream/paper inversion ──────────────────────────────────────
@@ -56,10 +84,10 @@
   --accent-30:    rgba(94,16,24,0.26);
 
   --text:         #1c0407;
-  --text-2:       rgba(28,4,7,0.58);
+  --text-2:       rgba(28,4,7,0.66);
   /* 0.62 clears WCAG AA (4.5:1) for small text (label-section, LegalLinks
      footer buttons) against surface/bg/panel — 0.34 measured ~2.2:1. */
-  --text-3:       rgba(28,4,7,0.62);
+  --text-3:       rgba(28,4,7,0.66);
 
   --chart-grid:   rgba(94,16,24,0.18);
 
@@ -162,7 +190,7 @@
 /* Section label — tiny uppercase mono */
 .label-section {
   font-family: 'JetBrains Mono', 'Fira Mono', monospace;
-  font-size: 9px;
+  font-size: var(--fs-9);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.20em;
@@ -219,7 +247,7 @@
 }
 .article .eyebrow {
   font-family: 'JetBrains Mono', 'Fira Mono', monospace;
-  font-size: 10px;
+  font-size: var(--fs-10);
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: var(--accent);

@@ -16,7 +16,7 @@ const section: React.CSSProperties = { marginBottom: 22 };
 const LegalNoticeContent: React.FC = () => {
   return (
     <div>
-      <p style={{ ...p, color: text3, fontSize: 11 }}>Last updated: October 21, 2026</p>
+      <p style={{ ...p, color: text3, fontSize: 'var(--fs-11)' }}>Last updated: October 21, 2026</p>
 
       <section style={section}>
         <h3 style={h3}>Site Publisher</h3>
