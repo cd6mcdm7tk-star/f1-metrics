@@ -513,7 +513,7 @@ def ingest_fastf1(year: int, gp_round: int, session_type: str):
                 logger.warning(f"  Telemetry failed for {driver_code}: {e}")
 
         except Exception as e:
-            logger.error(f"  Driver {driver_code} failed: {e}")
+            logger.error(f"  Driver {driver_num} failed: {e}")
 
     # FastF1 sessions are large: free the memory before the next one
     del session
