@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { CONSENT_KEY, CONSENT_EVENT } from '../utils/consent';
 
 // Dark site palette, hardcoded: the banner shows on the dark landing page and on the cream app pages alike.
@@ -8,18 +8,18 @@ const P = {
   border: 'rgba(242,230,216,0.14)', borderHi: 'rgba(242,230,216,0.24)',
 }
 
-export default function CookieConsent() {
-  const [visible, setVisible] = useState(false);
+/** Whether to ask: no choice stored yet. Never when storage is unavailable, since the choice couldn't be kept */
+function needsChoice(): boolean {
+  try {
+    return !localStorage.getItem(CONSENT_KEY);
+  } catch {
+    return false;
+  }
+}
 
-  useEffect(() => {
-    let existing: string | null = null;
-    try {
-      existing = localStorage.getItem(CONSENT_KEY);
-    } catch {
-      // localStorage unavailable — don't show a banner that can't persist a choice
-    }
-    if (!existing) setVisible(true);
-  }, []);
+export default function CookieConsent() {
+  // Read before the first paint, so the banner doesn't land a frame after the page
+  const [visible, setVisible] = useState(needsChoice);
 
   const choose = (value: 'accepted' | 'declined') => {
     try {
@@ -56,7 +56,7 @@ export default function CookieConsent() {
           <button
             onClick={() => choose('declined')}
             style={{
-              fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
+              fontFamily: "'JetBrains Mono', monospace", fontSize: 'var(--fs-10)',
               letterSpacing: '0.10em', textTransform: 'uppercase',
               color: P.text2, background: 'transparent', border: `1px solid ${P.border}`,
               borderRadius: 'var(--r)', padding: '9px 18px', cursor: 'pointer',
@@ -67,7 +67,7 @@ export default function CookieConsent() {
           <button
             onClick={() => choose('accepted')}
             style={{
-              fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
+              fontFamily: "'JetBrains Mono', monospace", fontSize: 'var(--fs-10)',
               letterSpacing: '0.10em', textTransform: 'uppercase',
               color: P.panel, background: P.accent, border: `1px solid ${P.accent}`,
               borderRadius: 'var(--r)', padding: '9px 18px', cursor: 'pointer', fontWeight: 700,

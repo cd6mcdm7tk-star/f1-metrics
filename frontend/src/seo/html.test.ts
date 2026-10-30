@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { headHtml, sitemap, withHead } from './html';
+import { headHtml, sitemap, withHead, withPreloads } from './html';
 import { NOT_FOUND, sitePages } from './pages';
 
 const pages = sitePages(2026);
@@ -15,6 +15,14 @@ describe('page heads written at build time', () => {
     expect(html).toContain('property="og:image:width" content="1200"');
     expect(html).toContain('application/ld+json');
     expect(html).toContain('<meta name="theme-color" content="#5e1018" />');
+  });
+
+  it('preloads the scripts and fonts a page needs first', () => {
+    const html = withPreloads(shell, ['assets/LandingPage-1.js', 'assets/rajdhani-latin-400-normal-2.woff2']);
+    expect(html).toContain('<link rel="modulepreload" crossorigin href="/assets/LandingPage-1.js" />');
+    expect(html).toContain('<link rel="preload" as="font" type="font/woff2" crossorigin href="/assets/rajdhani-latin-400-normal-2.woff2" />');
+    expect(html.indexOf('LandingPage')).toBeLessThan(html.indexOf('</head>'));
+    expect(withPreloads(shell, [])).toBe(shell);
   });
 
   it("marks every tag as react-helmet-async's own, so the app replaces them", () => {

@@ -3,18 +3,28 @@ import { dirname, resolve } from 'node:path'
 import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
-import { sitemap, withHead } from './src/seo/html'
+import { sitemap, withHead, withPreloads } from './src/seo/html'
 import { NOT_FOUND, sitePages, type PageSeo } from './src/seo/pages'
 
 /** Each page's head written into its own HTML file, a 404 page and the
  * sitemap: crawlers and link previews that don't run JavaScript read them */
 function seoPages(): Plugin {
   let outDir = 'dist'
+  // Fetched with the main script instead of after it: the body font on every
+  // page, and the home page's own scripts (its route is loaded lazily)
+  let font: string[] = []
+  let home: string[] = []
   return {
     name: 'seo-pages',
     apply: 'build',
     configResolved(config) {
       outDir = resolve(config.root, config.build.outDir)
+    },
+    generateBundle(_, bundle) {
+      const files = Object.values(bundle)
+      font = files.filter(f => f.type === 'asset' && /rajdhani-latin-400-normal-[^/]+\.woff2$/.test(f.fileName)).map(f => f.fileName)
+      const landing = files.find(f => f.type === 'chunk' && f.facadeModuleId?.endsWith('/pages/LandingPage.tsx'))
+      home = landing?.type === 'chunk' ? [landing.fileName, ...landing.imports] : []
     },
     closeBundle() {
       const shell = readFileSync(resolve(outDir, 'index.html'), 'utf8')
@@ -30,7 +40,9 @@ function seoPages(): Plugin {
       for (const [file, page] of files) {
         const path = resolve(outDir, file)
         mkdirSync(dirname(path), { recursive: true })
-        writeFileSync(path, withHead(shell, page))
+        // Scripts the shell already loads aren't preloaded twice
+        const early = [...font, ...(file === 'index.html' ? home : [])].filter(f => !shell.includes(f))
+        writeFileSync(path, withPreloads(withHead(shell, page), early))
       }
       writeFileSync(resolve(outDir, 'sitemap.xml'), sitemap(Object.values(pages), new Date().toISOString().slice(0, 10)))
     },

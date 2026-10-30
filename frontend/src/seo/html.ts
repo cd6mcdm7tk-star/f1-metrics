@@ -24,6 +24,15 @@ export function withHead(shell: string, page: PageSeo): string {
   return shell.replace(/<title>[^<]*<\/title>/, headHtml(page));
 }
 
+/** Files the page needs early, fetched alongside the main script rather than
+ * after it: scripts as module preloads, fonts as font preloads */
+export function withPreloads(html: string, files: string[]): string {
+  const links = files.map(file => (file.endsWith('.woff2')
+    ? `<link rel="preload" as="font" type="font/woff2" crossorigin href="/${file}" />`
+    : `<link rel="modulepreload" crossorigin href="/${file}" />`));
+  return links.length ? html.replace('</head>', `${links.join('\n')}\n</head>`) : html;
+}
+
 /** The sitemap of the pages search engines should find */
 export function sitemap(pages: PageSeo[], lastmod: string): string {
   const urls = pages.filter(p => !p.noindex).map(p => [

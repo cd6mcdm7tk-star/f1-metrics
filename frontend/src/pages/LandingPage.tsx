@@ -25,6 +25,17 @@ const P = {
 interface CalendarRace { round: number; location: string; country: string; date_start: string; }
 
 const CALENDAR_YEAR = CURRENT_SEASON_YEAR;
+/** The last calendar fetched, so a returning visitor sees the next race at once */
+const CALENDAR_KEY = `landing:calendar:${CALENDAR_YEAR}`;
+
+function storedCalendar(): CalendarRace[] | null {
+  try {
+    const stored = localStorage.getItem(CALENDAR_KEY);
+    return stored ? JSON.parse(stored) : null;
+  } catch {
+    return null;
+  }
+}
 
 function getNextRace(calendar: CalendarRace[]): CalendarRace | null {
   const now = new Date();
@@ -53,14 +64,17 @@ function pad(n: number) { return String(n).padStart(2, '0'); }
 export default function LandingPage() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
-  const [calendar, setCalendar] = useState<CalendarRace[] | null>(null);
+  const [calendar, setCalendar] = useState<CalendarRace[] | null>(storedCalendar);
   const [cd, setCd] = useState<Countdown>({ days: 0, hours: 0, minutes: 0, seconds: 0 });
 
   useEffect(() => {
     fetch(`${getApiBase()}/calendar/${CALENDAR_YEAR}`)
       .then(r => r.json())
-      .then(d => setCalendar(d.calendar || []))
-      .catch(() => setCalendar([]));
+      .then(d => {
+        setCalendar(d.calendar || []);
+        try { localStorage.setItem(CALENDAR_KEY, JSON.stringify(d.calendar || [])); } catch { /* private mode */ }
+      })
+      .catch(() => setCalendar(current => current ?? []));
   }, []);
 
   const race = calendar ? getNextRace(calendar) : null;
@@ -79,15 +93,9 @@ export default function LandingPage() {
     { value: cd.seconds, label: 'SEC'  },
   ];
 
-  if (!race) {
-    return (
-      <main style={{
-        height: '100dvh', width: '100vw',
-        background: P.bg,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }} />
-    );
-  }
+  // The page is drawn at once; the race's name and countdown fill their
+  // reserved places when the calendar arrives
+  const blank = '\u00a0';
 
   return (
     <>
@@ -128,7 +136,7 @@ export default function LandingPage() {
         {!isMobile && (
           <span style={{
             fontFamily: "'JetBrains Mono', monospace",
-            fontSize: 9, letterSpacing: '0.18em',
+            fontSize: 'var(--fs-9)', letterSpacing: '0.18em',
             color: P.textSub, textTransform: 'uppercase',
           }}>
             Race Telemetry Platform
@@ -149,7 +157,7 @@ export default function LandingPage() {
 
         <span style={{
           fontFamily: "'JetBrains Mono', monospace",
-          fontSize: 8, letterSpacing: '0.30em', textTransform: 'uppercase',
+          fontSize: 'var(--fs-8)', letterSpacing: '0.30em', textTransform: 'uppercase',
           color: P.accent,
         }}>
           Next Grand Prix
@@ -161,16 +169,16 @@ export default function LandingPage() {
           letterSpacing: '0.08em', textTransform: 'uppercase',
           color: P.text, margin: '12px 0 0', lineHeight: 1,
         }}>
-          {race.location} Grand Prix
+          {race ? `${race.location} Grand Prix` : blank}
         </h1>
 
         <p style={{
           fontFamily: "'JetBrains Mono', monospace",
-          fontSize: 9, letterSpacing: '0.12em',
+          fontSize: 'var(--fs-9)', letterSpacing: '0.12em',
           color: P.textSub,
           margin: '8px 0 0', textTransform: 'uppercase',
         }}>
-          {race.country}
+          {race?.country ?? blank}
         </p>
 
         <p style={{
@@ -209,11 +217,11 @@ export default function LandingPage() {
                   fontVariantNumeric: 'tabular-nums',
                   letterSpacing: '0.01em',
                 }}>
-                  {pad(value)}
+                  {race ? pad(value) : '--'}
                 </span>
                 <span style={{
                   fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: 7, letterSpacing: '0.20em',
+                  fontSize: 'var(--fs-7)', letterSpacing: '0.20em',
                   color: P.textSub, textTransform: 'uppercase',
                 }}>
                   {label}
@@ -228,7 +236,7 @@ export default function LandingPage() {
           onClick={() => navigate('/app')}
           style={{
             fontFamily: "'JetBrains Mono', monospace",
-            fontWeight: 400, fontSize: 10,
+            fontWeight: 400, fontSize: 'var(--fs-10)',
             letterSpacing: '0.26em', textTransform: 'uppercase',
             color: P.textSub,
             background: 'transparent',
@@ -264,19 +272,19 @@ export default function LandingPage() {
         {!isMobile && (
           <span style={{
             fontFamily: "'JetBrains Mono', monospace",
-            fontSize: 8, letterSpacing: '0.16em', textTransform: 'uppercase',
+            fontSize: 'var(--fs-8)', letterSpacing: '0.16em', textTransform: 'uppercase',
             color: P.textSub,
           }}>
             Powered by OpenF1 API
           </span>
         )}
-        <LegalLinks color={P.textSub} hoverColor={P.text} fontSize={8} />
+        <LegalLinks color={P.textSub} hoverColor={P.text} fontSize="var(--fs-8)" />
         <span style={{
           fontFamily: "'JetBrains Mono', monospace",
-          fontSize: 8, letterSpacing: '0.16em', textTransform: 'uppercase',
+          fontSize: 'var(--fs-8)', letterSpacing: '0.16em', textTransform: 'uppercase',
           color: P.textSub,
         }}>
-          R{String(race.round).padStart(2, '0')} / {calendar?.length ?? '—'} · {CALENDAR_YEAR} Season
+          R{race ? String(race.round).padStart(2, '0') : '--'} / {calendar?.length || '--'} · {CALENDAR_YEAR} Season
         </span>
       </div>
 
