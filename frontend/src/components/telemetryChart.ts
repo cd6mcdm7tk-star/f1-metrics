@@ -16,6 +16,45 @@ export const RENDER_SCALE = 6;
 /** One point of the lap, every lap's channels flattened: spd0, thr1, dlt0… */
 export type ChartRow = Record<string, number>;
 
+/** A corner label above the speed chart: its text, and its centre across the plot (px) */
+export interface CornerLabel {
+  text: string;
+  x: number;
+}
+
+/** Room left between two labels (px) */
+const LABEL_GAP = 6;
+
+/** The corners' labels across a plot `width` px wide showing `domain`: each
+ * over its corner, and corners too close to label apart merged into one
+ * ("T12–16") centred over them, so none overlap. `charWidth`: one character (px). */
+export function cornerLabels(
+  corners: { label: string; distance: number }[], domain: [number, number], width: number, charWidth: number,
+): CornerLabel[] {
+  const [from, to] = domain;
+  const span = to - from;
+  if (!(span > 0) || !(width > 0)) return [];
+  const at = (distance: number) => ((distance - from) / span) * width;
+  const shown = corners.filter(c => c.distance >= from && c.distance <= to).sort((a, b) => a.distance - b.distance);
+  type Group = { first: (typeof shown)[number]; last: (typeof shown)[number] };
+  const text = (g: Group) => (g.first === g.last ? g.first.label : `${g.first.label}–${g.last.label.replace(/^T/, '')}`);
+  const box = (g: Group) => {
+    const centre = (at(g.first.distance) + at(g.last.distance)) / 2;
+    const half = (text(g).length * charWidth) / 2;
+    return { centre, left: centre - half, right: centre + half };
+  };
+  const groups: Group[] = [];
+  for (const corner of shown) {
+    groups.push({ first: corner, last: corner });
+    // Merging can widen a label into the one before it: merge back until clear
+    while (groups.length > 1 && box(groups[groups.length - 2]).right + LABEL_GAP > box(groups[groups.length - 1]).left) {
+      const last = groups.pop()!;
+      groups[groups.length - 1].last = last.last;
+    }
+  }
+  return groups.map(g => ({ text: text(g), x: box(g).centre }));
+}
+
 export function fmtRpm(v: number): string {
   return `${(v / 1000).toFixed(1)}k`;
 }

@@ -419,16 +419,21 @@ export default function TelemetryViewMulti({ telemetryData, getDriverColor, areT
                     {gapLabel}
                   </span>
 
-                  {hasSectors && SECTOR_KEYS.map((k, si) => {
-                    const val = d.sectors[k];
-                    const isBest = val != null && allBySector[si].length > 0 && val === Math.min(...allBySector[si]);
-                    return (
-                      <span key={k} className="data-value text-xs" style={{ color: isBest ? colors[i] : 'var(--text-2)' }}>
-                        <span style={{ color: 'var(--text-3)', marginRight: 4 }}>{k.toUpperCase()}</span>
-                        <span style={{ fontWeight: isBest ? 700 : 400 }}>{fmtSector(val)}</span>
-                      </span>
-                    );
-                  })}
+                  {/* On a phone the three sectors share their own line; on a computer they follow the gap */}
+                  {hasSectors && (
+                    <div style={isMobile ? { display: 'flex', gap: 16, width: '100%' } : { display: 'contents' }}>
+                      {SECTOR_KEYS.map((k, si) => {
+                        const val = d.sectors[k];
+                        const isBest = val != null && allBySector[si].length > 0 && val === Math.min(...allBySector[si]);
+                        return (
+                          <span key={k} className="data-value text-xs" style={{ color: isBest ? colors[i] : 'var(--text-2)' }}>
+                            <span style={{ color: 'var(--text-3)', marginRight: 4 }}>{k.toUpperCase()}</span>
+                            <span style={{ fontWeight: isBest ? 700 : 400 }}>{fmtSector(val)}</span>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               );
             })}

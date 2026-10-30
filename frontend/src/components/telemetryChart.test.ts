@@ -1,9 +1,28 @@
 import { describe, expect, it } from 'vitest';
 import type { DriverMeta, TelemetryDataMulti } from '../types/telemetry';
-import { buildChartData, buildColors, buildLabel, fastestLapIndex } from './telemetryChart';
+import { buildChartData, buildColors, buildLabel, cornerLabels, fastestLapIndex } from './telemetryChart';
 
 const lap = (driver: string, lap: number, lapTime: number | null): DriverMeta => ({
   driver, lap, lapTime, year: 2025, gp: 1, session: 'Q', sectors: { s1: null, s2: null, s3: null },
+});
+
+describe('cornerLabels', () => {
+  const corners = [
+    { label: 'T1', distance: 100 }, { label: 'T2', distance: 130 }, { label: 'T3', distance: 160 },
+    { label: 'T4', distance: 600 }, { label: 'T5', distance: 2000 },
+  ];
+
+  it('merges corners too close to label apart, and keeps the others over their corner', () => {
+    expect(cornerLabels(corners, [0, 1000], 300, 6)).toEqual([{ text: 'T1–3', x: 39 }, { text: 'T4', x: 180 }]);
+  });
+
+  it('labels every corner on its own once there is room, as when zoomed in', () => {
+    expect(cornerLabels(corners, [0, 1000], 3000, 6).map(l => l.text)).toEqual(['T1', 'T2', 'T3', 'T4']);
+  });
+
+  it('draws nothing before the plot has a width', () => {
+    expect(cornerLabels(corners, [0, 1000], 0, 6)).toEqual([]);
+  });
 });
 
 describe('fastestLapIndex', () => {

@@ -1,8 +1,8 @@
-import { memo, type RefObject } from 'react';
+import { memo, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ReferenceLine,
 } from 'recharts';
-import { fmtRpm, RENDER_SCALE, type ChartRow } from './telemetryChart';
+import { cornerLabels, fmtRpm, RENDER_SCALE, type ChartRow } from './telemetryChart';
 import Watermark from './Watermark';
 
 const fmtDist = (v: number) => `${(v / 1000).toFixed(1)}km`;
@@ -15,6 +15,8 @@ const fmtDelta = (v: number) => `${+v.toFixed(3)}`;
 const GRID  = { strokeDasharray: '3 4', stroke: 'var(--chart-grid)', vertical: false };
 const CORNER_LINE = { stroke: 'var(--border-hi)', strokeDasharray: '2 3' };
 const TICK  = { fill: 'var(--text-2)', fontSize: 9, fontFamily: 'JetBrains Mono' };
+/** A JetBrains Mono character's width, as a share of its size */
+const MONO_ADVANCE = 0.6;
 
 interface Props {
   chartData: ChartRow[];
@@ -41,6 +43,25 @@ interface Props {
 function TelemetryChartStack({
   chartData, colors, labels, dashed, fastestIdx, corners, xDomain, speedYDomain, margin, yAxisWidth, zoomChartIdx, rowRefs, zoomWrapRefs,
 }: Props) {
+  // The corners' labels sit in a band over the speed chart, not on its dotted
+  // lines: laid out in pixels, so the band's width and font size are measured
+  const bandRef = useRef<HTMLDivElement>(null);
+  const [band, setBand] = useState({ width: 0, fontSize: 0 });
+  useEffect(() => {
+    const el = bandRef.current;
+    if (!el) return;
+    const measure = () => setBand({ width: el.clientWidth, fontSize: parseFloat(getComputedStyle(el).fontSize) });
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  const plotLeft = margin.left + yAxisWidth;
+  const cornerTags = useMemo(
+    () => cornerLabels(corners, xDomain, band.width - plotLeft - margin.right, band.fontSize * MONO_ADVANCE),
+    [corners, xDomain, band, plotLeft, margin.right],
+  );
+
   // The zoomed row hides its ticks, which would stretch with the transform
   const xAxisPropsFor = (rowIdx: number) => ({
     dataKey: 'distance' as const,
@@ -58,18 +79,22 @@ function TelemetryChartStack({
       <div ref={(el) => { rowRefs.current[0] = el; }} className="relative h-[220px] sm:h-[300px] overflow-hidden flex flex-col">
         <Watermark bottom={4} right={24} />
         <div className="label-section ml-1 mb-0.5 flex-shrink-0" style={{ color: 'var(--text-2)' }}>SPEED km/h</div>
+        {/* Hidden under the loupe, like the ticks: the chart stretches there, the band wouldn't */}
+        <div
+          ref={bandRef} className="relative flex-shrink-0"
+          style={{ height: '1.4em', fontFamily: "'JetBrains Mono', monospace", fontSize: 'var(--fs-9)', color: 'var(--text-2)', visibility: zoomChartIdx === 0 ? 'hidden' : undefined }}
+        >
+          {cornerTags.map(tag => (
+            <span key={tag.text} style={{ position: 'absolute', bottom: 0, left: plotLeft + tag.x, transform: 'translateX(-50%)', whiteSpace: 'nowrap' }}>{tag.text}</span>
+          ))}
+        </div>
         <div ref={(el) => { zoomWrapRefs.current[0] = el; }} className="flex-1 min-h-0" style={{ width: zoomChartIdx === 0 ? `${RENDER_SCALE * 100}%` : '100%' }}>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData} syncId="multi" margin={margin}>
               <CartesianGrid {...GRID} />
               <XAxis {...xAxisPropsFor(0)} hide />
               <YAxis stroke="transparent" tick={zoomChartIdx === 0 ? false : TICK} tickLine={false} tickFormatter={fmtSpeed} domain={speedYDomain} width={yAxisWidth} />
-              {corners.map((c, i) => (
-                <ReferenceLine
-                  key={i} x={c.distance} {...CORNER_LINE}
-                  label={{ value: c.label, position: 'insideTop', fill: 'var(--text-3)', fontSize: 8, fontFamily: 'JetBrains Mono' }}
-                />
-              ))}
+              {corners.map((c, i) => <ReferenceLine key={i} x={c.distance} {...CORNER_LINE} />)}
               {colors.map((color, i) => (
                 <Line key={i} type="monotone" dataKey={`spd${i}`} stroke={color} strokeWidth={i === 0 ? 1.5 : 1.2}
                   dot={false} isAnimationActive={false} strokeDasharray={dashed[i] ? '4 2' : undefined} />
