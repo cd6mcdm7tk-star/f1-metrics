@@ -264,10 +264,12 @@ export default function StatisticsPage() {
             </div>
           )}
 
-          {/* Pinned to the bottom of the sidebar, whatever the detail card's height */}
-          <div style={{ margin: isMobile ? '0 14px 14px' : 'auto 14px 14px', paddingTop: 12, borderTop: '1px solid var(--border)' }}>
-            <LegalLinks color="var(--text-3)" hoverColor="var(--text)" fontSize="var(--fs-8)" />
-          </div>
+          {/* Desktop: pinned to the bottom of the sidebar, whatever the detail card's height */}
+          {!isMobile && (
+            <div style={{ margin: 'auto 14px 14px', paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+              <LegalLinks color="var(--text-3)" hoverColor="var(--text)" fontSize="var(--fs-8)" />
+            </div>
+          )}
         </div>
 
         {/* ── Right: comparison, standings, race log ───────────────────────── */}
@@ -297,6 +299,13 @@ export default function StatisticsPage() {
           )}
         </div>
       </main>
+
+      {/* Mobile: at the end of the page, as on the telemetry page */}
+      {isMobile && (
+        <div style={{ padding: '14px 16px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'center', background: 'var(--bg)' }}>
+          <LegalLinks color="var(--text-3)" hoverColor="var(--text)" fontSize="var(--fs-8)" />
+        </div>
+      )}
     </div>
 
     <UpgradeModal isOpen={showUpgradeModal} onClose={() => setShowUpgradeModal(false)} reason="current_season" />
