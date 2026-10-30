@@ -1,7 +1,8 @@
 """
-Stores a session's laps and telemetry in PostgreSQL: OpenF1 for the current
-season (every lap's telemetry), FastF1 before that (fastest laps only).
-Run by jobs/schedule_ingest.py, or by hand:
+Stores a session's laps and telemetry in PostgreSQL: OpenF1 from its first
+season (every lap's telemetry, or the fastest laps' only), FastF1 before that
+(fastest laps only). Run by jobs/schedule_ingest.py, jobs/backfill_season.py,
+or by hand:
 
   python jobs/ingest_session.py --year 2026 --round 1 --session Q
 """
@@ -21,6 +22,7 @@ import requests
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.lap_samples import lap_samples, lap_window
+from app.openf1 import FIRST_SEASON as OPENF1_FIRST_SEASON
 from database import db
 
 logging.basicConfig(
@@ -183,8 +185,9 @@ def _openf1_session_key(year: int, gp_round: int, session_type: str) -> int:
     return sessions[0]["session_key"]
 
 
-def ingest_openf1(year: int, gp_round: int, session_type: str):
-    """Ingest all drivers' laps + telemetry for a session via OpenF1 API."""
+def ingest_openf1(year: int, gp_round: int, session_type: str, fastest_only: bool = False):
+    """Ingest all drivers' laps for a session via OpenF1, with every lap's
+    telemetry, or each driver's fastest lap's only."""
     logger.info(f"[OpenF1] Ingesting {year} R{gp_round} {session_type}")
 
     try:
@@ -233,7 +236,7 @@ def ingest_openf1(year: int, gp_round: int, session_type: str):
         # for good. Now it skips just that driver — whose missing laps the
         # scheduler then sees and retries on its next run.
         try:
-            _ingest_openf1_driver(year, gp_round, session_type, session_key, driver_num, code, driver_laps, compounds)
+            _ingest_openf1_driver(year, gp_round, session_type, session_key, driver_num, code, driver_laps, compounds, fastest_only)
         except Exception as e:
             failed.append(code)
             logger.error(f"  Driver {code} failed: {e}")
@@ -242,12 +245,17 @@ def ingest_openf1(year: int, gp_round: int, session_type: str):
 
 
 def _ingest_openf1_driver(year: int, gp_round: int, session_type: str, session_key: int,
-                          driver_num: int, code: str, driver_laps: list, compounds: dict):
+                          driver_num: int, code: str, driver_laps: list, compounds: dict,
+                          fastest_only: bool = False):
     # Find personal best (minimum lap_duration)
     valid_laps = [l for l in driver_laps if l.get("lap_duration") is not None]
     fastest_lap_time = min((l["lap_duration"] for l in valid_laps), default=None)
+    fastest = next((l for l in valid_laps if l["lap_duration"] == fastest_lap_time and l.get("date_start")), None)
 
-    car_data, pos_data = _fetch_driver_session_data(session_key, driver_num)
+    if fastest_only:
+        car_data, pos_data = _fetch_lap_data(session_key, driver_num, fastest) if fastest else ([], [])
+    else:
+        car_data, pos_data = _fetch_driver_session_data(session_key, driver_num)
     logger.info(f"  {code}: {len(car_data)} car_data points, {len(pos_data)} location points")
     car_frame, pos_frame = _session_frame(car_data), _session_frame(pos_data)
 
@@ -266,9 +274,10 @@ def _ingest_openf1_driver(year: int, gp_round: int, session_type: str, session_k
 
         date_start = lap.get("date_start")
         lap_duration = lap.get("lap_duration")
-        has_telemetry = False
+        # Only the fastest lap is stored then; the others stay readable live
+        has_telemetry = fastest_only and bool(date_start and lap_duration)
 
-        if date_start and lap_duration and car_data:
+        if date_start and lap_duration and car_data and (is_pb or not fastest_only):
             try:
                 tel_data = _extract_lap_telemetry(car_frame, pos_frame, date_start, lap_duration)
                 if tel_data:
@@ -359,6 +368,27 @@ def _fetch_driver_session_data(session_key: int, driver_number: int) -> tuple:
         pos_data = []
 
     return car_data, pos_data
+
+
+def lap_query_window(date_start: str, lap_duration: float) -> tuple[str, str]:
+    """The lap's window (app.lap_samples.lap_window) as OpenF1 date filters:
+    UTC without an offset, since a "+" in a query string reads as a space."""
+    begin, end = lap_window(pd.to_datetime(date_start, utc=True), lap_duration)
+    as_filter = lambda t: t.tz_convert("UTC").strftime("%Y-%m-%dT%H:%M:%S.%f")
+    return as_filter(begin), as_filter(end)
+
+
+def _fetch_lap_data(session_key: int, driver_number: int, lap: dict) -> tuple:
+    """car_data + location for one lap only, filtered by date on OpenF1's side;
+    the whole session's when the filter brings nothing back."""
+    begin, end = lap_query_window(lap["date_start"], lap["lap_duration"])
+    window = f"date>={begin}&date<={end}"
+    params = {"session_key": session_key, "driver_number": driver_number}
+    car_data = _openf1_get(f"car_data?{window}", params)
+    if not car_data:
+        logger.warning(f"  No windowed car_data for driver {driver_number}: reading the whole session")
+        return _fetch_driver_session_data(session_key, driver_number)
+    return car_data, _openf1_get(f"location?{window}", params)
 
 
 def _session_frame(rows: list) -> pd.DataFrame:
@@ -470,11 +500,13 @@ def ingest_fastf1(year: int, gp_round: int, session_type: str):
                     "y":        tel["Y"].fillna(0).tolist(),
                 })
 
+                # Under its number too, so picking that lap by number finds it
                 lap_num = int(fastest["LapNumber"])
-                db.save_telemetry(
-                    year, gp_round, session_type, driver_code,
-                    lap_num, "fastest", tel_data
-                )
+                for lap_type in ("fastest", f"lap_{lap_num}"):
+                    db.save_telemetry(
+                        year, gp_round, session_type, driver_code,
+                        lap_num, lap_type, tel_data
+                    )
                 logger.info(f"  Saved {driver_code}: fastest lap telemetry ({lap_num})")
 
             except Exception as e:
@@ -493,7 +525,7 @@ def ingest_fastf1(year: int, gp_round: int, session_type: str):
 # Entry point
 # ---------------------------------------------------------------------------
 
-def ingest(year: int, gp_round: int, session_type: str):
+def ingest(year: int, gp_round: int, session_type: str, fastest_only: bool = False):
     if not db.available:
         logger.error("PostgreSQL not available - set DATABASE_URL")
         sys.exit(1)
@@ -501,8 +533,8 @@ def ingest(year: int, gp_round: int, session_type: str):
     # Ensure tables exist
     db.create_tables()
 
-    if year >= 2026:
-        ingest_openf1(year, gp_round, session_type)
+    if year >= OPENF1_FIRST_SEASON:
+        ingest_openf1(year, gp_round, session_type, fastest_only)
     else:
         ingest_fastf1(year, gp_round, session_type)
 
