@@ -9,6 +9,7 @@ import type { GrandPrix, LapData, LapSelection, SessionDriver } from '../types/s
 import { compoundColor } from '../utils/compoundColors';
 import { formatLapTime, lapChartDomain, lapChartRows } from './lapChart';
 import LapTimesChart from './LapTimesChart';
+import { inSession } from './sessionDrivers';
 import { useLineColors, useLineTransitions } from './lineTransitions';
 import Watermark from './Watermark';
 import { TELEMETRY_SINCE } from '../seo/pages';
@@ -138,6 +139,20 @@ export default function SessionExplorer({
     setSelectedDrivers(initialDrivers);
     setSelectedLapRefs([]);
   }, [sessionKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The session's drivers, once loaded: a driver carried from the previous
+  // session who wasn't in this one leaves the selection
+  useEffect(() => {
+    if (!drivers.length) return;
+    setSelectedDrivers(prev => {
+      const kept = inSession(prev, drivers);
+      return kept.length === prev.length ? prev : kept;
+    });
+    setSelectedLapRefs(prev => {
+      const codes = inSession(prev.map(l => l.driver), drivers);
+      return codes.length === prev.length ? prev : prev.filter(l => codes.includes(l.driver));
+    });
+  }, [drivers]);
 
   // ── Toggle specific lap ref ────────────────────────────────────────────────
   const toggleLapRef = useCallback((driver: string, lapNumber: number) => {

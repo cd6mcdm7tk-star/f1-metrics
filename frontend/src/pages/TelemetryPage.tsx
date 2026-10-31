@@ -7,6 +7,7 @@ import SEO from '../components/SEO';
 import { sitePages } from '../seo/pages';
 import PageHeader from '../components/PageHeader';
 import SessionExplorer from '../components/SessionExplorer';
+import { pairInSession } from '../components/sessionDrivers';
 import TelemetryViewMulti from '../components/TelemetryViewMulti';
 import LegalLinks from '../components/LegalLinks';
 import { useIsMobile } from '../hooks/useIsMobile';
@@ -149,9 +150,11 @@ export default function TelemetryPage() {
       if (cancelled) return;
       setDrivers(data);
       setDriverTeams(Object.fromEntries(data.filter(d => d.abbreviation && d.team).map(d => [d.abbreviation, d.team])));
+      // The default pair: kept for drivers who took part, filled in for the others
       if (data.length >= 2) {
-        if (!driver1) setD1Raw(data[0].abbreviation);
-        if (!driver2) setD2Raw(data[1].abbreviation);
+        const [d1, d2] = pairInSession([driver1, driver2], data);
+        if (d1 !== driver1) setD1Raw(d1);
+        if (d2 !== driver2) setD2Raw(d2);
       }
     }).catch(e => console.error('loadDrivers:', e));
     return () => { cancelled = true; };
