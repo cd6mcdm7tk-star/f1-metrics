@@ -150,6 +150,27 @@ async def get_session_key(year: int, gp_round: int, session_type: str) -> int:
     return session_key
 
 
+# Until a session has run, OpenF1 lists the drivers of the one before (a
+# stand-in shows as the driver he replaces, Hirakawa as Ocon at Mexico 2026)
+# and its results fill in as it goes: they are final this long after its end
+SETTLED_AFTER = datetime.timedelta(hours=1)
+
+
+def is_settled(session: dict, now: datetime.datetime) -> bool:
+    """Whether an OpenF1 session ended long enough ago for its drivers and results to be final"""
+    end = session.get("date_end")
+    return bool(end) and now - datetime.datetime.fromisoformat(end) > SETTLED_AFTER
+
+
+async def session_settled(session_key: int) -> bool:
+    try:
+        sessions = await request("sessions", {"session_key": session_key})
+    except Exception as e:
+        logger.warning(f"End of session {session_key} unavailable: {e}")
+        return False
+    return bool(sessions) and is_settled(sessions[0], datetime.datetime.now(datetime.timezone.utc))
+
+
 async def get_circuit_key(session_key: int) -> int:
     """The circuit's key in F1's timing data, which MultiViewer's layouts use too."""
     sessions = await request("sessions", {"session_key": session_key})

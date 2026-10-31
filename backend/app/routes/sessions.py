@@ -16,6 +16,10 @@ from app.schedule import get_grands_prix as get_grands_prix_list
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
 
+# A session's drivers, kept for a day once final, a few minutes before (openf1.SETTLED_AFTER)
+DRIVERS_TTL = 86400
+UNSETTLED_DRIVERS_TTL = 300
+
 
 @router.get("/grands-prix/{year}")
 @limiter.limit("30/minute")
@@ -102,6 +106,7 @@ async def get_drivers(request: Request, year: int, gp_round: int, session_type: 
                 drivers.sort(key=lambda d: pos_by_number.get(int(d["number"]), 999) if d["number"].isdigit() else 999)
             except Exception as e:
                 logger.warning(f"session_result ordering unavailable for {year} R{gp_round} {session_type}: {e}")
+            ttl = DRIVERS_TTL if await openf1.session_settled(session_key) else UNSETTLED_DRIVERS_TTL
         else:
             session = fastf1.get_session(year, gp_round, session_type)
             await asyncio.to_thread(session.load)
@@ -119,8 +124,9 @@ async def get_drivers(request: Request, year: int, gp_round: int, session_type: 
             drivers.sort(key=lambda d: d["_pos"])
             for d in drivers:
                 del d["_pos"]
+            ttl = DRIVERS_TTL
 
-        redis_cache.set(cache_key, drivers, ttl=86400)
+        redis_cache.set(cache_key, drivers, ttl=ttl)
         return drivers
 
     except HTTPException:
