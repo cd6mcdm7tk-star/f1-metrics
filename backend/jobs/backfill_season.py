@@ -11,16 +11,22 @@ import argparse
 import logging
 import os
 import sys
+import time
 from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from app.openf1 import FIRST_SEASON as OPENF1_FIRST_SEASON
 from database import db
 from jobs.ingest_session import ingest
 from jobs.schedule_ingest import SESSION_NAME_MAP, SESSIONS_TO_INGEST, get_sessions_fastf1
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
+
+# FastF1 allows itself 500 calls an hour and a session takes about 19: below
+# that pace its loads start failing. Each FastF1 session takes this long at least (s).
+FASTF1_SESSION_PACE = 150
 
 
 def sessions_to_fill(schedule: list[dict], stored: set[tuple[int, str]], now: datetime) -> list[tuple[int, str]]:
@@ -58,13 +64,17 @@ def backfill(year: int) -> tuple[int, list[str]]:
     todo = sessions_to_fill(get_sessions_fastf1(year), stored_sessions(year), datetime.now(timezone.utc))
     logger.info(f"[Backfill] {year}: {len(todo)} sessions to ingest")
     failed = []
+    paced = year < OPENF1_FIRST_SEASON
     for i, (gp_round, code) in enumerate(todo, 1):
         logger.info(f"[Backfill] {year} {i}/{len(todo)}: round {gp_round} {code}")
+        started = time.monotonic()
         try:
             ingest(year, gp_round, code, fastest_only=True)
         except Exception as e:
             failed.append(f"R{gp_round} {code}")
             logger.error(f"[Backfill] {year} round {gp_round} {code} failed: {e}")
+        if paced and i < len(todo):
+            time.sleep(max(0.0, FASTF1_SESSION_PACE - (time.monotonic() - started)))
     return len(todo), failed
 
 

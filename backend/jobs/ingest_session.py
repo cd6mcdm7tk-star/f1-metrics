@@ -440,6 +440,14 @@ def ingest_fastf1(year: int, gp_round: int, session_type: str):
     session = fastf1.get_session(year, gp_round, session_type)
     # Laps and telemetry only: no weather or race control messages
     session.load(laps=True, telemetry=True, weather=False, messages=False)
+    # FastF1 logs a failed load (no data, its own rate limit) and carries on:
+    # nothing would be stored and the session would pass for done
+    try:
+        loaded = not session.laps.empty
+    except fastf1.core.DataNotLoadedError:
+        loaded = False
+    if not loaded:
+        raise RuntimeError(f"FastF1 loaded no laps for {year} R{gp_round} {session_type}")
 
     for driver_num in session.drivers:
         try:
