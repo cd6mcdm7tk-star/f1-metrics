@@ -1,0 +1,22 @@
+name: Something doesn't work
+description: A page that doesn't load, a button that does nothing, a chart that breaks
+labels: [bug]
+body:
+  - type: input
+    id: link
+    attributes:
+      label: Link
+      description: The page where it happens.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: What you did, and what happened
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Browser and device
+      placeholder: Safari, iPhone 15

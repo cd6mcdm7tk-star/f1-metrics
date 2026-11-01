@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: A security problem
+    url: https://github.com/cd6mcdm7tk-star/f1-metrics/blob/main/SECURITY.md
+    about: Please report it privately, as explained here.

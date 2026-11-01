@@ -1,0 +1,25 @@
+name: A number looks wrong
+description: A lap time, a gap, a trace or a statistic that doesn't match what you expected
+labels: [bug]
+body:
+  - type: input
+    id: link
+    attributes:
+      label: Link
+      description: The link button at the top right of the Telemetry page copies one that opens the same comparison.
+      placeholder: https://metrikdelta.com/app?y=2026&gp=19&s=Q…
+    validations:
+      required: true
+  - type: textarea
+    id: seen
+    attributes:
+      label: What the site shows
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected, and where it comes from
+      description: The official timing, a broadcast graphic, another tool…
+    validations:
+      required: true

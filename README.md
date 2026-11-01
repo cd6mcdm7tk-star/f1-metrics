@@ -1,5 +1,7 @@
 # METRIK DELTA
 
+[![CI](https://github.com/cd6mcdm7tk-star/f1-metrics/actions/workflows/ci.yml/badge.svg)](https://github.com/cd6mcdm7tk-star/f1-metrics/actions/workflows/ci.yml) [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
+
 Formula 1 telemetry and season statistics — [metrikdelta.com](https://metrikdelta.com). Free, with no account, and open source.
 
 - **Telemetry** (`/app`): every lap of a session since 2021 on a lap-time chart, and up to 10 laps compared side by side — speed, throttle, brake, gear, RPM, time delta, track dominance and speed through each corner. Charts export as 3600 px images.
@@ -9,7 +11,7 @@ Formula 1 telemetry and season statistics — [metrikdelta.com](https://metrikde
 
 ```
 frontend/   React 19 + TypeScript + Vite, Recharts, Tailwind — deployed on Vercel
-backend/    FastAPI (Python 3.14) — deployed on Railway, with PostgreSQL and Redis
+backend/    FastAPI (Python 3.12) — deployed on Railway, with PostgreSQL and Redis
 video/      Remotion — vertical videos for social media, in the site's design
 ```
 
@@ -22,7 +24,7 @@ The backend serves four kinds of data:
 | Results and standings | [Jolpica](https://github.com/jolpica/jolpica-f1) (Ergast API) |
 | Ingested sessions | PostgreSQL: every lap's time and each driver's fastest-lap telemetry, filled by an hourly job (`jobs/schedule_ingest.py`) and, for past seasons, `jobs/backfill_season.py` |
 
-Responses are cached in Redis. Everything is public; only the ingestion routes (`/api/admin`) need the `X-Admin-Secret` header.
+The home page's first card is the latest qualifying session's front row, found by `/api/latest-qualifying` (`app/featured.py`) once its results are final. Responses are cached in Redis. Everything is public; only the ingestion routes (`/api/admin`) need the `X-Admin-Secret` header.
 
 OpenF1 streams car data and positions for the whole session, about four samples a second: a lap is cut from line to line and its distance integrated from its speed, counted from the line (`app/lap_samples.py`). Laps compared from the same event are then lined up by their positions on the reference lap's path (`aligned_distance` in `app/telemetry.py`), so a lap start time a tenth out doesn't move every braking point.
 
@@ -35,17 +37,18 @@ backend/
     openf1.py          OpenF1 client
     telemetry.py       lap telemetry from PostgreSQL, OpenF1 or FastF1
     season.py          season bundle from Jolpica
+    featured.py        the home page's latest qualifying
   jobs/                session ingestion (cron)
 frontend/src/
-  pages/               Landing, Telemetry, Statistics, About, Methodology
-  components/          charts, explorer, modals; stats/ for the Statistics cards
+  pages/               Landing, Telemetry, Statistics, Methodology, Legal
+  components/          charts, explorer; stats/ for the Statistics cards, methodology/ for the Methodology page's figures
   stats/               season computations (head to head, standings)
   services/, utils/    API client, colours, chart export
 ```
 
 ## Running it locally
 
-Backend — runs as is: without `DATABASE_URL` and `REDIS_URL` it reads live data and caches in memory. `OPENF1_EMAIL` / `OPENF1_PASSWORD` (an OpenF1 account, needed during live sessions) and `ADMIN_SECRET` (the ingestion routes) are optional, in a `.env`.
+Backend (Python 3.12 or later) — runs as is: without `DATABASE_URL` and `REDIS_URL` it reads live data and caches in memory. `OPENF1_EMAIL` / `OPENF1_PASSWORD` (an OpenF1 account, needed during live sessions) and `ADMIN_SECRET` (the ingestion routes) are optional, in a `.env` (see `backend/.env.example`).
 
 ```bash
 cd backend
@@ -132,11 +135,13 @@ cd backend && pytest
 cd video && npm test && npm run typecheck
 ```
 
+They run on every push and pull request (`.github/workflows/ci.yml`).
+
 ## License
 
 The code is free software under the [GNU Affero General Public License v3.0](LICENSE): you may use, study, modify and share it, and if you run a modified version as a service, you publish your changes under the same license. The license covers the code only: the METRIK DELTA name, logo, mascot and videos are not part of it.
 
-Issues and pull requests are welcome.
+Issues and pull requests are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). Security problems are reported privately, as [SECURITY.md](SECURITY.md) explains.
 
 ---
 
