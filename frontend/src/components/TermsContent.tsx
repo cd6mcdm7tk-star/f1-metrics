@@ -37,20 +37,30 @@ const TermsContent: React.FC = () => {
         <ul style={ul}>
           <li>No illegal activity</li>
           <li>No automated scraping or traffic that overloads the service</li>
-          <li>No reselling or redistributing the data without permission from its sources (section 4)</li>
+          <li>No reselling or redistributing the data without permission from its sources (section 5)</li>
         </ul>
       </section>
 
       <section style={section}>
-        <h3 style={h3}>3. Intellectual Property</h3>
+        <h3 style={h3}>3. Open Source</h3>
         <p style={p}>
-          The METRIK DELTA name, logo, mascot, videos, interface and original content are ours. The
-          underlying F1 data is sourced from third parties (section 4) and remains subject to their own terms.
+          METRIK DELTA's source code is <a href="https://github.com/cd6mcdm7tk-star/f1-metrics" target="_blank" rel="noopener noreferrer" style={link}>published on GitHub</a> under the
+          GNU Affero General Public License v3.0 (AGPL-3.0): you may use, study, modify and share it under
+          that license's terms, which include publishing your changes when you run a modified version as a service.
         </p>
       </section>
 
       <section style={section}>
-        <h3 style={h3}>4. Data Attribution</h3>
+        <h3 style={h3}>4. Intellectual Property</h3>
+        <p style={p}>
+          The license covers the code only. The METRIK DELTA name, logo, mascot and videos are ours and may
+          not be used for another service without permission. The underlying F1 data is sourced from third
+          parties (section 5) and remains subject to their own terms.
+        </p>
+      </section>
+
+      <section style={section}>
+        <h3 style={h3}>5. Data Attribution</h3>
         <p style={p}>
           METRIK DELTA uses data from the FastF1 library, the OpenF1 API, and the Ergast/Jolpica API.
           Formula 1 trademarks, names, and official data belong to Formula One World Championship
@@ -60,7 +70,7 @@ const TermsContent: React.FC = () => {
       </section>
 
       <section style={section}>
-        <h3 style={h3}>5. Limitation of Liability</h3>
+        <h3 style={h3}>6. Limitation of Liability</h3>
         <p style={p}>
           METRIK DELTA is provided "as is," without warranty of any kind. Underlying F1 data can be
           incomplete, delayed, or occasionally incorrect at the source. We're not liable for damages
@@ -70,7 +80,7 @@ const TermsContent: React.FC = () => {
       </section>
 
       <section style={section}>
-        <h3 style={h3}>6. Changes to Terms</h3>
+        <h3 style={h3}>7. Changes to Terms</h3>
         <p style={p}>
           We may modify these Terms at any time. Material changes will be announced on the service.
           Continued use after a change means you accept the update.
@@ -78,12 +88,12 @@ const TermsContent: React.FC = () => {
       </section>
 
       <section style={section}>
-        <h3 style={h3}>7. Governing Law</h3>
+        <h3 style={h3}>8. Governing Law</h3>
         <p style={p}>These Terms are governed by French law. Disputes fall under the jurisdiction of the French courts.</p>
       </section>
 
       <section style={{ ...section, marginBottom: 0 }}>
-        <h3 style={h3}>8. Contact</h3>
+        <h3 style={h3}>9. Contact</h3>
         <div style={{ padding: '12px 14px', background: 'rgba(0,0,0,0.15)', border: `1px solid ${border}`, borderRadius: 'var(--r)' }}>
           <p style={{ ...p, color: text, margin: 0 }}>
             <span style={strong}>Email:</span>{' '}

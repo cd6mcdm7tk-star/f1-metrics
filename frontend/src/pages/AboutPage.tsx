@@ -30,7 +30,8 @@ export default function AboutPage() {
           races, qualifying and sprints, with the driver and constructor standings.
         </li>
         <li>
-          <strong>Free</strong> — every season, the current one included, with no account.
+          <strong>Free and open source</strong> — every season, the current one included, with no account. The
+          code is <a href="https://github.com/cd6mcdm7tk-star/f1-metrics" target="_blank" rel="noopener noreferrer">on GitHub</a>, under the AGPL-3.0 license.
         </li>
       </ul>
 
