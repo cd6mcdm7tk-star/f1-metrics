@@ -1,7 +1,6 @@
 import type { TelemetryDataMulti, LapRef } from '../types/telemetry';
 import type { GrandPrix, SessionDriver } from '../types/session';
 import { getApiBase } from '../config';
-import { authHeaders } from '../lib/apiAuth';
 
 const API_BASE_URL = getApiBase();
 
@@ -26,7 +25,7 @@ export const getDrivers = (year: number, gpRound: number, sessionType: string) =
 export async function getTelemetryMulti(laps: LapRef[]): Promise<TelemetryDataMulti> {
   const data = await getJson<TelemetryDataMulti>(`${API_BASE_URL}/telemetry/multi`, 'multi-lap telemetry', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...(await authHeaders(Math.max(...laps.map(l => l.year)))) },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ laps }),
   });
   multiCache.set(JSON.stringify(laps), data);

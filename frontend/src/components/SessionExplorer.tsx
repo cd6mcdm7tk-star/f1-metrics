@@ -3,8 +3,7 @@ import { Loader2, Eye, EyeOff } from 'lucide-react';
 import { getCached, getSessionLapsKey, setCached } from '../utils/lapsCache';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { getApiBase } from '../config';
-import { authHeaders } from '../lib/apiAuth';
-import { CURRENT_SEASON_YEAR } from '../hooks/useSubscription';
+import { CURRENT_SEASON_YEAR } from '../utils/season';
 import type { GrandPrix, LapData, LapSelection, SessionDriver } from '../types/session';
 import { compoundColor } from '../utils/compoundColors';
 import { formatLapTime, lapChartDomain, lapChartRows } from './lapChart';
@@ -176,7 +175,7 @@ export default function SessionExplorer({
     }
     setLoadingSet(prev => new Set(prev).add(code));
     try {
-      const r = await fetch(`${API}/session-laps/${year}/${gp}/${st}/${code}`, { headers: await authHeaders(year) });
+      const r = await fetch(`${API}/session-laps/${year}/${gp}/${st}/${code}`);
       if (!r.ok) return;
       const d: LapData = await r.json();
       setCached(key, d);

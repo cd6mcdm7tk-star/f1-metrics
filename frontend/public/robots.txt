@@ -1,7 +1,4 @@
 User-agent: *
 Allow: /
 
-Disallow: /success
-Disallow: /cancel
-
 Sitemap: https://metrikdelta.com/sitemap.xml

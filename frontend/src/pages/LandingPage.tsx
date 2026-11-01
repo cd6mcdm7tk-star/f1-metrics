@@ -5,7 +5,7 @@ import SEO from '../components/SEO';
 import { sitePages } from '../seo/pages';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { getApiBase } from '../config';
-import { CURRENT_SEASON_YEAR } from '../hooks/useSubscription';
+import { CURRENT_SEASON_YEAR } from '../utils/season';
 
 // ── Palette (Marlboro) ────────────────────────────────────────────────────────
 

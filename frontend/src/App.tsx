@@ -1,21 +1,14 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
 import { Analytics } from '@vercel/analytics/react';
-import { AuthProvider } from './contexts/AuthContext';
-import GoogleAnalytics from './components/GoogleAnalytics';
-import CookieConsent from './components/CookieConsent';
 import { beforeSend } from './lib/analytics';
-import { RESET_PASSWORD_PATH } from './lib/recovery';
 
 const LandingPage    = lazy(() => import('./pages/LandingPage'));
 const TelemetryPage  = lazy(() => import('./pages/TelemetryPage'));
 const StatisticsPage = lazy(() => import('./pages/StatisticsPage'));
-const SuccessPage    = lazy(() => import('./pages/SuccessPage'));
-const CancelPage     = lazy(() => import('./pages/CancelPage'));
 const AboutPage      = lazy(() => import('./pages/AboutPage'));
 const MethodologyPage = lazy(() => import('./pages/MethodologyPage'));
 const NotFoundPage   = lazy(() => import('./pages/NotFoundPage'));
-const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
 
 const Spinner = () => (
   <div className="flex items-center justify-center h-screen" style={{ background: '#3d0c10' }}>
@@ -25,27 +18,20 @@ const Spinner = () => (
 
 function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        {/* Cookieless, so it counts every visit, consent or not */}
-        <Analytics beforeSend={beforeSend} />
-        <GoogleAnalytics />
-        <CookieConsent />
-        <Suspense fallback={<Spinner />}>
-          <Routes>
-            <Route path="/"        element={<LandingPage />} />
-            <Route path="/app"     element={<TelemetryPage />} />
-            <Route path="/stats"   element={<StatisticsPage />} />
-            <Route path="/success" element={<SuccessPage />} />
-            <Route path="/cancel"  element={<CancelPage />} />
-            <Route path="/about"   element={<AboutPage />} />
-            <Route path="/methodology" element={<MethodologyPage />} />
-            <Route path={RESET_PASSWORD_PATH} element={<ResetPasswordPage />} />
-            <Route path="*"        element={<NotFoundPage />} />
-          </Routes>
-        </Suspense>
-      </BrowserRouter>
-    </AuthProvider>
+    <BrowserRouter>
+      {/* Cookieless: no consent needed */}
+      <Analytics beforeSend={beforeSend} />
+      <Suspense fallback={<Spinner />}>
+        <Routes>
+          <Route path="/"        element={<LandingPage />} />
+          <Route path="/app"     element={<TelemetryPage />} />
+          <Route path="/stats"   element={<StatisticsPage />} />
+          <Route path="/about"   element={<AboutPage />} />
+          <Route path="/methodology" element={<MethodologyPage />} />
+          <Route path="*"        element={<NotFoundPage />} />
+        </Routes>
+      </Suspense>
+    </BrowserRouter>
   );
 }
 

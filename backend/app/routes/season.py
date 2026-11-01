@@ -1,10 +1,9 @@
 import datetime
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 
-from app.access import current_season, season_access
 from app.limiter import limiter
 from app.season import get_season_payload, season_is_closed
 
@@ -12,7 +11,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
 
 
-@router.get("/season/{year}", dependencies=[Depends(season_access)])
+@router.get("/season/{year}")
 @limiter.limit("30/minute")
 async def get_season(request: Request, year: int):
     if year < 1950 or year > datetime.date.today().year:
@@ -27,7 +26,6 @@ async def get_season(request: Request, year: int):
     return Response(
         content=payload,
         media_type="application/json",
-        # The current season is for subscribers: kept by the browser, never by a shared cache
-        headers={"Cache-Control": "public, max-age=86400" if season_is_closed(year)
-                 else "private, max-age=300" if year >= current_season() else "public, max-age=300"},
+        # A season still running changes after each Grand Prix
+        headers={"Cache-Control": "public, max-age=86400" if season_is_closed(year) else "public, max-age=300"},
     )

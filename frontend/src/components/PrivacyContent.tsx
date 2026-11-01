@@ -18,55 +18,42 @@ const section: React.CSSProperties = { marginBottom: 22 };
 const PrivacyContent: React.FC = () => {
   return (
     <div>
-      <p style={{ ...p, color: text3, fontSize: 'var(--fs-11)' }}>Last updated: September 27, 2026</p>
+      <p style={{ ...p, color: text3, fontSize: 'var(--fs-11)' }}>Last updated: November 1, 2026</p>
 
       <section style={section}>
         <h3 style={h3}>1. Information We Collect</h3>
-        <p style={p}>We collect the following types of information:</p>
-        <p style={{ ...p, color: text }}><span style={strong}>Information you provide:</span></p>
-        <ul style={ul}>
-          <li>Email address (account creation and authentication, via Supabase)</li>
-          <li>Payment information (processed directly by Stripe — we never see your card details)</li>
-        </ul>
-        <p style={{ ...p, color: text, marginTop: 10 }}><span style={strong}>Automatically collected:</span></p>
-        <ul style={ul}>
-          <li>Usage data (pages visited, features used)</li>
-          <li>Device information (browser type, operating system)</li>
-          <li>IP address and approximate location</li>
-          <li>Cookies — see section 6, gated behind the consent banner</li>
-        </ul>
-      </section>
-
-      <section style={section}>
-        <h3 style={h3}>2. How We Use Your Information</h3>
-        <ul style={ul}>
-          <li>Provide, maintain, and improve METRIK DELTA</li>
-          <li>Process transactions and manage subscriptions</li>
-          <li>Send service-related emails (account, billing)</li>
-          <li>Analyze usage patterns to improve the platform (only with cookie consent)</li>
-          <li>Detect and prevent fraud or abuse</li>
-          <li>Respond to support requests</li>
-        </ul>
-      </section>
-
-      <section style={section}>
-        <h3 style={h3}>3. Data Storage and Security</h3>
         <p style={p}>
-          Your data is stored using Supabase (PostgreSQL) with encryption in transit (HTTPS/TLS)
-          and at rest, secure password hashing, and access controls.
+          METRIK DELTA has no accounts and asks you for nothing. What is collected comes from your
+          visit itself:
+        </p>
+        <ul style={ul}>
+          <li>Pages visited, with the address stripped of everything but campaign tags (Vercel and Cloudflare Web Analytics, without cookies)</li>
+          <li>Device information (browser type, operating system) and approximate country</li>
+          <li>IP address, in our hosting providers' technical logs</li>
+        </ul>
+        <p style={{ ...p, marginTop: 10 }}>
+          The site also keeps data caches and the last page you viewed in your browser's local storage.
+          They stay on your device and are never sent to us.
         </p>
       </section>
 
       <section style={section}>
-        <h3 style={h3}>4. Third-Party Services</h3>
+        <h3 style={h3}>2. How We Use It</h3>
+        <ul style={ul}>
+          <li>Run, secure and improve METRIK DELTA</li>
+          <li>Count visits and see which features are used</li>
+          <li>Detect and prevent abuse</li>
+          <li>Answer you if you write to us</li>
+        </ul>
+      </section>
+
+      <section style={section}>
+        <h3 style={h3}>3. Third-Party Services</h3>
         <p style={p}>We use the following sub-processors:</p>
         <ul style={ul}>
-          <li><span style={strong}>Stripe</span> — payment processing and subscription management (PCI DSS compliant)</li>
-          <li><span style={strong}>Supabase</span> — database hosting and user authentication</li>
-          <li><span style={strong}>Vercel</span> — frontend hosting and CDN</li>
+          <li><span style={strong}>Vercel</span> — frontend hosting, CDN and cookieless analytics</li>
           <li><span style={strong}>Railway</span> — backend API hosting</li>
-          <li><span style={strong}>Cloudflare</span> — DNS and DDoS protection</li>
-          <li><span style={strong}>Google Analytics</span> — usage analytics, only loaded after you accept cookies (section 6)</li>
+          <li><span style={strong}>Cloudflare</span> — DNS, DDoS protection and cookieless analytics</li>
         </ul>
         <p style={{ ...p, marginTop: 10 }}>
           These providers may process data outside the EU (notably the US). Where that's the case, we
@@ -75,16 +62,12 @@ const PrivacyContent: React.FC = () => {
       </section>
 
       <section style={section}>
-        <h3 style={h3}>5. Your Rights Under GDPR</h3>
+        <h3 style={h3}>4. Your Rights Under GDPR</h3>
         <p style={p}>As a France-based service, we comply with GDPR. You have the right to:</p>
         <ul style={ul}>
           <li><span style={strong}>Access</span> — request a copy of your personal data</li>
-          <li><span style={strong}>Rectification</span> — correct inaccurate data</li>
           <li><span style={strong}>Erasure</span> — request deletion ("right to be forgotten")</li>
-          <li><span style={strong}>Restriction</span> — limit how we process your data</li>
-          <li><span style={strong}>Portability</span> — receive your data in a structured format</li>
           <li><span style={strong}>Objection</span> — oppose certain processing</li>
-          <li><span style={strong}>Withdraw consent</span> — at any time, for anything based on consent (e.g. analytics cookies)</li>
         </ul>
         <p style={{ ...p, marginTop: 10 }}>
           To exercise these rights, contact us at{' '}
@@ -94,50 +77,31 @@ const PrivacyContent: React.FC = () => {
       </section>
 
       <section style={section}>
-        <h3 style={h3}>6. Cookies and Tracking</h3>
-        <p style={p}>We use two categories of cookies:</p>
-        <ul style={ul}>
-          <li><span style={strong}>Essential cookies</span> — authentication and security. Always active; the service can't work without them, so they don't require consent.</li>
-          <li><span style={strong}>Analytics cookies (Google Analytics)</span> — only set after you accept them in the cookie banner shown on your first visit. You can withdraw consent at any time from the banner.</li>
-        </ul>
-      </section>
-
-      <section style={section}>
-        <h3 style={h3}>7. Data Retention</h3>
+        <h3 style={h3}>5. Cookies</h3>
         <p style={p}>
-          We keep personal data only as long as necessary for the purposes above, or as required by law.
-          Account data is deleted within 30 days of account closure, except where retention is legally required
-          (e.g. invoicing records).
+          METRIK DELTA sets no cookies: its analytics count visits without them, so there is nothing to
+          consent to.
         </p>
       </section>
 
       <section style={section}>
-        <h3 style={h3}>8. Minors</h3>
+        <h3 style={h3}>6. Data Retention</h3>
         <p style={p}>
-          METRIK DELTA is not directed at children. In line with French law, we do not knowingly collect
-          personal data from users under 15 without parental consent. Contact us if you believe a minor has
-          provided us with personal data.
+          We keep no personal data ourselves. Technical logs and analytics are kept by the providers above
+          for their standard retention periods.
         </p>
       </section>
 
       <section style={section}>
-        <h3 style={h3}>9. International Data Transfers</h3>
+        <h3 style={h3}>7. Changes to This Policy</h3>
         <p style={p}>
-          Some sub-processors (Vercel, Railway, Google) may process data outside the EU/EEA. We rely on
-          Standard Contractual Clauses or equivalent safeguards where this occurs.
-        </p>
-      </section>
-
-      <section style={section}>
-        <h3 style={h3}>10. Changes to This Policy</h3>
-        <p style={p}>
-          We may update this policy from time to time. Material changes will be notified via email or a
-          notice on the service. The date above reflects the last update.
+          We may update this policy from time to time. Material changes will be announced on the service.
+          The date above reflects the last update.
         </p>
       </section>
 
       <section style={{ ...section, marginBottom: 0 }}>
-        <h3 style={h3}>11. Contact</h3>
+        <h3 style={h3}>8. Contact</h3>
         <div style={{ padding: '12px 14px', background: 'rgba(0,0,0,0.15)', border: `1px solid ${border}`, borderRadius: 'var(--r)' }}>
           <p style={{ ...p, color: text, margin: 0 }}>
             <span style={strong}>Email:</span>{' '}

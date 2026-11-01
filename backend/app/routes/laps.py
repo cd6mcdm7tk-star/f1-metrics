@@ -4,10 +4,9 @@ import logging
 
 import fastf1
 import pandas as pd
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 
 from app import openf1
-from app.access import season_access
 from app.cache import redis_cache
 from app.errors import fastf1_http_error
 from app.limiter import limiter
@@ -56,7 +55,7 @@ def _session_laps(year: int, gp_round: int, session_type: str, driver: str, team
     return result
 
 
-@router.get("/session-laps/{year}/{gp_round}/{session_type}/{driver}", dependencies=[Depends(season_access)])
+@router.get("/session-laps/{year}/{gp_round}/{session_type}/{driver}")
 @limiter.limit("10/minute")
 async def get_session_laps(request: Request, year: int, gp_round: int, session_type: str, driver: str):
     """PostgreSQL for ingested sessions, else Redis, else OpenF1 (current

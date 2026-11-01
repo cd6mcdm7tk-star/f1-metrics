@@ -1,6 +1,6 @@
 import ArticlePage from '../components/ArticlePage';
 import { OUTLIER_MARGIN } from '../components/lapChart';
-import { CURRENT_SEASON_YEAR } from '../hooks/useSubscription';
+import { CURRENT_SEASON_YEAR } from '../utils/season';
 import { sitePages, STATISTICS_SINCE, TELEMETRY_SINCE } from '../seo/pages';
 
 export default function MethodologyPage() {

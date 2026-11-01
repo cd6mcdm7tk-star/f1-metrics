@@ -3,14 +3,13 @@ import { useSearchParams } from 'react-router-dom';
 import SEO from '../components/SEO';
 import { sitePages, STATISTICS_SINCE } from '../seo/pages';
 import PageHeader from '../components/PageHeader';
-import UpgradeModal from '../components/UpgradeModal';
 import LegalLinks from '../components/LegalLinks';
 import ComparisonCard from '../components/stats/ComparisonCard';
 import DetailCard from '../components/stats/DetailCard';
 import RaceLog from '../components/stats/RaceLog';
 import { ConstructorStandings, DriverStandings } from '../components/stats/Standings';
 import { MONO, pairColors } from '../components/stats/shared';
-import { useSubscription, CURRENT_SEASON_YEAR } from '../hooks/useSubscription';
+import { CURRENT_SEASON_YEAR, LATEST_SEASON_YEAR } from '../utils/season';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { useRememberPageUrl } from '../hooks/usePageMemory';
 import {
@@ -34,11 +33,9 @@ export default function StatisticsPage() {
   const isMobile = useIsMobile();
   const [searchParams, setSearchParams] = useSearchParams();
   useRememberPageUrl();
-  const { canAccessYear, isReady: subscriptionReady } = useSubscription();
-  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
   // Restored from the URL, so a refresh or a shared link shows the same comparison
-  const [year, setYear] = useState(() => parseInt(searchParams.get('y') || String(CURRENT_SEASON_YEAR - 1)));
+  const [year, setYear] = useState(() => parseInt(searchParams.get('y') || String(LATEST_SEASON_YEAR)));
   const [driver1, setDriver1] = useState(() => searchParams.get('d1') || '');
   const [driver2, setDriver2] = useState(() => searchParams.get('d2') || '');
 
@@ -74,15 +71,6 @@ export default function StatisticsPage() {
     if (driver2) p.d2 = driver2;
     setSearchParams(p, { replace: true });
   }, [year, driver1, driver2]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // A current-season link loads before the subscription is known: once it
-  // is, a viewer without PRO goes back to the last free season.
-  useEffect(() => {
-    if (subscriptionReady && !canAccessYear(year)) {
-      setYear(CURRENT_SEASON_YEAR - 1);
-      setShowUpgradeModal(true);
-    }
-  }, [subscriptionReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Compared with the previous year rather than a first-run flag, which
   // StrictMode's double effect run would flip and wipe a deep-linked pair.
@@ -134,13 +122,6 @@ export default function StatisticsPage() {
     }
   }
 
-  const changeYear = (newYear: number) => {
-    if (!canAccessYear(newYear)) {
-      setShowUpgradeModal(true);
-      return;
-    }
-    setYear(newYear);
-  };
 
   const placeholder = loading ? 'Loading H2H...' : driver1 && driver2 ? 'Loading...' : 'Select two drivers';
 
@@ -173,7 +154,7 @@ export default function StatisticsPage() {
               <select
                 value={year}
                 aria-label="Season"
-                onChange={e => changeYear(Number(e.target.value))}
+                onChange={e => setYear(Number(e.target.value))}
                 style={{
                   width: '100%', padding: '7px 28px 7px 10px',
                   background: 'var(--panel)',
@@ -308,7 +289,6 @@ export default function StatisticsPage() {
       )}
     </div>
 
-    <UpgradeModal isOpen={showUpgradeModal} onClose={() => setShowUpgradeModal(false)} reason="current_season" />
     </>
   );
 }

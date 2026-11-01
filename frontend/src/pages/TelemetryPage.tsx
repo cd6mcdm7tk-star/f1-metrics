@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Check, Link, Download, Loader2 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
-import { useSubscription, CURRENT_SEASON_YEAR } from '../hooks/useSubscription';
-import UpgradeModal, { type UpgradeReason } from '../components/UpgradeModal';
+import { CURRENT_SEASON_YEAR, LATEST_SEASON_YEAR } from '../utils/season';
 import SEO from '../components/SEO';
 import { sitePages } from '../seo/pages';
 import PageHeader from '../components/PageHeader';
@@ -60,12 +59,9 @@ function comparisonFromUrl(params: URLSearchParams): { drivers: string[]; laps: 
 export default function TelemetryPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const isMobile = useIsMobile();
-  const { canAccessYear, isPremium, isReady: subscriptionReady } = useSubscription();
   useRememberPageUrl();
 
   const [activeView, setActiveView] = useState<ViewType>(() => (searchParams.get('v') as ViewType) || 'laps');
-  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
-  const [upgradeReason, setUpgradeReason] = useState<UpgradeReason>('current_season');
   const [urlCopied, setUrlCopied] = useState(false);
   const [exportingPng, setExportingPng] = useState(false);
   const [exportDone, setExportDone] = useState(false);
@@ -73,8 +69,7 @@ export default function TelemetryPage() {
   // up here for the export button and across view or page switches
   const [explorerDrivers, setExplorerDrivers] = useState<string[]>(() => (searchParams.get('ex') || '').split(',').filter(Boolean));
 
-  // Defaults to the last free season, so a first visit shows data rather than the paywall
-  const [year, setYearRaw] = useState(() => parseInt(searchParams.get('y') || String(CURRENT_SEASON_YEAR - 1)));
+  const [year, setYearRaw] = useState(() => parseInt(searchParams.get('y') || String(LATEST_SEASON_YEAR)));
   const [selectedGP, setGPRaw] = useState<number | null>(() => {
     const gp = searchParams.get('gp'); return gp ? parseInt(gp) : null;
   });
@@ -184,20 +179,6 @@ export default function TelemetryPage() {
       .finally(() => { if (multiGenRef.current === gen) setMultiLoading(false); });
   }, [comparedDrivers, selectedGP, sessionType, year]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleYearChange = useCallback((y: number) => {
-    if (!canAccessYear(y)) { setShowUpgradeModal(true); return; }
-    setYearRaw(y);
-  }, [canAccessYear]);
-
-  // A current-season link loads before the subscription is known: once it
-  // is, a viewer without PRO goes back to the last free season.
-  useEffect(() => {
-    if (subscriptionReady && !canAccessYear(year)) {
-      setYearRaw(CURRENT_SEASON_YEAR - 1);
-      setShowUpgradeModal(true);
-    }
-  }, [subscriptionReady]); // eslint-disable-line react-hooks/exhaustive-deps
-
   /** Opens the trace view on these laps (or each driver's fastest when `laps` is empty). */
   const startComparison = useCallback(async (driversToCompare: string[], laps: LapSelection[]) => {
     if (!driversToCompare.length || selectedGP == null || !sessionType) return;
@@ -240,12 +221,8 @@ export default function TelemetryPage() {
   }, []);
 
   // The lap-time chart in 16:9, or the telemetry stack at a fixed desktop
-  // width (see utils/exportBrandedPng). PRO only.
+  // width (see utils/exportBrandedPng)
   const handleExportPng = useCallback(async () => {
-    if (!isPremium) {
-      if (subscriptionReady) { setUpgradeReason('export'); setShowUpgradeModal(true); }
-      return;
-    }
     const isLaps = activeView === 'laps';
     const target = document.getElementById(isLaps ? 'laps-export-target' : 'telemetry-export-target');
     if (!target || exportingPng) return;
@@ -270,7 +247,7 @@ export default function TelemetryPage() {
     } finally {
       setExportingPng(false);
     }
-  }, [isPremium, subscriptionReady, activeView, exportingPng, explorerDrivers, multiTelemetryData, grandsPrix, selectedGP, sessionType, year]);
+  }, [activeView, exportingPng, explorerDrivers, multiTelemetryData, grandsPrix, selectedGP, sessionType, year]);
 
   const canExport = activeView === 'trace' ? !!multiTelemetryData : explorerDrivers.length > 0;
 
@@ -318,7 +295,7 @@ export default function TelemetryPage() {
               onClick={handleExportPng}
               disabled={exportingPng}
               style={iconButton(exportDone, exportingPng)}
-              title={isPremium ? 'Download charts as PNG' : 'Download charts as PNG (PRO)'}
+              title="Download charts as PNG"
               onMouseEnter={e => { if (!exportDone) e.currentTarget.style.color = 'var(--text)'; }}
               onMouseLeave={e => { if (!exportDone) e.currentTarget.style.color = 'var(--text-2)'; }}
             >
@@ -349,7 +326,7 @@ export default function TelemetryPage() {
         {activeView === 'laps' && (
           <SessionExplorer
             year={year}
-            onYearChange={handleYearChange}
+            onYearChange={setYearRaw}
             selectedGP={selectedGP}
             onGPChange={setGPRaw}
             grandsPrix={grandsPrix}
@@ -377,12 +354,6 @@ export default function TelemetryPage() {
           <LegalLinks color="var(--text-3)" hoverColor="var(--text)" fontSize="var(--fs-8)" />
         </div>
       )}
-
-      <UpgradeModal
-        isOpen={showUpgradeModal}
-        onClose={() => { setShowUpgradeModal(false); setUpgradeReason('current_season'); }}
-        reason={upgradeReason}
-      />
     </div>
     </>
   );

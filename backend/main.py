@@ -18,7 +18,7 @@ from slowapi.errors import RateLimitExceeded  # noqa: E402
 
 from app.cache import redis_cache  # noqa: E402
 from app.limiter import limiter  # noqa: E402
-from app.routes import admin, laps, payments, season, sessions, telemetry  # noqa: E402
+from app.routes import admin, laps, season, sessions, telemetry  # noqa: E402
 from app.season import prewarm_seasons  # noqa: E402
 from database import db  # noqa: E402
 
@@ -37,12 +37,11 @@ app.add_middleware(
         "https://metrikdelta.com",
         "https://www.metrikdelta.com",
     ],
-    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-for module in (sessions, telemetry, laps, season, payments, admin):
+for module in (sessions, telemetry, laps, season, admin):
     app.include_router(module.router)
 
 

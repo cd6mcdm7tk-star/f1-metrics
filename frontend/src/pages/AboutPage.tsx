@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import ArticlePage from '../components/ArticlePage';
-import { CURRENT_SEASON_YEAR } from '../hooks/useSubscription';
+import { CURRENT_SEASON_YEAR } from '../utils/season';
 import { sitePages, STATISTICS_SINCE, TELEMETRY_SINCE } from '../seo/pages';
 
 export default function AboutPage() {
@@ -30,8 +30,7 @@ export default function AboutPage() {
           races, qualifying and sprints, with the driver and constructor standings.
         </li>
         <li>
-          <strong>PRO</strong> — every past season is free. PRO adds the current season and HD chart export,
-          for €1.99 a month or €14.99 a year.
+          <strong>Free</strong> — every season, the current one included, with no account.
         </li>
       </ul>
 

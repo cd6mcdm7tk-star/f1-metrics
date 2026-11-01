@@ -1,10 +1,18 @@
 """Ingestion checks and manual re-ingestion, behind the X-Admin-Secret header."""
 import asyncio
+import hmac
+import os
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from app.access import is_admin
 from database import db
+
+
+def is_admin(request: Request) -> bool:
+    expected = os.getenv("ADMIN_SECRET", "")
+    given = request.headers.get("X-Admin-Secret", "")
+    # An unset secret must lock, not open to an empty header
+    return bool(expected) and hmac.compare_digest(given, expected)
 
 
 def require_admin(request: Request):

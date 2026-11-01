@@ -1,6 +1,5 @@
 // Statistics computed from one season's results, without any further request.
 import { getApiBase } from '../config';
-import { authHeaders } from '../lib/apiAuth';
 import type {
   ConstructorStanding, DriverStats, H2HData, JolpicaDriver, RaceClassification,
   RaceLogEntry, ResultEntry, SeasonBundle, SeasonDriver, SeasonRace, SprintH2H, StandingEntry,
@@ -12,7 +11,7 @@ const seasonCache = new Map<number, Promise<SeasonBundle>>();
 export function fetchSeason(year: number): Promise<SeasonBundle> {
   let pending = seasonCache.get(year);
   if (!pending) {
-    pending = authHeaders(year).then(headers => fetch(`${getApiBase()}/season/${year}`, { headers })).then(r => {
+    pending = fetch(`${getApiBase()}/season/${year}`).then(r => {
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       return r.json();
     });
