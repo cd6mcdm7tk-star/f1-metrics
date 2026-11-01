@@ -5,7 +5,7 @@ import { Download, Link, Lock } from 'lucide-react';
 import { continueRender, delayRender } from 'remotion';
 import type { ReactNode } from 'react';
 import LapTimesChart, { type LapTimesChartProps } from '../../../frontend/src/components/LapTimesChart';
-import PageHeaderView, { SignInButton } from '../../../frontend/src/components/PageHeaderView';
+import PageHeader from '../../../frontend/src/components/PageHeader';
 import TelemetryViewMulti from '../../../frontend/src/components/TelemetryViewMulti';
 import type { TelemetryDataMulti } from '../../../frontend/src/types/telemetry';
 import { MONO } from '../theme';
@@ -43,11 +43,10 @@ function Page({ height, children }: { height: number; children: ReactNode }) {
     <MemoryRouter>
       <style>{NO_TRANSITIONS}</style>
       <div className="data-zone site-capture" style={{ width: PAGE.width, height, display: 'grid', gridTemplateRows: '44px 1fr' }}>
-        <PageHeaderView
+        <PageHeader
           page="telemetry"
           leading={<span style={control}>←</span>}
           actions={<><span style={icon}><Link size={14} /></span><span style={icon}><Download size={14} /></span></>}
-          account={<SignInButton />}
         />
         <main style={{ padding: 12, background: 'var(--bg)' }}>{children}</main>
       </div>

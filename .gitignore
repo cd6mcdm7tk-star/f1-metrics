@@ -5,3 +5,6 @@ backend/cache/
 .env
 .env.*
 !.env.example
+
+# Local Claude Code settings hold credentials
+.claude/settings.local.json

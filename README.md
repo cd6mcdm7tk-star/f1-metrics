@@ -1,10 +1,9 @@
 # METRIK DELTA
 
-Formula 1 telemetry and season statistics — [metrikdelta.com](https://metrikdelta.com)
+Formula 1 telemetry and season statistics — [metrikdelta.com](https://metrikdelta.com). Free, with no account, and open source.
 
-- **Telemetry** (`/app`): every lap of a session since 2018 on a lap-time chart, and up to 10 laps compared side by side — speed, throttle, brake, gear, RPM, time delta, track dominance and speed through each corner. Charts export as 3600 px images.
+- **Telemetry** (`/app`): every lap of a session since 2021 on a lap-time chart, and up to 10 laps compared side by side — speed, throttle, brake, gear, RPM, time delta, track dominance and speed through each corner. Charts export as 3600 px images.
 - **Statistics** (`/stats`): two drivers' season head to head (races, qualifying, sprints), with the driver and constructor standings, since 2003.
-- **PRO** (Stripe subscription): the current season, and chart export.
 
 ## How it works
 
@@ -18,14 +17,12 @@ The backend serves four kinds of data:
 
 | Data | Source |
 | --- | --- |
-| Past seasons' laps and telemetry | [FastF1](https://github.com/theOehrly/Fast-F1) |
-| Current season | [OpenF1](https://openf1.org), read live |
+| Laps and telemetry, 2023 onwards | [OpenF1](https://openf1.org) |
+| Laps and telemetry, 2021–2022 | [FastF1](https://github.com/theOehrly/Fast-F1), from its mirror of F1's timing archive (the archive itself needs an F1 TV login since October 2026, so 2018–2020 can't be loaded) |
 | Results and standings | [Jolpica](https://github.com/jolpica/jolpica-f1) (Ergast API) |
-| Ingested sessions | PostgreSQL, filled by an hourly job (`jobs/schedule_ingest.py`) |
+| Ingested sessions | PostgreSQL: every lap's time and each driver's fastest-lap telemetry, filled by an hourly job (`jobs/schedule_ingest.py`) and, for past seasons, `jobs/backfill_season.py` |
 
-Responses are cached in Redis. Accounts and subscriptions live in Supabase.
-
-Past seasons are free; the current one is PRO, checked by the API itself (`app/access.py`): its laps, telemetry and season bundle need a signed-in subscriber's Supabase token, or the `X-Admin-Secret` header for our own tools.
+Responses are cached in Redis. Everything is public; only the ingestion routes (`/api/admin`) need the `X-Admin-Secret` header.
 
 OpenF1 streams car data and positions for the whole session, about four samples a second: a lap is cut from line to line and its distance integrated from its speed, counted from the line (`app/lap_samples.py`). Laps compared from the same event are then lined up by their positions on the reference lap's path (`aligned_distance` in `app/telemetry.py`), so a lap start time a tenth out doesn't move every braking point.
 
@@ -34,13 +31,13 @@ backend/
   main.py              app setup
   database.py          PostgreSQL pool and queries
   app/
-    routes/            HTTP routes: sessions, telemetry, laps, season, payments, admin
+    routes/            HTTP routes: sessions, telemetry, laps, season, admin
     openf1.py          OpenF1 client
     telemetry.py       lap telemetry from PostgreSQL, OpenF1 or FastF1
     season.py          season bundle from Jolpica
   jobs/                session ingestion (cron)
 frontend/src/
-  pages/               Landing, Telemetry, Statistics, checkout results
+  pages/               Landing, Telemetry, Statistics, About, Methodology
   components/          charts, explorer, modals; stats/ for the Statistics cards
   stats/               season computations (head to head, standings)
   services/, utils/    API client, colours, chart export
@@ -48,7 +45,7 @@ frontend/src/
 
 ## Running it locally
 
-Backend — needs a `.env` with `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `SUPABASE_JWT_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID_MONTHLY`, `STRIPE_PRICE_ID_ANNUAL`, `STRIPE_WEBHOOK_SECRET`. `DATABASE_URL`, `REDIS_URL`, `OPENF1_EMAIL` / `OPENF1_PASSWORD` and `ADMIN_SECRET` are optional: without them it reads live data and caches in memory.
+Backend — runs as is: without `DATABASE_URL` and `REDIS_URL` it reads live data and caches in memory. `OPENF1_EMAIL` / `OPENF1_PASSWORD` (an OpenF1 account, needed during live sessions) and `ADMIN_SECRET` (the ingestion routes) are optional, in a `.env`.
 
 ```bash
 cd backend
@@ -57,7 +54,7 @@ pip install -r requirements-dev.txt
 uvicorn main:app --reload --port 8000
 ```
 
-Frontend — needs a `.env.local` with `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (it calls `http://localhost:8000` in development).
+Frontend — calls `http://localhost:8000` in development.
 
 ```bash
 cd frontend
@@ -78,9 +75,9 @@ npm run render -- duel --year 2025 --gp 1 --session Q --drivers NOR,PIA   # out/
 npm run studio                                                           # live preview
 ```
 
-`--laps 19,17` compares specific laps instead of the fastest ones; `--lang fr` renders one language only. The current season needs the API's admin secret in `METRIK_ADMIN_SECRET`.
+`--laps 19,17` compares specific laps instead of the fastest ones; `--lang fr` renders one language only.
 
-A Grand Prix recap (60–80 s) tells a race from its classification and the top ten's laps (`video/src/recap/`): the podium, the gap to the leader lap by lap with the neutralised laps, the tyre stints, the top two's pace on the site's own lap chart (`LapTimesChart`, shared with the session explorer), the biggest climbs and the retirements, then what the race changes in the championship. Scenes cut under a sweeping band, the camera follows the charts and dives onto what the voice names, and the voice plays 12 % faster than recorded (`VOICE_PACE`). The race's data is fetched once into `video/out/cache/`.
+A Grand Prix recap (60–80 s) tells a race from its classification and the top ten's laps (`video/src/recap/`): the podium, the gap to the leader lap by lap with the neutralised laps, the tyre stints, the top two's pace on the site's own lap chart (`LapTimesChart`, shared with the session explorer), the biggest climbs and the retirements, then what the race changes in the championship. Scenes cut under a sweeping band, the camera follows the charts and dives onto what the voice names, and the voice is mastered 12 % faster than recorded, at the loudness social feeds play at (`VOICE_PACE`, `video/tts/master.py`). The race's data is fetched once into `video/out/cache/`.
 
 ```bash
 npm run render -- recap --year 2026 --gp 17 --lang fr   # out/2026-marinabay-recap-fr.mp4
@@ -135,6 +132,12 @@ cd backend && pytest
 cd video && npm test && npm run typecheck
 ```
 
+## License
+
+The code is free software under the [GNU Affero General Public License v3.0](LICENSE): you may use, study, modify and share it, and if you run a modified version as a service, you publish your changes under the same license. The license covers the code only: the METRIK DELTA name, logo, mascot and videos are not part of it.
+
+Issues and pull requests are welcome.
+
 ---
 
-Data from FastF1, OpenF1 and Jolpica. METRIK DELTA is not affiliated with Formula 1.
+Data from FastF1, OpenF1 and Jolpica. METRIK DELTA is an independent project, not affiliated with, endorsed by or sponsored by Formula 1.
