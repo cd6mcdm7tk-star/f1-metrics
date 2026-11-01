@@ -16,8 +16,8 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -33,8 +33,8 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
           cache: pip
@@ -48,12 +48,17 @@ jobs:
       run:
         working-directory: video
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: video/package-lock.json
+          cache-dependency-path: |
+            video/package-lock.json
+            frontend/package-lock.json
+      # The videos film the site's own components, which import its packages
+      - run: npm ci --legacy-peer-deps
+        working-directory: frontend
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
