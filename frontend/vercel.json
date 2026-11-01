@@ -1,6 +1,13 @@
 {
   "buildCommand": "npm install --legacy-peer-deps && npm run build",
   "installCommand": "npm install --legacy-peer-deps",
+  "redirects": [
+    {
+      "source": "/about",
+      "destination": "/methodology",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     {
       "source": "/app",
@@ -11,24 +18,8 @@
       "destination": "/stats/index.html"
     },
     {
-      "source": "/about",
-      "destination": "/about/index.html"
-    },
-    {
       "source": "/methodology",
       "destination": "/methodology/index.html"
-    },
-    {
-      "source": "/success",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/cancel",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/reset-password",
-      "destination": "/index.html"
     }
   ],
   "headers": [

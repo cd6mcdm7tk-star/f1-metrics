@@ -15,7 +15,7 @@ import { TELEMETRY_SINCE } from '../seo/pages';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-// Telemetry exists from 2018 (FastF1)
+// Telemetry exists from 2021 (FastF1, then OpenF1 from 2023)
 const YEARS = Array.from({ length: CURRENT_SEASON_YEAR - TELEMETRY_SINCE + 1 }, (_, i) => CURRENT_SEASON_YEAR - i);
 const SESSIONS = ['Q', 'R', 'FP1', 'FP2', 'FP3'];
 const SPRINT_SESSIONS = ['SQ', 'S'];

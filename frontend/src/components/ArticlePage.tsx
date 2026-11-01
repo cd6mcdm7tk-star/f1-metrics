@@ -4,7 +4,7 @@ import LegalLinks from './LegalLinks';
 import PageHeader from './PageHeader';
 import SEO from './SEO';
 
-/** A long-form page (About, Methodology): the app's header, a readable column
+/** A long-form page (Methodology): the app's header, a readable column
  * styled by `.article` in index.css, and the footer links. */
 export default function ArticlePage({ seo, eyebrow, title, lead, children }: {
   seo: PageSeo;

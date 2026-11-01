@@ -5,7 +5,7 @@
 export const SITE_URL = 'https://metrikdelta.com';
 
 /** The first season of each kind of data the site has */
-export const TELEMETRY_SINCE = 2018;
+export const TELEMETRY_SINCE = 2021;
 export const STATISTICS_SINCE = 2003;
 
 export interface PageSeo {
@@ -64,22 +64,10 @@ export function sitePages(year: number) {
         breadcrumb: breadcrumb('Statistics', '/stats'),
       },
     },
-    about: {
-      path: '/about',
-      title: 'About METRIK DELTA — Independent F1 Telemetry & Statistics',
-      description: 'Who builds METRIK DELTA, what it does, where its Formula 1 data comes from and how to get in touch.',
-      structuredData: {
-        '@context': 'https://schema.org',
-        '@type': 'AboutPage',
-        name: 'About METRIK DELTA',
-        url: `${SITE_URL}/about`,
-        breadcrumb: breadcrumb('About', '/about'),
-      },
-    },
     methodology: {
       path: '/methodology',
-      title: 'Methodology — How METRIK DELTA Computes F1 Telemetry & Statistics',
-      description: `How lap times, telemetry, time deltas, track dominance and head-to-head statistics are computed on METRIK DELTA from FastF1, OpenF1 and Jolpica data, ${STATISTICS_SINCE} to ${year}, and where that data has limits.`,
+      title: 'Methodology — How to Read F1 Telemetry & How METRIK DELTA Computes It',
+      description: `How to read F1 telemetry and head-to-head charts, and how METRIK DELTA computes laps, time gaps and statistics from FastF1, OpenF1 and Jolpica data, ${STATISTICS_SINCE} to ${year}, worked through on a real pole lap.`,
       structuredData: {
         '@context': 'https://schema.org',
         '@type': 'WebPage',

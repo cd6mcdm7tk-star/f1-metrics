@@ -1,6 +1,6 @@
 // Shared by TelemetryViewMulti and its chart stack: how a comparison becomes
 // the charts' rows, colours and labels, and the charts' layout.
-import type { DriverMeta, TelemetryDataMulti } from '../types/telemetry';
+import type { DriverMeta, TelemetryDataMulti, TelemetryPointMulti } from '../types/telemetry';
 import { teammateColors } from '../utils/teamColors';
 
 /** Chart margins: also used by the crosshair / loupe pixel math (desktop only) */
@@ -67,6 +67,29 @@ export function fastestLapIndex(drivers: DriverMeta[]): number {
     if (d.lapTime != null && (bestTime == null || d.lapTime < bestTime)) best = i;
   });
   return best;
+}
+
+/** The lap cut into `count` equal lengths, each won by the lap that spent the
+ * least time in it, read from the gaps to the first lap (the highest average
+ * speed can pick another driver: slow metres weigh more in time). -1 for a
+ * length not driven yet in a replay up to `replayDistance`. */
+export function miniSectorLeaders(points: TelemetryPointMulti[], laps: number, count: number, replayDistance: number | null = null): number[] {
+  if (!points.length) return [];
+  const size = (points[points.length - 1].distance || 1) / count;
+  const at = (distance: number) => {
+    const i = points.findIndex(p => p.distance >= distance);
+    return points[i === -1 ? points.length - 1 : i];
+  };
+  return Array.from({ length: count }, (_, i) => {
+    if (replayDistance != null && (i + 1) * size > replayDistance) return -1;
+    const from = at(i * size), to = at((i + 1) * size);
+    if (to.distance <= from.distance) return -1;
+    let best = 0;
+    for (let lap = 1; lap < laps; lap++) {
+      if (to.deltas[lap] - from.deltas[lap] < to.deltas[best] - from.deltas[best]) best = lap;
+    }
+    return best;
+  });
 }
 
 /** Recharts rows, with the deltas rebased onto lap `reference` (the API gives them against the first lap) */

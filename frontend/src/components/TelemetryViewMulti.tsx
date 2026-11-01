@@ -4,7 +4,7 @@ import type { TelemetryDataMulti } from '../types/telemetry';
 import { useIsMobile } from '../hooks/useIsMobile';
 import TelemetryChartStack from './TelemetryChartStack';
 import {
-  buildChartData, buildColors, buildLabel, fastestLapIndex, fmtRpm,
+  buildChartData, buildColors, buildLabel, fastestLapIndex, fmtRpm, miniSectorLeaders,
   MARGIN, MOBILE_MARGIN, MOBILE_Y_AXIS_WIDTH, RENDER_SCALE, Y_AXIS_WIDTH,
 } from './telemetryChart';
 
@@ -191,25 +191,10 @@ export default function TelemetryViewMulti({ telemetryData, getDriverColor, areT
   }, [telemetryData, distances]);
 
   // ── Mini-sector dominance strip (24 buckets, N drivers) ────────────────────
-  const miniSectors = useMemo(() => {
-    const tel = telemetryData.telemetry;
-    if (!tel.length) return [];
-    const maxD = tel[tel.length - 1].distance || 1;
-    const N_SEG = 24;
-    const segSize = maxD / N_SEG;
-    return Array.from({ length: N_SEG }, (_, i) => {
-      const s = i * segSize, e = (i + 1) * segSize;
-      if (replayDistance != null && e > replayDistance) return -1;
-      const pts = tel.filter(p => p.distance >= s && p.distance < e);
-      if (!pts.length) return -1;
-      const avgs = Array.from({ length: n }, (_, di) =>
-        pts.reduce((sum, p) => sum + p.speeds[di], 0) / pts.length,
-      );
-      let best = 0;
-      for (let di = 1; di < n; di++) if (avgs[di] > avgs[best]) best = di;
-      return best;
-    });
-  }, [telemetryData, n, replayDistance]);
+  const miniSectors = useMemo(
+    () => miniSectorLeaders(telemetryData.telemetry, n, 24, replayDistance),
+    [telemetryData, n, replayDistance],
+  );
 
   // ── Refs for DOM manipulation ──────────────────────────────────────────────
   const containerRef = useRef<HTMLDivElement>(null);

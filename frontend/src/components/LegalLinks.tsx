@@ -1,9 +1,7 @@
 import { useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 import Modal from './Modal';
-import PrivacyContent from './PrivacyContent';
-import TermsContent from './TermsContent';
-import LegalNoticeContent from './LegalNoticeContent';
+import LegalContent from './LegalContent';
 
 interface LegalLinksProps {
   color?: string;
@@ -11,13 +9,13 @@ interface LegalLinksProps {
   fontSize?: CSSProperties['fontSize'];
 }
 
-// About · Methodology (pages) · Privacy · Terms · Legal notice (documents in a modal), as a row of text links
+// Methodology (a page) · Legal (a document in a modal), as a row of text links
 export default function LegalLinks({
   color = 'rgba(242,230,216,0.32)',
   hoverColor = 'rgba(242,230,216,0.7)',
   fontSize = 'var(--fs-9)',
 }: LegalLinksProps) {
-  const [open, setOpen] = useState<'privacy' | 'terms' | 'legal' | null>(null);
+  const [open, setOpen] = useState(false);
 
   const linkStyle = {
     fontFamily: "'JetBrains Mono', monospace",
@@ -32,35 +30,17 @@ export default function LegalLinks({
   return (
     <>
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', justifyContent: 'center', rowGap: 6 }}>
-        <Link to="/about" style={{ ...linkStyle, textDecoration: 'none' }} onMouseEnter={onEnter} onMouseLeave={onLeave}>
-          About
-        </Link>
-        <span style={{ color, fontSize }}>·</span>
         <Link to="/methodology" style={{ ...linkStyle, textDecoration: 'none' }} onMouseEnter={onEnter} onMouseLeave={onLeave}>
           Methodology
         </Link>
         <span style={{ color, fontSize }}>·</span>
-        <button style={linkStyle} onMouseEnter={onEnter} onMouseLeave={onLeave} onClick={() => setOpen('privacy')}>
-          Privacy
-        </button>
-        <span style={{ color, fontSize }}>·</span>
-        <button style={linkStyle} onMouseEnter={onEnter} onMouseLeave={onLeave} onClick={() => setOpen('terms')}>
-          Terms
-        </button>
-        <span style={{ color, fontSize }}>·</span>
-        <button style={linkStyle} onMouseEnter={onEnter} onMouseLeave={onLeave} onClick={() => setOpen('legal')}>
-          Legal Notice
+        <button style={linkStyle} onMouseEnter={onEnter} onMouseLeave={onLeave} onClick={() => setOpen(true)}>
+          Legal
         </button>
       </div>
 
-      <Modal isOpen={open === 'privacy'} onClose={() => setOpen(null)} title="Privacy Policy">
-        <PrivacyContent />
-      </Modal>
-      <Modal isOpen={open === 'terms'} onClose={() => setOpen(null)} title="Terms of Service">
-        <TermsContent />
-      </Modal>
-      <Modal isOpen={open === 'legal'} onClose={() => setOpen(null)} title="Legal Notice">
-        <LegalNoticeContent />
+      <Modal isOpen={open} onClose={() => setOpen(false)} title="Legal">
+        <LegalContent />
       </Modal>
     </>
   );

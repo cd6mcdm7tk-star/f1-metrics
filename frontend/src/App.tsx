@@ -6,7 +6,6 @@ import { beforeSend } from './lib/analytics';
 const LandingPage    = lazy(() => import('./pages/LandingPage'));
 const TelemetryPage  = lazy(() => import('./pages/TelemetryPage'));
 const StatisticsPage = lazy(() => import('./pages/StatisticsPage'));
-const AboutPage      = lazy(() => import('./pages/AboutPage'));
 const MethodologyPage = lazy(() => import('./pages/MethodologyPage'));
 const NotFoundPage   = lazy(() => import('./pages/NotFoundPage'));
 
@@ -26,7 +25,6 @@ function App() {
           <Route path="/"        element={<LandingPage />} />
           <Route path="/app"     element={<TelemetryPage />} />
           <Route path="/stats"   element={<StatisticsPage />} />
-          <Route path="/about"   element={<AboutPage />} />
           <Route path="/methodology" element={<MethodologyPage />} />
           <Route path="*"        element={<NotFoundPage />} />
         </Routes>

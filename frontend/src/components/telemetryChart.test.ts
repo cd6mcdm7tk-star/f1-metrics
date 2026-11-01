@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { DriverMeta, TelemetryDataMulti } from '../types/telemetry';
-import { buildChartData, buildColors, buildLabel, cornerLabels, fastestLapIndex } from './telemetryChart';
+import type { DriverMeta, TelemetryDataMulti, TelemetryPointMulti } from '../types/telemetry';
+import { buildChartData, buildColors, buildLabel, cornerLabels, fastestLapIndex, miniSectorLeaders } from './telemetryChart';
 
 const lap = (driver: string, lap: number, lapTime: number | null): DriverMeta => ({
   driver, lap, lapTime, year: 2025, gp: 1, session: 'Q', sectors: { s1: null, s2: null, s3: null },
@@ -60,5 +60,22 @@ describe('buildColors and buildLabel', () => {
 
   it('adds the lap number only for a driver shown twice', () => {
     expect(laps.map(l => buildLabel(l, laps))).toEqual(['NOR L19', 'PIA', 'NOR L12']);
+  });
+});
+
+describe('miniSectorLeaders', () => {
+  // Two laps over 200 m: the second gains 0.1 s in the first half, then loses 0.05 s
+  const point = (distance: number, gap: number, speeds: number[]): TelemetryPointMulti => ({
+    distance, speeds, deltas: [0, gap], throttles: [], brakes: [], gears: [], rpms: [], x: 0, y: 0,
+  });
+  const points = [point(0, 0, [100, 100]), point(50, -0.05, [80, 140]), point(100, -0.1, [100, 100]),
+    point(150, -0.08, [200, 150]), point(200, -0.05, [200, 150])];
+
+  it('gives each length to the lap that spent the least time in it', () => {
+    expect(miniSectorLeaders(points, 2, 2)).toEqual([1, 0]);
+  });
+
+  it('leaves out the lengths a replay has not reached', () => {
+    expect(miniSectorLeaders(points, 2, 2, 120)).toEqual([1, -1]);
   });
 });

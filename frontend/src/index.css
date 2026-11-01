@@ -226,9 +226,21 @@
 .article p {
   margin: 0 0 12px;
 }
-.article ul {
+.article ul,
+.article ol {
   margin: 0 0 12px;
   padding-left: 20px;
+}
+.article ul {
+  list-style: disc;
+}
+/* Numbered like the steps on the figures above them */
+.article ol {
+  list-style: decimal;
+}
+.article ol li::marker {
+  color: var(--accent);
+  font-weight: 700;
 }
 .article li {
   margin: 0 0 6px;
@@ -252,4 +264,42 @@
   text-transform: uppercase;
   color: var(--accent);
   margin: 0 0 10px;
+}
+.article h3 {
+  font-weight: 700;
+  font-size: 17px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  margin: 24px 0 6px;
+}
+.article table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0 0 14px;
+  font-size: 16px;
+}
+.article th,
+.article td {
+  text-align: left;
+  padding: 6px 10px 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+.article figure text {
+  font-size: 11px;
+}
+@media (max-width: 600px) {
+  .article figure text {
+    font-size: 20px;
+  }
+}
+.article td:first-child {
+  white-space: nowrap;
+}
+.article th {
+  font-family: 'JetBrains Mono', 'Fira Mono', monospace;
+  font-size: var(--fs-10);
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-3);
 }
