@@ -320,6 +320,12 @@ export default function TelemetryPage() {
             ) : (
               <EmptyState message="Select drivers in Explorer first" />
             )}
+            {!isMobile && (
+              // Under the charts rather than over them, and left out of the PNG
+              <div data-export-hide style={{ display: 'flex', justifyContent: 'center', paddingTop: 16 }}>
+                <LegalLinks color="var(--text-3)" hoverColor="var(--text)" fontSize="var(--fs-8)" />
+              </div>
+            )}
           </div>
         )}
 
@@ -344,12 +350,13 @@ export default function TelemetryPage() {
         )}
       </main>
 
-      {/* Desktop: fixed in the corner (the page never scrolls). Mobile: at the end of the page. */}
+      {/* Desktop: in the lap times' corner (the page never scrolls; the comparison has
+          them under its charts). Mobile: at the end of the page. */}
       {isMobile ? (
         <div style={{ padding: '14px 16px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'center' }}>
           <LegalLinks color="var(--text-3)" hoverColor="var(--text)" fontSize="var(--fs-8)" />
         </div>
-      ) : (
+      ) : activeView === 'laps' && (
         <div style={{ position: 'fixed', bottom: 8, left: 12, zIndex: 40 }}>
           <LegalLinks color="var(--text-3)" hoverColor="var(--text)" fontSize="var(--fs-8)" />
         </div>

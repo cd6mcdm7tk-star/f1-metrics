@@ -34,6 +34,7 @@ function seoPages(): Plugin {
         ['app/index.html', pages.telemetry],
         ['stats/index.html', pages.statistics],
         ['methodology/index.html', pages.methodology],
+        ['legal/index.html', pages.legal],
         ['404.html', NOT_FOUND],
       ]
       for (const [file, page] of files) {

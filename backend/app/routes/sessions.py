@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException, Request
 from app import openf1
 from app.cache import redis_cache
 from app.errors import fastf1_http_error
+from app.featured import latest_qualifying
 from app.limiter import limiter
 from app.schedule import get_grands_prix as get_grands_prix_list
 
@@ -72,6 +73,16 @@ async def get_calendar(request: Request, year: int):
     except Exception as e:
         logger.error(f"Error fetching calendar: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/latest-qualifying")
+@limiter.limit("30/minute")
+async def get_latest_qualifying(request: Request):
+    """The latest qualifying session that's final, with its front row: the homepage's first card."""
+    result = await latest_qualifying(datetime.datetime.now(datetime.timezone.utc))
+    if result is None:
+        raise HTTPException(status_code=404, detail="No qualifying session has finished yet")
+    return result
 
 
 @router.get("/drivers/{year}/{gp_round}/{session_type}")

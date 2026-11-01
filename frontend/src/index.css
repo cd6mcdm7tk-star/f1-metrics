@@ -197,7 +197,7 @@
   color: var(--text-3);
 }
 
-/* Long-form pages (ArticlePage: About, Methodology) */
+/* Long-form pages (ArticlePage: Methodology, Legal) */
 .article {
   max-width: 720px;
   margin: 0 auto;
@@ -264,6 +264,30 @@
   text-transform: uppercase;
   color: var(--accent);
   margin: 0 0 10px;
+}
+.article-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.article-close {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.article-close:hover {
+  color: var(--text);
+  border-color: var(--text-3);
 }
 .article h3 {
   font-weight: 700;

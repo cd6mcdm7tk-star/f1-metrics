@@ -27,7 +27,7 @@ const breadcrumb = (name: string, path: string) => ({
   ],
 });
 
-/** The pages search engines should find, as of the season `year` */
+/** The site's pages, as of the season `year` (search engines skip the noindex ones) */
 export function sitePages(year: number) {
   return {
     home: {
@@ -75,6 +75,12 @@ export function sitePages(year: number) {
         url: `${SITE_URL}/methodology`,
         breadcrumb: breadcrumb('Methodology', '/methodology'),
       },
+    },
+    legal: {
+      path: '/legal',
+      title: 'Legal Notice, Data & Terms | METRIK DELTA',
+      description: 'Who publishes METRIK DELTA, where it is hosted, what personal data a visit leaves behind, and its terms of use.',
+      noindex: true,
     },
   } satisfies Record<string, PageSeo>;
 }

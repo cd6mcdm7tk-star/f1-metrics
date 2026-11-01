@@ -1,7 +1,5 @@
-import { useState, type CSSProperties } from 'react';
+import type { CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
-import Modal from './Modal';
-import LegalContent from './LegalContent';
 
 interface LegalLinksProps {
   color?: string;
@@ -9,39 +7,26 @@ interface LegalLinksProps {
   fontSize?: CSSProperties['fontSize'];
 }
 
-// Methodology (a page) · Legal (a document in a modal), as a row of text links
+// Methodology · Legal, as a row of text links
 export default function LegalLinks({
   color = 'rgba(242,230,216,0.32)',
   hoverColor = 'rgba(242,230,216,0.7)',
   fontSize = 'var(--fs-9)',
 }: LegalLinksProps) {
-  const [open, setOpen] = useState(false);
-
   const linkStyle = {
     fontFamily: "'JetBrains Mono', monospace",
     fontSize, letterSpacing: '0.08em', textTransform: 'uppercase' as const,
-    color, background: 'none', border: 'none', padding: 0, cursor: 'pointer',
-    transition: 'color 0.15s',
+    color, textDecoration: 'none', transition: 'color 0.15s',
   };
 
   const onEnter = (e: React.MouseEvent<HTMLElement>) => { e.currentTarget.style.color = hoverColor; };
   const onLeave = (e: React.MouseEvent<HTMLElement>) => { e.currentTarget.style.color = color; };
 
   return (
-    <>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', justifyContent: 'center', rowGap: 6 }}>
-        <Link to="/methodology" style={{ ...linkStyle, textDecoration: 'none' }} onMouseEnter={onEnter} onMouseLeave={onLeave}>
-          Methodology
-        </Link>
-        <span style={{ color, fontSize }}>·</span>
-        <button style={linkStyle} onMouseEnter={onEnter} onMouseLeave={onLeave} onClick={() => setOpen(true)}>
-          Legal
-        </button>
-      </div>
-
-      <Modal isOpen={open} onClose={() => setOpen(false)} title="Legal">
-        <LegalContent />
-      </Modal>
-    </>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', justifyContent: 'center', rowGap: 6 }}>
+      <Link to="/methodology" style={linkStyle} onMouseEnter={onEnter} onMouseLeave={onLeave}>Methodology</Link>
+      <span style={{ color, fontSize }}>·</span>
+      <Link to="/legal" style={linkStyle} onMouseEnter={onEnter} onMouseLeave={onLeave}>Legal</Link>
+    </div>
   );
 }

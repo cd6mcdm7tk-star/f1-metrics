@@ -20,6 +20,10 @@
     {
       "source": "/methodology",
       "destination": "/methodology/index.html"
+    },
+    {
+      "source": "/legal",
+      "destination": "/legal/index.html"
     }
   ],
   "headers": [

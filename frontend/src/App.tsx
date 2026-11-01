@@ -7,6 +7,7 @@ const LandingPage    = lazy(() => import('./pages/LandingPage'));
 const TelemetryPage  = lazy(() => import('./pages/TelemetryPage'));
 const StatisticsPage = lazy(() => import('./pages/StatisticsPage'));
 const MethodologyPage = lazy(() => import('./pages/MethodologyPage'));
+const LegalPage      = lazy(() => import('./pages/LegalPage'));
 const NotFoundPage   = lazy(() => import('./pages/NotFoundPage'));
 
 const Spinner = () => (
@@ -26,6 +27,7 @@ function App() {
           <Route path="/app"     element={<TelemetryPage />} />
           <Route path="/stats"   element={<StatisticsPage />} />
           <Route path="/methodology" element={<MethodologyPage />} />
+          <Route path="/legal"   element={<LegalPage />} />
           <Route path="*"        element={<NotFoundPage />} />
         </Routes>
       </Suspense>
