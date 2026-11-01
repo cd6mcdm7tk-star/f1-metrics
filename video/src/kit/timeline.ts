@@ -17,12 +17,14 @@ export interface Timeline<Beat extends string, Scene extends string, Cue extends
   cues: Record<Cue, number>;
 }
 
-/** Between two lines, and longer where the scene changes */
-const GAP = 14;
-const CUT = 26;
-/** Before the first line, and after the last one for the closing card */
+/** Between two lines, and longer where the scene changes: the swipe's length */
+const GAP = 8;
+const CUT = 18;
+/** Before the first line, and after the last one for the closing card, by default */
 const LEAD = 8;
 const TAIL = 100;
+/** TikTok only pays for videos over a minute: a shorter script holds its closing card longer (s) */
+const MIN_SECONDS = 61;
 
 /** When a word starting with `word` is said in `line`, or `fallback` of the way through it */
 export const cueIn = (line: VoiceLine, word: string, fallback: number): number =>
@@ -30,7 +32,7 @@ export const cueIn = (line: VoiceLine, word: string, fallback: number): number =
 
 export function buildTimeline<Beat extends string, Scene extends string, Cue extends string>(
   order: readonly Beat[], sceneOf: Record<Beat, Scene>, script: Record<Beat, string>, cues: Record<Cue, CueSpec<Beat>>,
-  lang: Lang, voiceover: Voiceover | null, fps = 60,
+  lang: Lang, voiceover: Voiceover | null, fps = 60, tail = TAIL,
 ): Timeline<Beat, Scene, Cue> {
   let at = LEAD;
   const beats = {} as Record<Beat, VoiceLine>;
@@ -39,7 +41,7 @@ export function buildTimeline<Beat extends string, Scene extends string, Cue ext
     beats[beat] = toVoiceLine(script[beat], at, lang, fps, voiceover);
     at = beats[beat].to;
   });
-  const frames = at + TAIL;
+  const frames = Math.max(at + tail, MIN_SECONDS * fps);
 
   const scenes: Timeline<Beat, Scene, Cue>['scenes'] = [];
   order.forEach((beat, i) => {

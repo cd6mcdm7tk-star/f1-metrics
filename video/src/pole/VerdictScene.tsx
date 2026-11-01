@@ -1,5 +1,5 @@
 import { useCurrentFrame } from 'remotion';
-import { EASE_OUT, ramp } from '../bible/motion';
+import { EASE_OUT, ramp } from '../kit/motion';
 import Headline, { headline } from '../kit/Headline';
 import { INK, inkOn } from '../kit/ink';
 import Stage from '../kit/Stage';

@@ -8,7 +8,7 @@ import Subtitle, { SUBTITLE_TOP } from './Subtitle';
 import Swipe from './Swipe';
 import { BRAND_NAME, SITE } from './theme';
 import { Signature, TitleCard } from './TitleCard';
-import { VOICE_PACE, type Voiceover, type VoiceLine } from './voice';
+import type { Voiceover, VoiceLine } from './voice';
 
 export interface ShowScene {
   kind: string;
@@ -55,7 +55,7 @@ export default function Show({ scenes, voice, voiceover, outro, cover, lang, chi
       {voice.slice(0, -1).map(line => <Subtitle key={line.from} line={line} top={SUBTITLE_TOP} />)}
       {voiceover && voice.map(line => voiceover[line.text] && (
         <Sequence key={line.from} from={line.from} durationInFrames={line.to - line.from + 30} layout="none">
-          <Html5Audio src={staticFile(voiceover[line.text].file)} playbackRate={VOICE_PACE} />
+          <Html5Audio src={staticFile(voiceover[line.text].file)} />
         </Sequence>
       ))}
     </AbsoluteFill>

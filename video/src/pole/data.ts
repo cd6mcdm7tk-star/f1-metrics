@@ -4,12 +4,12 @@
 import type { SessionDriver } from '../../../frontend/src/types/session';
 import type { TelemetryDataMulti } from '../../../frontend/src/types/telemetry';
 import { teamColor } from '../../../frontend/src/utils/teamColors';
-import { API_BASE, getJson } from '../api';
+import { API_BASE, fetchLapsTelemetry, fetchLastYearsCorners, getJson } from '../api';
+import { driverCodes, openF1, sessionKey } from '../openf1';
 import { prepareDuel, type Duel } from '../duel/data';
 import { withCornersFrom } from '../kit/corners';
 import type { SessionLaps } from '../recap/data';
 
-const OPENF1 = 'https://api.openf1.org/v1';
 /** How many of the classified drivers the video follows */
 export const FOLLOWED = 6;
 /** How close a lap time must be to the official one to be that lap (s) */
@@ -43,13 +43,6 @@ export interface PoleSession {
   duel: Duel;
 }
 
-/** OpenF1 is public: plain requests, without our API's admin header */
-async function openF1<T>(path: string): Promise<T> {
-  const response = await fetch(`${OPENF1}${path}`);
-  if (!response.ok) throw new Error(`${OPENF1}${path}: HTTP ${response.status}`);
-  return response.json();
-}
-
 interface OfficialResult {
   code: string;
   position: number;
@@ -58,14 +51,11 @@ interface OfficialResult {
 
 /** The qualifying classification, with each driver's best time per segment */
 async function officialOrder(year: number, location: string): Promise<OfficialResult[]> {
-  const sessions = await openF1<{ session_key: number }[]>(`/sessions?year=${year}&location=${encodeURIComponent(location)}&session_name=Qualifying`);
-  if (!sessions.length) throw new Error(`No qualifying session on OpenF1 for ${location} ${year}`);
-  const key = sessions[0].session_key;
-  const [results, drivers] = await Promise.all([
+  const key = await sessionKey(year, location, 'Qualifying');
+  const [results, code] = await Promise.all([
     openF1<{ driver_number: number; position: number | null; duration: (number | null)[] | number | null }[]>(`/session_result?session_key=${key}`),
-    openF1<{ driver_number: number; name_acronym: string }[]>(`/drivers?session_key=${key}`),
+    driverCodes(key),
   ]);
-  const code = new Map(drivers.map(d => [d.driver_number, d.name_acronym]));
   return results
     .filter((r): r is typeof r & { position: number } => r.position != null && code.has(r.driver_number))
     .sort((a, b) => a.position - b.position)
@@ -107,29 +97,13 @@ export async function fetchPoleSession({ year, gp }: { year: number; gp: number 
     });
   }
 
-  const lapsTelemetry = (laps: { driver: string; lap?: number }[], season = year, round = gp) => getJson<TelemetryDataMulti>(`${api}/telemetry/multi`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ laps: laps.map(l => ({ year: season, gp: round, session: 'Q', ...l })) }),
-  });
+  const lapsTelemetry = (laps: { driver: string; lap?: number }[]) => fetchLapsTelemetry(laps.map(l => ({ year, gp, session: 'Q', ...l })), api);
   const raw = await lapsTelemetry(drivers.map(d => ({ driver: d.code, lap: d.lap })));
   const [pole, second] = drivers;
   const rawDuel = await lapsTelemetry([{ driver: pole.code, lap: pole.lap }, { driver: second.code, lap: second.lap }]);
   // Corner numbers from last year's qualifying on the same circuit, when this season has none yet
-  const earlier = raw.corners.length ? null : await lastYearsCorners(year, location, api, lapsTelemetry);
+  const earlier = raw.corners.length ? null : await fetchLastYearsCorners(year, location, api);
   const telemetry = earlier ? withCornersFrom(raw, earlier) : raw;
   const duel = prepareDuel(earlier ? withCornersFrom(rawDuel, earlier) : rawDuel, sessionDrivers, location);
   return { year, round: gp, location, drivers, telemetry, duel };
-}
-
-async function lastYearsCorners(
-  year: number, location: string, api: string,
-  lapsTelemetry: (laps: { driver: string }[], season: number, round: number) => Promise<TelemetryDataMulti>,
-): Promise<TelemetryDataMulti | null> {
-  const calendar = await getJson<{ calendar: { round: number; location: string }[] }>(`${api}/calendar/${year - 1}`);
-  const round = calendar.calendar.find(g => g.location === location)?.round;
-  if (round == null) return null;
-  const sessionDrivers = await getJson<SessionDriver[]>(`${api}/drivers/${year - 1}/${round}/Q`);
-  if (sessionDrivers.length < 2) return null;
-  return lapsTelemetry(sessionDrivers.slice(0, 2).map(d => ({ driver: d.abbreviation })), year - 1, round);
 }

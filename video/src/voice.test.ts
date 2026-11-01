@@ -71,13 +71,13 @@ describe('toVoiceLine', () => {
     },
   };
 
-  // Seconds into the recording, as frames of the video at the voice's pace
-  const at = (seconds: number) => 100 + Math.round((seconds / VOICE_PACE) * 60);
+  // Seconds into the recording, as frames of the video
+  const at = (seconds: number) => 100 + Math.round(seconds * 60);
 
-  it('finds the recording without the tags and times the line by it, sped up', () => {
+  it('finds the recording without the tags and times the line by it', () => {
     const line = toVoiceLine('[surprised] Moins qu’un clignement.', 100, 'fr', 60, voiceover);
     expect(line.text).toBe('Moins qu’un clignement.');
-    expect(line.to).toBe(100 + Math.ceil((1.5 / VOICE_PACE) * 60) + 6);
+    expect(line.to).toBe(100 + 90);
     expect(line.said.map(w => w.start)).toEqual([at(0.1), at(0.4), at(0.6)]);
   });
 

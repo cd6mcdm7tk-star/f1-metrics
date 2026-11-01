@@ -6,6 +6,7 @@ import { SAFE, VIDEO } from '../format';
 import Headline, { headline } from '../kit/Headline';
 import Hud from '../kit/Hud';
 import { INK } from '../kit/ink';
+import { landing, lit } from '../kit/motion';
 import { blendCamera, fitCamera, mixAngle, orbit, type Camera3D } from '../kit/projection';
 import Stage from '../kit/Stage';
 import { positionAt, valueAt, type Track } from '../kit/track';
@@ -20,7 +21,7 @@ import { EASE_OUT, lapClock, ramp } from './motion';
 // turn 1 while the camera rises until it looks straight down on the corner,
 // approach at the bottom, like the schematic that follows.
 
-/** The hook's title, a line each; its words are the voice's, revealed as said */
+/** The hook's title, a line each; its words are the voice's, lit up as said */
 const HOOK = 'Pourquoi les pilotes\nne roulent *jamais*\nau milieu\nde la piste ?';
 /** Where the whole circuit sits under the title */
 const OVERVIEW = { x: 24, y: 780, w: VIDEO.width - 48, h: 700 };
@@ -101,8 +102,8 @@ export default function FlyScene({ duel, track, facts, story, series, episode }:
       {title > 0 && (
         <Headline
           lines={headline(HOOK)} size={100}
-          style={{ position: 'absolute', top: 290, left: SAFE.left, width: SAFE.right - SAFE.left, opacity: title }}
-          reveal={i => ramp(frame, (hook.said[i]?.start ?? 0) - 4, (hook.said[i]?.start ?? 0) + 8, EASE_OUT)}
+          style={{ position: 'absolute', top: 290, left: SAFE.left, width: SAFE.right - SAFE.left, opacity: title, transform: `scale(${landing(frame)})`, transformOrigin: 'left top' }}
+          reveal={i => lit(ramp(frame, (hook.said[i]?.start ?? 0) - 4, (hook.said[i]?.start ?? 0) + 8, EASE_OUT))}
         />
       )}
       <VoiceCaption line={context} top={300} />

@@ -3,11 +3,12 @@ import { AbsoluteFill, Html5Audio, Sequence, staticFile, useCurrentFrame, type C
 import { fetchDuel } from '../api';
 import type { Duel } from '../duel/data';
 import type { Lang } from '../i18n';
+import Camera from '../kit/Camera';
 import { INK } from '../kit/ink';
 import { buildTrack } from '../kit/track';
 import MascotBubble from '../mascot/MascotBubble';
 import Swipe from '../Swipe';
-import { VOICE_PACE, type Voiceover } from '../voice';
+import type { Voiceover } from '../voice';
 import { buildCorde, cordeFacts, CORDE_QUERY, type CordeNarration } from './corde';
 import EndScene from './EndScene';
 import FlyScene from './FlyScene';
@@ -50,18 +51,20 @@ export default function CordeEpisode({ lang, duel, narration, voiceover }: Corde
 
   return (
     <AbsoluteFill style={{ background: INK.bg }}>
-      {dissolve < 1 && <AbsoluteFill><FlyScene duel={duel} track={track} facts={facts} story={story} {...brand} /></AbsoluteFill>}
-      {dissolve > 0 && frame < proof.from && <AbsoluteFill style={{ opacity: dissolve }}><SchemaScene story={story} from={schema.from} {...brand} /></AbsoluteFill>}
-      {within(proof) && <ProofScene duel={duel} facts={facts} story={story} from={proof.from} {...brand} />}
-      {within(payoff) && <PayoffScene duel={duel} track={track} facts={facts} story={story} from={payoff.from} {...brand} />}
-      {within(end) && <EndScene next={narration.next} line={story.beats.end} from={end.from} {...brand} />}
+      <Camera timeline={story}>
+        {dissolve < 1 && <AbsoluteFill><FlyScene duel={duel} track={track} facts={facts} story={story} {...brand} /></AbsoluteFill>}
+        {dissolve > 0 && frame < proof.from && <AbsoluteFill style={{ opacity: dissolve }}><SchemaScene story={story} from={schema.from} {...brand} /></AbsoluteFill>}
+        {within(proof) && <ProofScene duel={duel} facts={facts} story={story} from={proof.from} {...brand} />}
+        {within(payoff) && <PayoffScene duel={duel} track={track} facts={facts} story={story} from={payoff.from} {...brand} />}
+        {within(end) && <EndScene next={narration.next} line={story.beats.end} from={end.from} {...brand} />}
+      </Camera>
       {/* The mascot comes in for the proof and the verdict, then says goodbye */}
       <MascotBubble lines={[story.beats.proof, story.beats.payoff]} from={proof.from + 12} to={payoff.to} at={{ x: 770, y: 1330, size: 170 }} />
       <MascotBubble lines={[story.beats.end]} from={end.from + 20} to={story.frames} at={{ x: 390, y: 960, size: 300 }} />
       {[proof.from, payoff.from, end.from].map(at => <Swipe key={at} at={at} />)}
       {voiceover && story.voice.map(line => voiceover[line.text] && (
         <Sequence key={line.from} from={line.from} durationInFrames={line.to - line.from + 30} layout="none">
-          <Html5Audio src={staticFile(voiceover[line.text].file)} playbackRate={VOICE_PACE} />
+          <Html5Audio src={staticFile(voiceover[line.text].file)} />
         </Sequence>
       ))}
     </AbsoluteFill>

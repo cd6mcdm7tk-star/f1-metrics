@@ -2,7 +2,7 @@
 // many fit in a few tenths, the teammates' duels, a driver who had a better
 // time in an earlier segment, who owns each sector, the top speeds, and
 // where the pole lap was won and partly given back.
-import { analyse, type Corner } from '../duel/analysis';
+import { analyse, type Corner, type Finding } from '../duel/analysis';
 import { interpolate } from '../duel/data';
 import type { PoleDriver, PoleSession } from './data';
 
@@ -22,9 +22,16 @@ export interface PoleFacts {
   /** The corner where pole gained most on the runner-up, and the one where it lost most */
   gain: Corner;
   loss: Corner;
+  /** Where that gain shows on the speed trace: the stretch of the corner pole took faster (entry, exit or all of it), and by how much */
+  gainStretch: SpeedStretch | null;
   /** The stretches between mid-straights where pole gained on the runner-up, in lap order */
   won: { from: number; to: number; gap: number }[];
 }
+
+type SpeedStretch = Extract<Finding, { kind: 'entrySpeed' | 'exitSpeed' | 'cornerSpeed' }>;
+
+const isPoleStretch = (f: Finding): f is SpeedStretch =>
+  (f.kind === 'entrySpeed' || f.kind === 'exitSpeed' || f.kind === 'cornerSpeed') && f.side === 0;
 
 /** The gaps "how close" can be counted within: the smallest holding a group */
 const CLOSE = [0.1, 0.2, 0.3, 0.5, 1];
@@ -68,5 +75,5 @@ export function poleFacts(session: PoleSession): PoleFacts {
   const gain = corners.reduce((a, b) => (b.gapChange > a.gapChange ? b : a));
   const loss = corners.reduce((a, b) => (b.gapChange < a.gapChange ? b : a));
 
-  return { gaps, within, teammates, earlier, sectors, topSpeeds, gain, loss, won };
+  return { gaps, within, teammates, earlier, sectors, topSpeeds, gain, loss, gainStretch: gain.findings.find(isPoleStretch) ?? null, won };
 }

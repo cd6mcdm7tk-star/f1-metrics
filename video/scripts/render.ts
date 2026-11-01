@@ -4,8 +4,10 @@
 //   npm run render -- duel --year 2025 --gp 1 --session Q --drivers NOR,PIA [--laps 19,17] [--lang fr] [--silent]
 //   npm run render -- recap --year 2026 --gp 17 [--lang fr] [--silent]
 //   npm run render -- quali --year 2026 --gp 17 [--lang fr] [--silent]
-//   npm run render -- bible --episode corde [--lang fr] [--silent]
+//   npm run render -- bible --episode corde|altitude [--lang fr] [--silent]
 //   npm run render -- pole --year 2026 --gp 18 [--lang fr] [--silent]
+//   npm run render -- money --team aston-martin|mclaren [--lang fr] [--silent]
+//   npm run render -- race --year 2026 --gp 18 [--lang fr] [--silent]
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
@@ -13,8 +15,57 @@ import { bundle } from '@remotion/bundler';
 import { renderMedia, selectComposition } from '@remotion/renderer';
 import { fetchDuel, fetchQuali, fetchRecap, type DuelQuery } from '../src/api';
 import { buildCorde, CORDE_QUERY, type CordeNarration } from '../src/bible/corde';
+import { ALTITUDE_QUERY } from '../src/bible/altitude/data';
+import { buildAltitude, type AltitudeNarration } from '../src/bible/altitude/story';
 import type { Duel } from '../src/duel/data';
 import { fetchPoleSession, type PoleSession } from '../src/pole/data';
+import { ASTON_MARTIN } from '../src/money/astonMartin';
+import { MCLAREN } from '../src/money/mclaren/data';
+import { buildMcLaren, type McLarenNarration } from '../src/money/mclaren/story';
+import { buildMoney, type MoneyNarration } from '../src/money/story';
+import { fetchRaceWeekend, type RaceWeekend } from '../src/race/data';
+import { buildRace, type RaceNarration } from '../src/race/story';
+import type { TelemetryDataMulti } from '../../frontend/src/types/telemetry';
+
+/** An episode of La Bible F1: the lap it tells, its composition, and what it says */
+interface BibleEpisode {
+  slug: string;
+  query: DuelQuery;
+  composition: string;
+  voice(narration: Record<string, string>, lang: Lang, voiceover: Voiceover | null): VoiceLine[];
+}
+
+/** The Bible's episodes, by the name on the command line */
+const BIBLE_EPISODES: Record<string, BibleEpisode> = {
+  corde: {
+    slug: 'bible-01-corde', query: CORDE_QUERY, composition: 'BibleCorde',
+    voice: (narration: CordeNarration, lang: Lang, voiceover: Voiceover | null) => buildCorde(narration, lang, voiceover).voice,
+  },
+  altitude: {
+    slug: 'bible-02-altitude', query: ALTITUDE_QUERY, composition: 'BibleAltitude',
+    voice: (narration: AltitudeNarration, lang: Lang, voiceover: Voiceover | null) => buildAltitude(narration, lang, voiceover).voice,
+  },
+};
+
+/** A team whose accounts have been read: the circuit behind its episode, its composition, what it is given and says */
+interface MoneyTeam {
+  base: DuelQuery;
+  composition: string;
+  props: Record<string, unknown>;
+  voice(narration: Record<string, string>, lang: Lang, voiceover: Voiceover | null): VoiceLine[];
+}
+
+/** The money episodes, by the team's name on the command line */
+const MONEY_TEAMS: Record<string, MoneyTeam> = {
+  'aston-martin': {
+    base: ASTON_MARTIN.base, composition: 'MoneyAstonMartin', props: { accounts: ASTON_MARTIN },
+    voice: (narration: MoneyNarration, lang: Lang, voiceover: Voiceover | null) => buildMoney(narration, lang, voiceover).voice,
+  },
+  mclaren: {
+    base: MCLAREN.base, composition: 'MoneyMcLaren', props: {},
+    voice: (narration: McLarenNarration, lang: Lang, voiceover: Voiceover | null) => buildMcLaren(narration, lang, voiceover).voice,
+  },
+};
 import { buildPole, type PoleNarration } from '../src/pole/story';
 import { analyse } from '../src/duel/analysis';
 import { buildStory } from '../src/duel/story';
@@ -34,8 +85,10 @@ const USAGE = [
   'npm run render -- duel --year 2025 --gp 1 --session Q --drivers NOR,PIA [--laps 19,17] [--lang fr] [--silent]',
   'npm run render -- recap --year 2026 --gp 17 [--lang fr] [--silent]',
   'npm run render -- quali --year 2026 --gp 17 [--lang fr] [--silent]',
-  'npm run render -- bible --episode corde [--lang fr] [--silent]',
+  'npm run render -- bible --episode corde|altitude [--lang fr] [--silent]',
   'npm run render -- pole --year 2026 --gp 18 [--lang fr] [--silent]',
+  'npm run render -- money --team aston-martin|mclaren [--lang fr] [--silent]',
+  'npm run render -- race --year 2026 --gp 18 [--lang fr] [--silent]',
 ].join('\n');
 
 const { positionals, values } = parseArgs({
@@ -47,15 +100,18 @@ const { positionals, values } = parseArgs({
     drivers: { type: 'string' },
     laps: { type: 'string' },
     episode: { type: 'string' },
+    team: { type: 'string' },
     lang: { type: 'string' },
     silent: { type: 'boolean', default: false },
   },
 });
 
 const [template] = positionals;
-const valid = template === 'bible'
-  ? values.episode === 'corde'
-  : !!values.year && !!values.gp && ['duel', 'recap', 'quali', 'pole'].includes(template) && (template !== 'duel' || !!values.drivers);
+const valid = template === 'money'
+  ? values.team != null && values.team in MONEY_TEAMS
+  : template === 'bible'
+  ? values.episode != null && values.episode in BIBLE_EPISODES
+  : !!values.year && !!values.gp && ['duel', 'recap', 'quali', 'pole', 'race'].includes(template) && (template !== 'duel' || !!values.drivers);
 if (!valid) {
   console.error(USAGE);
   process.exit(1);
@@ -140,17 +196,52 @@ async function qualiJob(): Promise<Job> {
 
 /** La Bible F1: an episode explained on one lap, its script required */
 async function bibleJob(): Promise<Job> {
-  const { year, gp, session, drivers } = CORDE_QUERY;
-  const duel = await cached<Duel>(`duel-${year}-${gp}-${session}-${drivers.join('-')}`, () => fetchDuel(CORDE_QUERY));
-  const slug = 'bible-01-corde';
+  const episode = BIBLE_EPISODES[values.episode!];
+  const { year, gp, session, drivers } = episode.query;
+  const duel = await cached<Duel>(`duel-${year}-${gp}-${session}-${drivers.join('-')}`, () => fetchDuel(episode.query));
+  return {
+    slug: episode.slug,
+    output: episode.slug,
+    composition: lang => `${episode.composition}-${lang}`,
+    take: (lang, voiceover) => {
+      const narration = readScript<Record<string, string>>(episode.slug, lang);
+      if (!narration) throw new Error(`narration/${episode.slug}.${lang}.json is missing: this episode has no generated script`);
+      return { inputProps: { lang, duel, narration, voiceover }, voice: episode.voice(narration, lang, voiceover) };
+    },
+  };
+}
+
+/** L'argent de la F1: a team's accounts, its script required */
+async function moneyJob(): Promise<Job> {
+  const team = MONEY_TEAMS[values.team!];
+  const { year, gp, session } = team.base;
+  const circuit = await cached<TelemetryDataMulti>(`circuit-${year}-${gp}-${session}`, async () => (await fetchDuel(team.base)).telemetry);
+  const slug = `money-${values.team}`;
   return {
     slug,
     output: slug,
-    composition: lang => `BibleCorde-${lang}`,
+    composition: lang => `${team.composition}-${lang}`,
     take: (lang, voiceover) => {
-      const narration = readScript<CordeNarration>(slug, lang);
-      if (!narration) throw new Error(`narration/${slug}.${lang}.json is missing: this episode has no generated script`);
-      return { inputProps: { lang, duel, narration, voiceover }, voice: buildCorde(narration, lang, voiceover).voice };
+      const narration = readScript<Record<string, string>>(slug, lang);
+      if (!narration) throw new Error(`narration/${slug}.${lang}.json is missing: write the script from the accounts first`);
+      return { inputProps: { lang, ...team.props, circuit, narration, voiceover }, voice: team.voice(narration, lang, voiceover) };
+    },
+  };
+}
+
+/** Sunday's video: the race in a minute, its script required */
+async function raceJob(): Promise<Job> {
+  const query = { year: Number(values.year), gp: Number(values.gp) };
+  const race = await cached<RaceWeekend>(`race-${query.year}-${query.gp}`, () => fetchRaceWeekend(query));
+  const slug = [query.year, race.location, 'race'].join('-').toLowerCase().replace(/[^a-z0-9-]+/g, '');
+  return {
+    slug,
+    output: slug,
+    composition: lang => `RaceRecap-${lang}`,
+    take: (lang, voiceover) => {
+      const narration = readScript<RaceNarration>(slug, lang);
+      if (!narration) throw new Error(`narration/${slug}.${lang}.json is missing: write the script from the race's facts first`);
+      return { inputProps: { lang, query, race, narration, voiceover }, voice: buildRace(narration, lang, voiceover).voice };
     },
   };
 }
@@ -172,7 +263,7 @@ async function poleJob(): Promise<Job> {
   };
 }
 
-const job = template === 'pole' ? await poleJob() : template === 'bible' ? await bibleJob() : template === 'duel' ? await duelJob() : template === 'recap' ? await recapJob() : await qualiJob();
+const job = template === 'race' ? await raceJob() : template === 'money' ? await moneyJob() : template === 'pole' ? await poleJob() : template === 'bible' ? await bibleJob() : template === 'duel' ? await duelJob() : template === 'recap' ? await recapJob() : await qualiJob();
 
 // Each language's voiceover, spoken before bundling, which copies public/.
 // The lines don't depend on the timing: speak them, then time the video to them.

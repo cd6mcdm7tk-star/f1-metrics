@@ -2,14 +2,17 @@ import type { ReactNode } from 'react';
 import { AbsoluteFill } from 'remotion';
 import { SAFE, VIDEO } from '../format';
 import { BRAND_NAME, DISPLAY, MONO, SITE } from '../theme';
+import { useFraming } from './Camera';
+import { framed } from './framing';
 import { INK } from './ink';
 
 /** The safe area's right edge, as a CSS `right` */
 const VIDEO_RIGHT = VIDEO.width - SAFE.right;
 
 /** The new series' backdrop: the site's dark bordeaux, lit from the top, with
- * the series and the brand along the top of the safe area. `scene` is drawn
- * under the fog and vignette, `children` over them. */
+ * the series and the brand along the top of the safe area. `scene`, a 3D shot
+ * with its own camera, is drawn under the fog and vignette; `children` over
+ * them, as the camera frames them (kit/Camera.tsx). */
 export default function Stage({ series, episode, fog = false, scene, children }: {
   series: string;
   episode?: string;
@@ -18,6 +21,7 @@ export default function Stage({ series, episode, fog = false, scene, children }:
   scene?: ReactNode;
   children?: ReactNode;
 }) {
+  const camera = framed(useFraming());
   return (
     <AbsoluteFill style={{ background: `linear-gradient(180deg, #5e1018 0%, ${INK.bg} 42%, ${INK.deep} 100%)` }}>
       {scene}
@@ -33,7 +37,7 @@ export default function Stage({ series, episode, fog = false, scene, children }:
         </div>
         <span style={{ fontFamily: MONO, fontSize: 20, letterSpacing: '0.22em', color: INK.textSub }}>{BRAND_NAME}</span>
       </div>
-      {children}
+      <AbsoluteFill style={camera}>{children}</AbsoluteFill>
       <div style={{ position: 'absolute', top: SAFE.bottom + 14, right: VIDEO_RIGHT, fontFamily: MONO, fontSize: 22, letterSpacing: '0.08em', color: INK.text, opacity: 0.72 }}>
         {SITE}
       </div>

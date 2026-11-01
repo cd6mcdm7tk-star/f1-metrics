@@ -4,11 +4,12 @@ import type { Duel } from '../duel/data';
 import { SAFE } from '../format';
 import { INK } from '../kit/ink';
 import { orbit } from '../kit/projection';
+import Slam from '../kit/Slam';
 import Stage from '../kit/Stage';
 import { positionAt, type Track } from '../kit/track';
 import Track3D from '../kit/Track3D';
 import VoiceCaption from '../kit/VoiceCaption';
-import { DISPLAY, MONO } from '../theme';
+import { MONO } from '../theme';
 import type { CordeFacts, CordeStory } from './corde';
 import { EASE_OUT, ramp } from './motion';
 
@@ -16,22 +17,6 @@ import { EASE_OUT, ramp } from './motion';
 // the pole's margin, over the corner turning slowly in the dark.
 
 const seconds = (s: number) => `${s.toFixed(3).replace('.', ',')} s`;
-
-/** A figure landing: bigger and transparent to its size, with a short shake */
-function Slam({ at, frame, children, top, size }: { at: number; frame: number; children: string; top: number; size: number }) {
-  const t = ramp(frame, at - 3, at + 10, EASE_OUT);
-  if (t <= 0) return null;
-  const shake = frame - at < 10 ? Math.sin((frame - at) * 2.4) * (10 - (frame - at)) * 1.4 : 0;
-  return (
-    <div style={{
-      position: 'absolute', top, left: 0, right: 0, textAlign: 'center', opacity: t,
-      transform: `translateX(${shake}px) scale(${1.5 - 0.5 * t})`,
-      fontFamily: DISPLAY, fontWeight: 700, fontSize: size, lineHeight: 1, color: INK.text, letterSpacing: '0.01em', fontVariantNumeric: 'tabular-nums',
-    }}>
-      {children}
-    </div>
-  );
-}
 
 const kicker = { position: 'absolute' as const, left: 0, right: 0, textAlign: 'center' as const, fontFamily: MONO, fontSize: 26, letterSpacing: '0.24em', color: INK.textSub };
 

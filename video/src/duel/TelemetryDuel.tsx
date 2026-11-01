@@ -8,7 +8,7 @@ import SiteMark from '../SiteMark';
 import Subtitle, { SUBTITLE_TOP } from '../Subtitle';
 import { BRAND_NAME, SITE } from '../theme';
 import { Signature, TitleCard } from '../TitleCard';
-import { spokenGap, VOICE_PACE, type Narration, type Voiceover } from '../voice';
+import { spokenGap, type Narration, type Voiceover } from '../voice';
 import { analyse } from './analysis';
 import type { Duel } from './data';
 import PageShot from './PageShot';
@@ -69,7 +69,7 @@ export default function TelemetryDuel({ lang, duel, narration, voiceover }: Tele
       {story.voice.slice(0, -1).map(line => <Subtitle key={line.from} line={line} top={SUBTITLE_TOP} />)}
       {voiceover && story.voice.map(line => voiceover[line.text] && (
         <Sequence key={line.from} from={line.from} durationInFrames={line.to - line.from + 30} layout="none">
-          <Html5Audio src={staticFile(voiceover[line.text].file)} playbackRate={VOICE_PACE} />
+          <Html5Audio src={staticFile(voiceover[line.text].file)} />
         </Sequence>
       ))}
     </AbsoluteFill>

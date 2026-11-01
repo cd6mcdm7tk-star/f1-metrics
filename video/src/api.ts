@@ -93,3 +93,21 @@ export async function fetchQuali({ year, gp }: RecapQuery, api = API_BASE): Prom
   const event = calendar.calendar.find(g => g.round === gp);
   return prepareQuali({ year, round: gp, location: event?.location ?? duel.location }, results, laps, duel);
 }
+
+/** Laps' telemetry together, from one session (2 to 10 laps) */
+export const fetchLapsTelemetry = (laps: { year: number; gp: number; session: string; driver: string; lap?: number }[], api = API_BASE) =>
+  getJson<TelemetryDataMulti>(`${api}/telemetry/multi`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ laps }),
+  });
+
+/** Last year's qualifying at the same place, for its corner numbers when this season has none yet */
+export async function fetchLastYearsCorners(year: number, location: string, api = API_BASE): Promise<TelemetryDataMulti | null> {
+  const calendar = await getJson<{ calendar: { round: number; location: string }[] }>(`${api}/calendar/${year - 1}`);
+  const round = calendar.calendar.find(g => g.location === location)?.round;
+  if (round == null) return null;
+  const sessionDrivers = await getJson<SessionDriver[]>(`${api}/drivers/${year - 1}/${round}/Q`);
+  if (sessionDrivers.length < 2) return null;
+  return fetchLapsTelemetry(sessionDrivers.slice(0, 2).map(d => ({ year: year - 1, gp: round, session: 'Q', driver: d.abbreviation })), api);
+}

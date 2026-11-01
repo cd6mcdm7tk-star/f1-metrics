@@ -180,19 +180,19 @@ export interface VoiceLine {
   moods: MoodAt[];
 }
 
-/** The voiceover plays this much faster than it was spoken, its pitch kept
- * (Remotion's playbackRate goes through ffmpeg's atempo) */
+/** The voiceover is this much faster than Chatterbox says it, its pitch kept
+ * (tts/master.py, which masters each recording at this pace) */
 export const VOICE_PACE = 1.12;
 
 /** A line of the script said from frame `start`, without its expression tags,
- * timed by its recording or, without one, by its length, at the voice's pace */
+ * timed by its recording or, without one, by its length at the voice's pace */
 export function toVoiceLine(script: string, start: number, lang: Lang, fps: number, voiceover?: Voiceover | null): VoiceLine {
   const { text, moods } = parseMoods(script);
   const recorded = voiceover?.[text];
-  const seconds = (recorded?.seconds ?? speechFrames(text) / 60) / VOICE_PACE;
-  const length = Math.ceil(seconds * fps) + (recorded ? 6 : 0);
-  const timed = timeWords(text, recorded?.words ?? [], recorded?.seconds ?? seconds * VOICE_PACE);
-  const frame = (t: number) => start + Math.round((t / VOICE_PACE) * fps);
+  const seconds = recorded?.seconds ?? speechFrames(text) / 60 / VOICE_PACE;
+  const length = Math.ceil(seconds * fps);
+  const timed = timeWords(text, recorded?.words ?? [], seconds);
+  const frame = (t: number) => start + Math.round(t * fps);
   const said = timed.map(w => ({ word: w.word, start: frame(w.start) }));
   return {
     from: start, to: start + length, text,

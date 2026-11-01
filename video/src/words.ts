@@ -110,13 +110,28 @@ export function showWords(words: { word: string; start: number; end: number }[],
   for (let i = 0; i < words.length; i++) {
     const w = words[i];
     const value = numberValue(w.word, lang);
+    // "quatre virgule quatre" → "4,4": a French decimal said aloud
+    const decimal = lang === 'fr' && value != null && !trailing(w.word) && normalise(words[i + 1]?.word ?? '') === 'virgule'
+      ? numberValue(words[i + 2]?.word ?? '', lang) : null;
+    if (decimal != null) {
+      const last = words[i + 2];
+      shown.push({ text: `${value},${decimal}${trailing(last.word)}`, start: w.start, end: last.end, figure: true });
+      i += 2;
+      continue;
+    }
     if (value != null && value > 1) {
       // "cent deux", "deux cents": a French number in several words
       if (lang === 'fr') {
         let j = i;
-        while (j + 1 < words.length && !trailing(words[j].word) && numberValue(words[j + 1].word, lang) != null) j++;
+        // "cinquante et un": "et" joins the tens to un or onze
+        const joined = (k: number) => normalise(words[k + 1]?.word ?? '') === 'et' && !trailing(words[k + 1].word) && /^(un|onze)$/.test(normalise(words[k + 2]?.word ?? ''));
+        while (j + 1 < words.length && !trailing(words[j].word)) {
+          if (numberValue(words[j + 1].word, lang) != null) j++;
+          else if (joined(j)) j += 2;
+          else break;
+        }
         const run = words.slice(i, j + 1);
-        const merged = run.length > 1 && run.some(r => /^(cents?|mille)$/.test(normalise(r.word))) ? numberValue(run.map(r => r.word).join('-'), lang) : null;
+        const merged = run.length > 1 && run.some(r => /^(cents?|mille|et)$/.test(normalise(r.word))) ? numberValue(run.map(r => r.word).join('-'), lang) : null;
         if (merged != null) {
           shown.push({ text: `${merged}${trailing(run[run.length - 1].word)}`, start: w.start, end: run[run.length - 1].end, figure: true });
           i = j;

@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useCurrentFrame } from 'remotion';
-import { EASE_OUT, ramp } from '../bible/motion';
+import { EASE_OUT, landing, ramp } from '../kit/motion';
 import { SAFE, VIDEO } from '../format';
 import Headline, { headline } from '../kit/Headline';
 import { fitCamera } from '../kit/projection';
@@ -21,6 +21,8 @@ export interface SceneProps {
   from: number;
   series: string;
   episode: string;
+  /** The hook's title, from the script, in place of how close the top was */
+  title?: string;
 }
 
 /** Under the hook's title, the whole circuit */
@@ -32,21 +34,23 @@ function hookTitle({ count, gap }: PoleFacts['within']): string {
   return `*${count}* pilotes\nen moins de\n${limit}`;
 }
 
-/** The hook: how close it was, over the pole lap drawn round the circuit as a streak of light */
-export function HookScene({ session, facts, story, track, series, episode }: SceneProps) {
+const linear = (t: number) => t;
+
+/** The hook: how close it was, over the pole lap drawn round the circuit as a
+ * streak of light, the title and the car already there on the first frame */
+export function HookScene({ session, facts, story, track, series, episode, title }: SceneProps) {
   const frame = useCurrentFrame();
   const { hook } = story.beats;
   const ground = useMemo(() => track.points.map(p => ({ ...p, z: 0 })), [track]);
-  const camera = fitCamera(ground, 0.95 + 0.15 * ramp(frame, 0, hook.to + 40), 0.5, 40, OVERVIEW, VIDEO);
+  const camera = fitCamera(ground, 0.95 + 0.15 * ramp(frame, 0, hook.to + 40, linear), 0.5, 40, OVERVIEW, VIDEO);
   const pole = session.drivers[0];
   const lap = session.duel.distance;
-  const car = lap[Math.min(lap.length - 1, Math.round(ramp(frame, hook.from, hook.to, (t: number) => t) * (lap.length - 1)))];
+  const car = lap[Math.min(lap.length - 1, Math.round(ramp(frame, 0, hook.to, linear) * (lap.length - 1)))];
   return (
     <Stage series={series} episode={episode} scene={<Track3D track={track} camera={camera} width={34} car={{ distance: car, color: pole.color, trail: 600 }} />}>
       <Headline
-        lines={headline(hookTitle(facts.within))} size={112}
-        reveal={i => ramp(frame, hook.from + i * 7, hook.from + i * 7 + 12, EASE_OUT)}
-        style={{ position: 'absolute', top: 290, left: SAFE.left, width: SAFE.right - SAFE.left }}
+        lines={headline(title ?? hookTitle(facts.within))} size={112}
+        style={{ position: 'absolute', top: 290, left: SAFE.left, width: SAFE.right - SAFE.left, transform: `scale(${landing(frame)})`, transformOrigin: 'left top' }}
       />
     </Stage>
   );

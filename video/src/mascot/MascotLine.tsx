@@ -1,7 +1,7 @@
 import { AbsoluteFill, Html5Audio, Sequence, staticFile, type CalculateMetadataFunction } from 'remotion';
 import { VIDEO } from '../format';
 import type { Lang } from '../i18n';
-import { toVoiceLine, VOICE_PACE, type MouthCue, type Voiceover, type VoiceLine } from '../voice';
+import { toVoiceLine, type MouthCue, type Voiceover, type VoiceLine } from '../voice';
 import type { HeardWord } from '../words';
 import Subtitle, { SUBTITLE_TOP } from '../Subtitle';
 import MascotShot from './MascotShot';
@@ -45,7 +45,7 @@ export default function MascotLine({ line, audio }: MascotLineProps) {
       <MascotShot lines={[line]} from={0} to={line.to + TAIL} />
       <Subtitle line={line} top={SUBTITLE_TOP} />
       <Sequence from={line.from}>
-        <Html5Audio src={staticFile(audio)} playbackRate={VOICE_PACE} />
+        <Html5Audio src={staticFile(audio)} />
       </Sequence>
     </AbsoluteFill>
   );

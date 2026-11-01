@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useCurrentFrame } from 'remotion';
-import { EASE_OUT, ramp } from '../bible/motion';
+import { EASE_OUT, ramp } from '../kit/motion';
 import { interpolate } from '../duel/data';
 import { SAFE, VIDEO } from '../format';
 import DuelHud, { type DuelReading } from '../kit/DuelHud';
@@ -14,7 +14,8 @@ import type { SceneProps } from './GridScenes';
 // The pole lap against the runner-up's, both cars on the same clock so the
 // gap on screen is the real one: a fast run round the circuit lighting up
 // where pole was won, a dive behind the pole car through the corner it gained
-// most in, its exit lit, then up over the last sector the runner-up won back.
+// most in, where it was faster lit, then up over the stretch from the corner
+// the runner-up won most back to the line.
 
 const OVERVIEW = { x: 24, y: 560, w: VIDEO.width - 48, h: 900 };
 const DIVE = 50;
@@ -61,12 +62,12 @@ export default function LapScene({ session, facts, story, track, series, episode
       : blendCamera(chase(), above, ramp(frame, loss.from, loss.from + 60));
 
   const won = [story.cues.firstCorner, story.cues.esses, story.cues.stadium];
-  const exit = facts.gain.findings.find(f => f.kind === 'exitSpeed');
+  const faster = facts.gainStretch;
   const paints: Paint[] = frame < gain.from
     ? facts.won.slice(0, won.length).flatMap((s, i) => (frame >= won[i] ? [{ from: s.from, to: s.to, color: pole.color, glow: true }] : []))
     : frame < loss.from
-      ? exit?.kind === 'exitSpeed' && frame >= story.cues.exit ? [{ from: exit.from, to: exit.to, color: pole.color, glow: true }] : []
-      : frame >= story.cues.lastCorner ? [{ from: facts.loss.from, to: facts.loss.to, color: rival.color, glow: true }] : [];
+      ? faster && frame >= story.cues.faster ? [{ from: faster.from, to: faster.to, color: pole.color, glow: true }] : []
+      : frame >= story.cues.lossCorner ? [{ from: facts.loss.from, to: facts.loss.to, color: rival.color, glow: true }] : [];
   const close = frame >= gain.from && frame < loss.from;
   const label = frame < gain.from ? null : frame < loss.from ? facts.gain : facts.loss;
 

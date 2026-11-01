@@ -50,9 +50,20 @@ describe('showWords', () => {
     expect(showWords(at(['cent', 'deux', 'points']), 'fr')[0]).toMatchObject({ start: 0, end: 2, figure: true });
   });
 
+  it('joins the tens to un with "et", as French says them', () => {
+    expect(showWords(at(['trois', 'cent', 'cinquante', 'et', 'un', 'tous']), 'fr').map(w => w.text)).toEqual(['351', 'tous']);
+    expect(showWords(at(['soixante', 'et', 'onze', 'tours.']), 'fr').map(w => w.text)).toEqual(['71', 'tours.']);
+    expect(showWords(at(['cinquante', 'et', 'deux']), 'fr').map(w => w.text)).toEqual(['50', 'et', '2']);
+  });
+
   it('keeps numbers apart across punctuation, and those without hundreds', () => {
     expect(showWords(at(['cent,', 'deux']), 'fr').map(w => w.text)).toEqual(['100,', '2']);
     expect(showWords(at(['deux', 'trois']), 'fr').map(w => w.text)).toEqual(['2', '3']);
+  });
+
+  it('shows a French decimal said aloud as one figure', () => {
+    expect(showWords(at(['quatre', 'virgule', 'quatre', 'millions.']), 'fr').map(w => w.text)).toEqual(['4,4', 'millions.']);
+    expect(showWords(at(['zéro', 'virgule', 'deux.']), 'fr').map(w => w.text)).toEqual(['0,2.']);
   });
 
   it('shows a percentage as a figure with its sign', () => {

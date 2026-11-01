@@ -39,4 +39,14 @@ describe('qualifying facts', () => {
     expect(facts.sectors[2].to).toBe(2000);
     expect(facts.gain.label).toBe('T1');
   });
+
+  it('lights where the pole lap was faster in that corner, only when it was', () => {
+    const stretch = facts.gainStretch;
+    if (stretch) {
+      expect(['entrySpeed', 'exitSpeed', 'cornerSpeed']).toContain(stretch.kind);
+      expect(stretch.side).toBe(0);
+      expect(stretch.to).toBeGreaterThan(stretch.from);
+    }
+    expect(facts.gain.findings.some(f => ['entrySpeed', 'exitSpeed', 'cornerSpeed'].includes(f.kind) && 'side' in f && f.side === 0)).toBe(stretch != null);
+  });
 });

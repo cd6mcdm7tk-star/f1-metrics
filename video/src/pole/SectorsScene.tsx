@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useCurrentFrame } from 'remotion';
-import { EASE_OUT, ramp } from '../bible/motion';
+import { EASE_OUT, ramp } from '../kit/motion';
 import { SAFE, VIDEO } from '../format';
 import { INK, inkOn } from '../kit/ink';
 import { fitCamera } from '../kit/projection';
@@ -19,7 +19,8 @@ export default function SectorsScene({ session, facts, story, track, from, serie
   const frame = useCurrentFrame();
   const ground = useMemo(() => track.points.map(p => ({ ...p, z: 0 })), [track]);
   const camera = fitCamera(ground, 1.1 + 0.15 * ramp(frame, from, story.beats.sectors.to + 40), 0.95, 40, MAP, VIDEO);
-  const reveal = [story.cues.sectorOne, story.cues.sectorsTwo, story.cues.sectorsTwo + 12];
+  // The third with the second when they share an owner (« les deux autres »)
+  const reveal = [story.cues.sectorOne, story.cues.sectorsTwo, Math.max(story.cues.sectorThree, story.cues.sectorsTwo + 12)];
   const paints: Paint[] = facts.sectors.flatMap((sector, k) => (frame >= reveal[k]
     ? [{ from: k === 0 ? 0 : facts.sectors[k - 1].to, to: sector.to, color: sector.driver.color, glow: true }]
     : []));
