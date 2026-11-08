@@ -99,6 +99,8 @@ interface SessionExplorerProps {
   onCompareLaps: (laps: LapSelection[]) => void;
   /** Lets the parent know which drivers are plotted (drives its PNG export button). */
   onSelectedDriversChange?: (drivers: string[]) => void;
+  /** The chart is being exported: it takes its export size at once, without animating to it */
+  exporting?: boolean;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -112,6 +114,7 @@ export default function SessionExplorer({
   onCompare,
   onCompareLaps,
   onSelectedDriversChange,
+  exporting = false,
 }: SessionExplorerProps) {
   const isMobile = useIsMobile();
 
@@ -515,7 +518,7 @@ export default function SessionExplorer({
               <LapTimesChart
                 rows={chartData} drivers={selectedDrivers} lines={lines} entering={entering} leaving={leaving}
                 colorOf={resolveColor} yDomain={yDomain}
-                selectedLapRefs={selectedLapRefs} onToggle={toggleLapRef} animate={!reducedMotion}
+                selectedLapRefs={selectedLapRefs} onToggle={toggleLapRef} animate={!reducedMotion && !exporting}
                 chartKey={chartKey}
               />
               <Watermark />

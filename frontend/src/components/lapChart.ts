@@ -4,8 +4,10 @@ import type { GPTempoLap } from '../types/session';
 
 export type LapChartRow = Record<string, number | string | null>;
 
-/** Laps slower than the session's best by more than this are outliers (pit, safety car, red flag) */
+/** Laps slower than the best on their tyres by more than this are outliers (pit, safety car, red flag) */
 export const OUTLIER_MARGIN = 5;
+/** Tyres run for fewer laps than this are judged against the session's best: a safety car may be all they saw */
+const MIN_COMPOUND_LAPS = 3;
 
 export function formatLapTime(s: number | null | undefined): string {
   if (!s) return '—';
@@ -13,20 +15,29 @@ export function formatLapTime(s: number | null | undefined): string {
   return `${m}:${(s % 60).toFixed(3).padStart(6, '0')}`;
 }
 
+/** The best lap to judge a lap on these tyres against. By tyre, so that a wet
+ * race's intermediates aren't all outliers next to its slicks */
+function referenceLap(laps: GPTempoLap[]): (compound: string | null) => number {
+  const best = laps.length ? Math.min(...laps.map(l => l.LapTime!)) : Infinity;
+  return compound => {
+    const onTyre = laps.filter(l => l.Compound === compound).map(l => l.LapTime!);
+    return compound && onTyre.length >= MIN_COMPOUND_LAPS ? Math.min(...onTyre) : best;
+  };
+}
+
 /** A row per lap number any driver set a time on, with each driver's time
  * (outliers left out unless shown) and tyre under `<code>__compound` */
 export function lapChartRows(lapsOf: (code: string) => GPTempoLap[] | undefined, drivers: string[], showOutliers: boolean): LapChartRow[] {
   const allNums = new Set<number>();
   drivers.forEach(code => lapsOf(code)?.forEach(l => { if (l.LapTime) allNums.add(l.LapNumber); }));
-  const allTimes = drivers.flatMap(code => lapsOf(code)?.map(l => l.LapTime).filter((t): t is number => !!t) ?? []);
-  const best = allTimes.length ? Math.min(...allTimes) : Infinity;
+  const bestFor = referenceLap(drivers.flatMap(code => lapsOf(code)?.filter(l => l.LapTime) ?? []));
 
   return Array.from(allNums).sort((a, b) => a - b).map(lapNumber => {
     const row: LapChartRow = { lapNumber };
     drivers.forEach(code => {
       const lap = lapsOf(code)?.find(l => l.LapNumber === lapNumber);
       const t = lap?.LapTime ?? null;
-      row[code] = t && (showOutliers || t <= best + OUTLIER_MARGIN) ? t : null;
+      row[code] = t && (showOutliers || t <= bestFor(lap?.Compound ?? null) + OUTLIER_MARGIN) ? t : null;
       row[`${code}__compound`] = lap?.Compound ?? null;
     });
     return row;

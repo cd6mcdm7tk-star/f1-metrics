@@ -59,7 +59,7 @@ export default function MethodologyPage() {
         Every lap of the session, one dot each, coloured by tyre. In a race, dots that climb lap after lap are tyres
         wearing out, a sudden drop after a gap is a pit stop and fresh tyres, and slow laps for everyone at once are a
         safety car. To compare two drivers' pace, look at the same tyres over the same laps rather than at their
-        single best lap. Laps more than {OUTLIER_MARGIN} seconds off the session's best are hidden at first so they
+        single best lap. Laps more than {OUTLIER_MARGIN} seconds off the best on the same tyres are hidden at first so they
         don't flatten the chart; one click brings them back, and the table always lists them.
       </p>
 

@@ -346,6 +346,7 @@ export default function TelemetryPage() {
             onCompare={handleCompare}
             onCompareLaps={handleCompareLaps}
             onSelectedDriversChange={setExplorerDrivers}
+            exporting={exportingPng}
           />
         )}
       </main>

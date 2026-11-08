@@ -22,6 +22,20 @@ describe('lapChartRows', () => {
     expect(lapChartRows(code => laps[code], ['VER', 'LEC'], false)[2].VER).toBeNull();
     expect(lapChartRows(code => laps[code], ['VER', 'LEC'], true)[2].VER).toBe(120.5);
   });
+
+  it('judges each lap against the best on its own tyres', () => {
+    // Intermediates at 87 s, slicks at 73 s: only the 106 and the 80 are off the pace
+    const wet = { NOR: [lap(1, 87, 'INTERMEDIATE'), lap(2, 86, 'INTERMEDIATE'), lap(3, 106, 'INTERMEDIATE'), lap(4, 74, 'SOFT'), lap(5, 73, 'SOFT'), lap(6, 75, 'SOFT'), lap(7, 80, 'SOFT')] };
+    const rows = lapChartRows(code => wet[code as 'NOR'], ['NOR'], false);
+    expect(rows.filter(r => r.NOR != null).map(r => r.lapNumber)).toEqual([1, 2, 4, 5, 6]);
+  });
+
+  it('judges tyres run for only a lap or two against the session\'s best', () => {
+    // Fitted under a safety car: two slow laps can't set a standard of their own
+    const short = { ANT: [lap(1, 81), lap(2, 80), lap(3, 82), lap(4, 112, 'MEDIUM'), lap(5, 123, 'MEDIUM')] };
+    const rows = lapChartRows(code => short[code as 'ANT'], ['ANT'], false);
+    expect(rows.filter(r => r.ANT != null).map(r => r.lapNumber)).toEqual([1, 2, 3]);
+  });
 });
 
 describe('lapChartDomain', () => {
