@@ -31,6 +31,12 @@ async def ingestion_status(year: int, round: int):
     }
 
 
+@router.get("/feedback")
+async def feedback(limit: int = 50):
+    """The latest messages sent from the site's Feedback panel."""
+    return await asyncio.to_thread(db.list_feedback, min(max(limit, 1), 500))
+
+
 @router.post("/reingest")
 async def reingest(request: Request):
     body = await request.json()

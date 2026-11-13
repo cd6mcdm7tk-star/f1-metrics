@@ -24,7 +24,7 @@ The backend serves four kinds of data:
 | Results and standings | [Jolpica](https://github.com/jolpica/jolpica-f1) (Ergast API) |
 | Ingested sessions | PostgreSQL: every lap's time and each driver's fastest-lap telemetry, filled by an hourly job (`jobs/schedule_ingest.py`) and, for past seasons, `jobs/backfill_season.py` |
 
-The home page's first card is the latest qualifying session's front row, found by `/api/latest-qualifying` (`app/featured.py`) once its results are final. Responses are cached in Redis. Everything is public; only the ingestion routes (`/api/admin`) need the `X-Admin-Secret` header.
+The home page's first card is the latest qualifying session's front row, found by `/api/latest-qualifying` (`app/featured.py`) once its results are final. Messages sent from the Feedback panel (`POST /api/feedback`, `app/routes/feedback.py`) are kept in PostgreSQL for twelve months and mailed to the site's mailbox when `SMTP_*` is set. Responses are cached in Redis. Everything is public; only the admin routes (`/api/admin`: ingestion, feedback) need the `X-Admin-Secret` header.
 
 OpenF1 streams car data and positions for the whole session, about four samples a second: a lap is cut from line to line and its distance integrated from its speed, counted from the line (`app/lap_samples.py`). Laps compared from the same event are then lined up by their positions on the reference lap's path (`aligned_distance` in `app/telemetry.py`), so a lap start time a tenth out doesn't move every braking point.
 

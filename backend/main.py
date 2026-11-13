@@ -18,7 +18,7 @@ from slowapi.errors import RateLimitExceeded  # noqa: E402
 
 from app.cache import redis_cache  # noqa: E402
 from app.limiter import limiter  # noqa: E402
-from app.routes import admin, laps, season, sessions, telemetry  # noqa: E402
+from app.routes import admin, feedback, laps, season, sessions, telemetry  # noqa: E402
 from app.season import prewarm_seasons  # noqa: E402
 from database import db  # noqa: E402
 
@@ -41,7 +41,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-for module in (sessions, telemetry, laps, season, admin):
+for module in (sessions, telemetry, laps, season, feedback, admin):
     app.include_router(module.router)
 
 

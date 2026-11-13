@@ -39,12 +39,17 @@ export default function LegalPage() {
       <ul>
         <li>your IP address, in the hosting providers' technical logs, kept for their standard periods;</li>
         <li>a count of pages visited, with browser, device type and country, from Vercel and Cloudflare Web Analytics, which use no cookies;</li>
-        <li>your email, if you write to us, kept as long as the conversation needs it.</li>
+        <li>your email, if you write to us, kept as long as the conversation needs it;</li>
+        <li>
+          what you send with the Feedback form: your message, the page you were on, and your email if you give it.
+          It is kept in our database for twelve months at most, and mailed to our mailbox.
+        </li>
       </ul>
       <p>
         The site keeps its data cache and your last page in your browser's local storage, which never leaves your
         device. Vercel, Railway and Cloudflare (DNS and protection against attacks) may process data in the United
-        States, under the European Commission's Standard Contractual Clauses.
+        States, under the European Commission's Standard Contractual Clauses. Our mailbox is hosted by Infomaniak, in
+        Switzerland.
       </p>
       <p>
         You can ask for access to or deletion of your data, or object to its use, at the email above, and complain to

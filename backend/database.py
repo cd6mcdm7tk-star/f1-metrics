@@ -152,6 +152,14 @@ class PostgresDB:
             UNIQUE (year, gp_round, session_type, driver_code, lap_number)
         );
 
+        CREATE TABLE IF NOT EXISTS feedback (
+            id SERIAL PRIMARY KEY,
+            message TEXT NOT NULL,
+            email VARCHAR(254),
+            page VARCHAR(500),
+            created_at TIMESTAMP DEFAULT NOW()
+        );
+
         CREATE INDEX IF NOT EXISTS idx_telemetry_lookup
             ON telemetry (year, gp_round, session_type, driver_code, lap_type);
         CREATE INDEX IF NOT EXISTS idx_laps_lookup
@@ -359,6 +367,23 @@ class PostgresDB:
             )
             counts[table] = row[0] if row else 0
         return counts
+
+    # ------------------------------------------------------------------
+    # Feedback
+    # ------------------------------------------------------------------
+    # Kept this long, as the legal page says
+    FEEDBACK_KEPT = "12 months"
+
+    def save_feedback(self, message: str, email: Optional[str], page: Optional[str]):
+        """Stores a visitor's message, and lets go of those past their keeping time."""
+        self._execute("INSERT INTO feedback (message, email, page) VALUES (%s, %s, %s)", (message, email, page))
+        self._execute(f"DELETE FROM feedback WHERE created_at < NOW() - INTERVAL '{self.FEEDBACK_KEPT}'")
+
+    def list_feedback(self, limit: int = 50) -> list[dict]:
+        rows = self._execute(
+            "SELECT id, created_at, message, email, page FROM feedback ORDER BY created_at DESC LIMIT %s", (limit,), fetch="all",
+        ) or []
+        return [{"id": r[0], "created_at": r[1].isoformat(), "message": r[2], "email": r[3], "page": r[4]} for r in rows]
 
 
 # Global instance
