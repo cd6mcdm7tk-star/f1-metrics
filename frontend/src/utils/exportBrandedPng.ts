@@ -63,6 +63,8 @@ async function layOutForExport(target: HTMLElement, layout: ExportLayout): Promi
 
 interface TextStamp {
   left: number; top: number; lineHeight: number;
+  /** Degrees, for an axis title turned on its side */
+  rotate: number;
   text: string; color: string;
   fontFamily: string; fontSize: number; fontWeight: string; letterSpacing: number;
 }
@@ -76,18 +78,24 @@ function stampSvgTexts(target: HTMLElement): TextStamp[] {
   target.querySelectorAll<SVGTextElement>('svg text').forEach(el => {
     const ctm = el.getScreenCTM();
     const text = el.textContent ?? '';
-    // Rotated or multi-line text keeps its SVG rendering
-    if (!ctm || Math.abs(ctm.b) > 1e-3 || Math.abs(ctm.c) > 1e-3) return;
-    if (!text.trim() || el.querySelectorAll('tspan').length > 1) return;
+    if (!ctm) return;
+    const upright = Math.abs(ctm.b) < 1e-3 && Math.abs(ctm.c) < 1e-3;
+    const onItsSide = Math.abs(ctm.a) < 1e-3 && Math.abs(ctm.d) < 1e-3;
+    // Text at any other angle, or over several lines, keeps its SVG rendering
+    if ((!upright && !onItsSide) || !text.trim() || el.querySelectorAll('tspan').length > 1) return;
     const r = el.getBoundingClientRect();
     if (!r.width || !r.height) return;
     const cs = getComputedStyle(el);
+    const scale = Math.hypot(ctm.a, ctm.b);
+    // The line, before it's turned: centred where the SVG text is
+    const [length, thickness] = upright ? [r.width, r.height] : [r.height, r.width];
     el.setAttribute('data-export-text', String(stamps.length));
     stamps.push({
-      left: r.left - origin.left, top: r.top - origin.top, lineHeight: r.height,
+      left: r.left - origin.left + (r.width - length) / 2, top: r.top - origin.top + (r.height - thickness) / 2,
+      lineHeight: thickness, rotate: upright ? 0 : Math.round((Math.atan2(ctm.b, ctm.a) * 180) / Math.PI),
       text, color: cs.fill,
-      fontFamily: cs.fontFamily, fontSize: parseFloat(cs.fontSize) * ctm.a,
-      fontWeight: cs.fontWeight, letterSpacing: (parseFloat(cs.letterSpacing) || 0) * ctm.a,
+      fontFamily: cs.fontFamily, fontSize: parseFloat(cs.fontSize) * scale,
+      fontWeight: cs.fontWeight, letterSpacing: (parseFloat(cs.letterSpacing) || 0) * scale,
     });
   });
   return stamps;
@@ -106,6 +114,7 @@ function applyTextStamps(clone: HTMLElement, stamps: TextStamp[]) {
       lineHeight: `${s.lineHeight}px`, whiteSpace: 'pre',
       color: s.color, fontFamily: s.fontFamily, fontSize: `${s.fontSize}px`,
       fontWeight: s.fontWeight, letterSpacing: `${s.letterSpacing}px`,
+      ...(s.rotate ? { transform: `rotate(${s.rotate}deg)`, transformOrigin: 'center' } : {}),
     });
     clone.appendChild(span);
   });

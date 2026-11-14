@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { GPTempoLap } from '../types/session';
-import { dotDrawDelay, DRAW_MS, drawTimeAt, formatLapTime, lapChartDomain, lapChartRows } from './lapChart';
+import { dotDrawDelay, DRAW_MS, drawTimeAt, formatLapTime, lapChartDomain, lapChartRows, lapTicks } from './lapChart';
 
 const lap = (LapNumber: number, LapTime: number | null, Compound: string | null = 'SOFT'): GPTempoLap => ({
   LapNumber, LapTime, Compound, Sector1Time: null, Sector2Time: null, Sector3Time: null, IsPersonalBest: false, HasTelemetry: true, Team: '', Driver: '',
@@ -42,6 +42,25 @@ describe('lapChartDomain', () => {
   it('spans the plotted times padded to whole seconds', () => {
     expect(lapChartDomain(lapChartRows(code => laps[code], ['VER', 'LEC'], false), ['VER', 'LEC'])).toEqual([94, 100]);
     expect(lapChartDomain([], ['VER'])).toEqual([60, 120]);
+  });
+});
+
+describe('lapTicks', () => {
+  it('writes every lap when there is room', () => {
+    expect(lapTicks(1, 12, 900)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+  });
+
+  it('keeps to round laps on a race, and the first one', () => {
+    expect(lapTicks(1, 71, 1600)).toEqual([1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70]);
+    expect(lapTicks(1, 71, 260)).toEqual([1, 10, 20, 30, 40, 50, 60, 70]);
+  });
+
+  it('drops the first lap when a round one is right next to it', () => {
+    expect(lapTicks(3, 40, 300)).toEqual([5, 10, 15, 20, 25, 30, 35, 40]);
+  });
+
+  it('writes nothing without laps', () => {
+    expect(lapTicks(5, 4, 900)).toEqual([]);
   });
 });
 

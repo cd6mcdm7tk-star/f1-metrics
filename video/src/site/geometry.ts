@@ -1,5 +1,6 @@
 // Where things sit on the site's telemetry page, in page pixels, from the
 // site's own sizes (TelemetryPage, TelemetryViewMulti) at this width.
+import { LAP_CHART_PLOT } from '../../../frontend/src/components/lapChart';
 import type { Rect } from '../camera';
 
 export const PAGE = { width: 1000, height: 1132 };
@@ -61,12 +62,15 @@ export const FIXED_DOMAINS: Partial<Record<RowName, [number, number]>> = {
 };
 
 // The site's lap chart (LapTimesChart) on its own page, under the header:
-// its panel, and inside it the plot (4 + 46 + 12 px left of the first lap,
-// 20 + 12 px right of the last, 34 px above, 18 + 30 px of lap axis below)
-// Taller than on the site, to fill the upright video
+// its panel, and inside it the plot. Taller than on the site, to fill the upright video
 export const LAPS_PAGE = { width: PAGE.width, height: 968 };
 export const LAPS_PANEL: Rect = { x: 12, y: 56, w: 976, h: 900 };
-const LAPS_PLOT = { left: LAPS_PANEL.x + 62, right: LAPS_PANEL.x + LAPS_PANEL.w - 32, top: LAPS_PANEL.y + 34, bottom: LAPS_PANEL.y + LAPS_PANEL.h - 48 };
+const LAPS_PLOT = {
+  left: LAPS_PANEL.x + LAP_CHART_PLOT.left,
+  right: LAPS_PANEL.x + LAPS_PANEL.w - LAP_CHART_PLOT.right,
+  top: LAPS_PANEL.y + LAP_CHART_PLOT.top,
+  bottom: LAPS_PANEL.y + LAPS_PANEL.h - LAP_CHART_PLOT.bottom,
+};
 
 /** Where a lap falls on the lap chart of laps 1 to `last` */
 export const lapX = (lap: number, last: number): number => LAPS_PLOT.left + ((lap - 1) / Math.max(1, last - 1)) * (LAPS_PLOT.right - LAPS_PLOT.left);

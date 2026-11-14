@@ -51,6 +51,40 @@ export function lapChartDomain(rows: LapChartRow[], drivers: string[]): [number,
   return [Math.floor(Math.min(...times) - 0.5), Math.ceil(Math.max(...times) + 0.5)];
 }
 
+/** The lap chart's frame (px): margins, the time axis' width, and the room
+ * left before the first lap and after the last */
+export const LAP_CHART = { margin: { top: 34, right: 20, left: 4, bottom: 18 }, timeAxis: 54, lapPadding: 12 } as const;
+/** Recharts' default height for the lap axis (px) */
+const LAP_AXIS_HEIGHT = 30;
+/** Where the plot sits inside the chart's box (px from each side): the first
+ * lap's dots, the last's, the slowest time and the fastest */
+export const LAP_CHART_PLOT = {
+  left: LAP_CHART.margin.left + LAP_CHART.timeAxis + LAP_CHART.lapPadding,
+  right: LAP_CHART.margin.right + LAP_CHART.lapPadding,
+  top: LAP_CHART.margin.top,
+  bottom: LAP_CHART.margin.bottom + LAP_AXIS_HEIGHT,
+} as const;
+
+/** Least distance between two lap numbers under the chart (px) */
+const LAP_TICK_ROOM = 32;
+const LAP_STEPS = [1, 5, 10, 20, 50];
+
+/** Every `step`-th lap, and the first lap unless a round one comes right after it */
+function lapsEvery(step: number, first: number, last: number): number[] {
+  const start = Math.ceil(first / step) * step;
+  const laps = start - first > step / 2 ? [first] : [];
+  for (let lap = start; lap <= last; lap += step) laps.push(lap);
+  return laps;
+}
+
+/** The lap numbers written under a chart of laps `first` to `last`, `width`
+ * px wide: each lap if they fit, else round steps (1, 5, 10, 15… or 1, 10, 20…) */
+export function lapTicks(first: number, last: number, width: number): number[] {
+  if (last < first) return [];
+  const fits = (step: number) => (width / Math.max(1, last - first)) * step >= LAP_TICK_ROOM;
+  return lapsEvery(LAP_STEPS.find(fits) ?? LAP_STEPS[LAP_STEPS.length - 1], first, last);
+}
+
 /** The chart's own animation: a line drawing in, or the lines moving to a new scale (ms) */
 export const DRAW_MS = 900;
 /** Recharts' 'ease-in-out' curve, as cubic-bezier control points */

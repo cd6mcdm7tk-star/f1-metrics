@@ -1,8 +1,10 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { compoundColor } from '../utils/compoundColors';
-import { dotDrawDelay, DRAW_MS, formatLapTime, type LapChartRow } from './lapChart';
+import { dotDrawDelay, DRAW_MS, formatLapTime, LAP_CHART, LAP_CHART_PLOT, lapTicks, type LapChartRow } from './lapChart';
 import type { LapSelection } from '../types/session';
+
+const AXIS_TITLE = { fontSize: 8, fontFamily: 'JetBrains Mono', letterSpacing: '0.15em' };
 
 /** A line drawing in, or fading out after it was deselected */
 type Phase = 'in' | 'out';
@@ -76,11 +78,14 @@ export default function LapTimesChart({
   rows, drivers, lines = drivers, entering = [], leaving = [], colorOf, yDomain, selectedLapRefs = [], onToggle, animate = false, chartKey, children,
 }: LapTimesChartProps) {
   const phaseOf = (code: string): Phase | undefined => (leaving.includes(code) ? 'out' : entering.includes(code) ? 'in' : undefined);
+  const [width, setWidth] = useState(0);
+  const laps = rows.map(r => Number(r.lapNumber));
+  const ticks = rows.length ? lapTicks(laps[0], laps[laps.length - 1], width - LAP_CHART_PLOT.left - LAP_CHART_PLOT.right) : [];
   return (
     <>
       {/* Legend */}
       <div style={{
-        position: 'absolute', top: 10, left: 56, zIndex: 10,
+        position: 'absolute', top: 10, left: LAP_CHART.margin.left + LAP_CHART.timeAxis + 6, zIndex: 10,
         display: 'flex', gap: 14, flexWrap: 'wrap',
       }}>
         {drivers.map(code => (
@@ -94,18 +99,16 @@ export default function LapTimesChart({
       </div>
 
       <div key={chartKey} style={{ width: '100%', height: '100%' }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart
-          data={rows}
-          margin={{ top: 34, right: 20, left: 4, bottom: 18 }}
-        >
+      <ResponsiveContainer width="100%" height="100%" onResize={setWidth}>
+        <LineChart data={rows} margin={LAP_CHART.margin}>
           <CartesianGrid strokeDasharray="4 4" stroke="var(--chart-grid)" />
-          <XAxis dataKey="lapNumber" stroke="transparent"
+          <XAxis dataKey="lapNumber" stroke="transparent" ticks={ticks} interval={0}
             tick={{ fill: 'var(--text-2)', fontSize: 9, fontFamily: 'JetBrains Mono' }}
-            padding={{ left: 12, right: 12 }}
-            label={{ value: 'LAP', position: 'insideBottom', offset: -6, fill: 'var(--text-3)', style: { fontSize: 8, fontFamily: 'JetBrains Mono', letterSpacing: '0.15em' } }}
+            padding={{ left: LAP_CHART.lapPadding, right: LAP_CHART.lapPadding }}
+            label={{ value: 'LAP NUMBER', position: 'insideBottom', offset: -6, fill: 'var(--text-3)', style: AXIS_TITLE }}
           />
-          <YAxis stroke="transparent" width={46} allowDecimals={false}
+          <YAxis stroke="transparent" width={LAP_CHART.timeAxis} allowDecimals={false}
+            label={{ value: 'LAP TIME', angle: -90, position: 'insideLeft', offset: 6, fill: 'var(--text-3)', style: { ...AXIS_TITLE, textAnchor: 'middle' } }}
             tick={{ fill: 'var(--text-2)', fontSize: 9, fontFamily: 'JetBrains Mono' }}
             tickFormatter={v => {
               const m = Math.floor(v / 60);
