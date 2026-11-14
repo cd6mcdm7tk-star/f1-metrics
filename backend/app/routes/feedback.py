@@ -1,13 +1,13 @@
-"""Messages sent from the site's Feedback panel: kept in PostgreSQL and mailed
-to the site's mailbox."""
+"""Messages sent from the site's Feedback panel, kept in PostgreSQL and read
+through GET /api/admin/feedback. They aren't mailed: Railway's plan blocks
+outgoing SMTP."""
 import asyncio
 import logging
 import re
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response
+from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field, field_validator
 
-from app import mail
 from app.limiter import limiter
 from database import db
 
@@ -43,27 +43,16 @@ class Feedback(BaseModel):
         return email
 
 
-def _send_mail(body: Feedback) -> None:
-    try:
-        mail.send(mail.feedback_mail(body.message, body.email, body.page))
-    except Exception as e:
-        logger.error(f"Feedback mail failed (the message is kept in the database): {e}")
-
-
 @router.post("/feedback", status_code=204)
 @limiter.limit("5/hour")
-async def send_feedback(request: Request, body: Feedback, background: BackgroundTasks):
+async def send_feedback(request: Request, body: Feedback):
     if body.website:
         return Response(status_code=204)
-    saved = False
-    if db.available:
-        try:
-            await asyncio.to_thread(db.save_feedback, body.message, body.email, body.page)
-            saved = True
-        except Exception as e:
-            logger.error(f"Feedback not saved: {e}")
-    if not saved and not mail.configured():
+    try:
+        if not db.available:
+            raise RuntimeError("no database")
+        await asyncio.to_thread(db.save_feedback, body.message, body.email, body.page)
+    except Exception as e:
+        logger.error(f"Feedback not saved: {e}")
         raise HTTPException(status_code=503, detail="Feedback can't be taken right now")
-    if mail.configured():
-        background.add_task(_send_mail, body)
     return Response(status_code=204)

@@ -41,8 +41,8 @@ export default function LegalPage() {
         <li>a count of pages visited, with browser, device type and country, from Vercel and Cloudflare Web Analytics, which use no cookies;</li>
         <li>your email, if you write to us, kept as long as the conversation needs it;</li>
         <li>
-          what you send with the Feedback form: your message, the page you were on, and your email if you give it.
-          It is kept in our database for twelve months at most, and mailed to our mailbox.
+          what you send with the Feedback form: your message, the page you were on, and your email if you give it,
+          kept in our database for twelve months at most.
         </li>
       </ul>
       <p>

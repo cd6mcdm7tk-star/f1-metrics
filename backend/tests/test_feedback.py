@@ -5,7 +5,6 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from starlette.requests import Request
 
-from app import mail
 from app.limiter import client_ip, limiter
 from app.routes import feedback
 from database import db
@@ -25,11 +24,10 @@ def client():
 
 @pytest.fixture
 def saved(monkeypatch):
-    """What the route stores, with the database there and no mail set up"""
+    """What the route stores"""
     rows = []
     monkeypatch.setattr(type(db), "available", property(lambda self: True))
     monkeypatch.setattr(db, "save_feedback", lambda *row: rows.append(row))
-    monkeypatch.setattr(mail, "configured", lambda: False)
     return rows
 
 
@@ -55,18 +53,9 @@ def test_drops_what_a_bot_sends_without_telling_it(client, saved):
     assert saved == []
 
 
-def test_says_so_when_it_can_neither_keep_nor_mail(client, monkeypatch):
+def test_says_so_when_it_cannot_keep_it(client, monkeypatch):
     monkeypatch.setattr(type(db), "available", property(lambda self: False))
-    monkeypatch.setattr(mail, "configured", lambda: False)
     assert client.post(URL, json={"message": "Hello there"}).status_code == 503
-
-
-def test_mails_it_to_the_site(client, saved, monkeypatch):
-    sent = []
-    monkeypatch.setattr(mail, "configured", lambda: True)
-    monkeypatch.setattr(mail, "send", sent.append)
-    client.post(URL, json={"message": "Hello there", "email": "fan@example.com", "page": "/stats"})
-    assert len(sent) == 1 and sent[0]["Reply-To"] == "fan@example.com"
 
 
 def test_five_messages_an_hour_from_one_visitor(client, saved):
@@ -75,16 +64,6 @@ def test_five_messages_an_hour_from_one_visitor(client, saved):
     assert client.post(URL, json={"message": "Hello there"}).status_code == 429
     # Another visitor, behind the same proxy, still gets through
     assert client.post(URL, json={"message": "Hello there"}, headers={"X-Forwarded-For": "203.0.113.9"}).status_code == 204
-
-
-def test_the_mail_reads_well_and_answers_the_visitor(monkeypatch):
-    monkeypatch.setenv("SMTP_USER", "contact@metrikdelta.com")
-    monkeypatch.delenv("FEEDBACK_TO", raising=False)
-    message = mail.feedback_mail("Love the charts", "fan@example.com", "/methodology")
-    assert message["To"] == "contact@metrikdelta.com"
-    assert message["Subject"] == "Feedback · /methodology"
-    assert "https://metrikdelta.com/methodology" in message.get_content()
-    assert "Reply-To" not in mail.feedback_mail("Love the charts", None, None)
 
 
 def test_a_visitor_is_the_address_the_proxy_added_last():

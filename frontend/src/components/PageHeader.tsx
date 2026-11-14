@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { rememberedUrl } from '../hooks/usePageMemory';
 
@@ -12,9 +12,9 @@ const PAGES = [
 
 export type AppPage = (typeof PAGES)[number]['key'];
 
-/** Top bar of the app pages: wordmark, Telemetry / Statistics switch, the
- * page's own actions. Pages outside the switch (About, Methodology) leave
- * `page` out. */
+/** Top bar of the app pages: wordmark (back to the home page), Telemetry /
+ * Statistics switch, the page's own actions. Pages outside the switch
+ * (Methodology, Legal) leave `page` out. */
 export default function PageHeader({ page, leading, actions }: {
   page?: AppPage;
   leading?: ReactNode;
@@ -35,10 +35,10 @@ export default function PageHeader({ page, leading, actions }: {
     }}>
       {leading}
 
-      <span className="font-rajdhani font-black text-sm tracking-[0.12em]">
+      <Link to="/" aria-label="METRIK DELTA, home page" className="font-rajdhani font-black text-sm tracking-[0.12em]" style={{ textDecoration: 'none' }}>
         <span style={{ color: 'var(--text)' }}>METRIK</span>
         <span style={{ color: 'var(--accent)' }}> DELTA</span>
-      </span>
+      </Link>
 
       {/* Centred on desktop whatever the side slots hold */}
       <div style={{
